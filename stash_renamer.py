@@ -64,11 +64,11 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
                     rf"\s*-\s*\{re.escape(token)}\s*-\s*",  # - $token -
                     rf"\s*-\s*\{re.escape(token)}\s*",      # - $token
                     rf"\s*\{re.escape(token)}\s*-\s*",      # $token -
-                    rf"\s*\{re.escape(token)}\s*",          # $token
+                    rf"\s*\{re.escape(token)}\s*",          # $token (fallback)
                 ]
                 for pattern in patterns:
                     if re.search(pattern, new_filename):
-                        new_filename = re.sub(pattern, "", new_filename)
+                        new_filename = re.sub(pattern, " ", new_filename)  # Replace with space to avoid concatenation
                         break
             else:
                 new_filename = new_filename.replace(token, str(value).strip())
@@ -414,7 +414,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             else:
                 logPrint(f"[OS] File doesn't exist on disk ({current_path})")
         else:
-            logPrint("[DRY_RUN][OS] File should be renamed")
+            logPrint(f"[DRY] {current_filename} -> {new_filename}")
             with open("renamer_dryrun.txt", "a", encoding="utf-8") as fh:
                 print(f"{current_path} -> {new_path}", file=fh)
 
