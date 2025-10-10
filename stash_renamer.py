@@ -65,8 +65,8 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     for token, value in tokens.items():
         s = s.replace(token, value if value else "")
 
-    # Normalize hyphen separators to " - "
-    s = re.sub(r"\s*-\s*", " - ", s)
+    # Remove the global hyphen normalization to avoid spacing inside dates
+    # s = re.sub(r"\s*-\s*", " - ", s)
 
     # Collapse duplicate separators created by empty tokens
     s = re.sub(r"(?:\s*-\s*){2,}", " - ", s)
@@ -112,22 +112,6 @@ def load_or_create_config(interactive_ok: bool) -> SimpleNamespace:
     cfg = import_config_from_path(local_cfg_path)
     if cfg:
         return cfg
-
-    # 2) Fallback: reuse kodi-helper config if present
-    sibling_cfg_path = os.path.normpath(os.path.join(script_dir, "..", "kodi-helper", "config.py"))
-    cfg = import_config_from_path(sibling_cfg_path)
-    if cfg:
-        return cfg
-
-    # 3) Try importing any 'config' discoverable on sys.path
-    try:
-        mod = importlib.import_module("config")
-        server_url = getattr(mod, "server_url", None)
-        api_key = getattr(mod, "api_key", None)
-        if server_url and api_key:
-            return SimpleNamespace(server_url=server_url, api_key=api_key)
-    except Exception:
-        pass
 
     # 4) Not found: interactively prompt if allowed
     if interactive_ok:
