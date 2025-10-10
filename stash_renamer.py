@@ -431,7 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tag", action="append", dest="tags", help="Tag name to select scenes by. Repeatable.")
     parser.add_argument("--template", dest="template", help="Filename template. Required for no-tag mode or for --tag when no --config.")
     parser.add_argument("--config", dest="config_json", help="Path to JSON with [{\"tag\": \"...\", \"template\": \"...\"}, ...] mappings.")
-    parser.add_argument("--path-like", dest="path_like", help="Optional substring to match in file path (LIKE-style with % wildcards interpreted as substring).")
+    parser.add_argument("--path-like", dest="path_like", help="Optional substring to match in file path (LIKE-style with %% wildcards interpreted as substring).")
     parser.add_argument("--filter", dest="scene_filter", help="JSON string for SceneFilterType. Merged with tag filter if provided.")
     parser.add_argument("--interactive", action="store_true", help="Run in interactive mode (also bootstraps API config if missing).")
     return parser
