@@ -51,16 +51,27 @@ def normalize_height(v: Optional[int]) -> str:
 
 
 def makeFilename(scene_info: Dict[str, str], query: str) -> str:
-    new_filename = str(query)
+    new_filename = str(query).strip()
 
     def replace_or_remove(token: str, key: str):
         nonlocal new_filename
         if token in new_filename:
             value = scene_info.get(key)
             if value is None or str(value).strip() == "":
-                new_filename = re.sub(rf"\{token}\s*", "", new_filename)
+                # Remove the token and any surrounding separators
+                # Handle patterns like "- $token -", "- $token", "$token -", etc.
+                patterns = [
+                    rf"\s*-\s*\{re.escape(token)}\s*-\s*",  # - $token -
+                    rf"\s*-\s*\{re.escape(token)}\s*",      # - $token
+                    rf"\s*\{re.escape(token)}\s*-\s*",      # $token -
+                    rf"\s*\{re.escape(token)}\s*",          # $token
+                ]
+                for pattern in patterns:
+                    if re.search(pattern, new_filename):
+                        new_filename = re.sub(pattern, "", new_filename)
+                        break
             else:
-                new_filename = new_filename.replace(token, str(value))
+                new_filename = new_filename.replace(token, str(value).strip())
 
     replace_or_remove("$date", "date")
     replace_or_remove("$performer", "performer")
@@ -68,10 +79,12 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     replace_or_remove("$studio", "studio")
     replace_or_remove("$height", "height")
 
-    new_filename = re.sub(r"^\s*-\s*", "", new_filename)
-    new_filename = re.sub(r"\s*-\s*$", "", new_filename)
-    new_filename = re.sub(r"\[\W*]", "", new_filename)
-    new_filename = re.sub(r"\s{2,}", " ", new_filename)
+    # Clean up any remaining double separators and trim
+    new_filename = re.sub(r"\s*-\s*-\s*", " - ", new_filename)  # Fix double separators
+    new_filename = re.sub(r"^\s*-\s*", "", new_filename)        # Remove leading separator
+    new_filename = re.sub(r"\s*-\s*$", "", new_filename)        # Remove trailing separator
+    new_filename = re.sub(r"\[\W*\]", "", new_filename)         # Remove empty brackets
+    new_filename = re.sub(r"\s{2,}", " ", new_filename)         # Collapse multiple spaces
     new_filename = new_filename.strip()
     return new_filename
 
@@ -470,20 +483,22 @@ def interactive_prompt() -> argparse.Namespace:
     tags_raw = input("Enter tag names (comma-separated). Leave blank for no-tag mode: ").strip()
     args.tags = [t.strip() for t in tags_raw.split(",") if t.strip()] or None
 
+    default_template = "$studio - $date - $title - $performer"
+    
     if args.tags:
         per_tag = (input("Use a single template for all tags? [Y/n]: ").strip().lower() or "y")
         if per_tag.startswith("y"):
-            args.template = input("Template: ").strip()
+            args.template = input(f"Template [{default_template}]: ").strip() or default_template
             args.config_inline = None
         else:
             mappings = []
             for t in args.tags:
-                tt = input(f"Template for tag \"{t}\": ").strip()
+                tt = input(f"Template for tag \"{t}\" [{default_template}]: ").strip() or default_template
                 mappings.append({"tag": t, "template": tt})
             args.config_inline = mappings
             args.template = None
     else:
-        args.template = input("Template for no-tag mode (applies to all selected scenes): ").strip()
+        args.template = input(f"Template for no-tag mode [{default_template}]: ").strip() or default_template
         args.config_inline = None
 
     filt = input("Optional raw SceneFilterType JSON (will be merged if tags provided): ").strip()
