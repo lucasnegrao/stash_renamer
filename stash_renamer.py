@@ -157,7 +157,7 @@ def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
     }
     payload = {"query": query}
     if variables is not None:
-        payload["variables"] = variables
+        payload["variables"] = variables # type: ignore
 
     resp = requests.post(CONFIG.server_url, json=payload, headers=headers)
     if resp.status_code != 200:
@@ -442,14 +442,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     if argv is None:
         argv = sys.argv[1:]
     if len(argv) == 0:
-        # Print the list of arguments and exit cleanly
-        parser.print_help()
-        print("\nExamples:")
-        print('  python Stash_Sqlite_Renamer.py --template "$date $performer - $title [$studio]" --dry-run')
-        print('  python Stash_Sqlite_Renamer.py --tag "!1. Western" --template "$date $title"')
-        print('  python Stash_Sqlite_Renamer.py --config mappings.json --path-like "/media/R18/%"')
-        print('  python Stash_Sqlite_Renamer.py --interactive')
-        sys.exit(0)
+        # Default to interactive mode when no arguments provided
+        print("No arguments provided. Starting in interactive mode...")
+        print("Use --help to see all available options.\n")
+        return argparse.Namespace(interactive=True)
     return parser.parse_args(argv)
 
 
@@ -515,11 +511,13 @@ def run():
     global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, CONFIG
 
     args = parse_args()
-    if getattr(args, "interactive", False):
+    
+    # Initialize config early, before interactive prompt if needed
+    is_interactive = getattr(args, "interactive", False)
+    CONFIG = load_or_create_config(interactive_ok=is_interactive)
+    
+    if is_interactive:
         args = interactive_prompt()
-
-    # Only initialize config when we're actually going to run, not when printing help
-    CONFIG = load_or_create_config(interactive_ok=getattr(args, "interactive", False))
 
     USING_LOG = getattr(args, "using_log", USING_LOG)
     DRY_RUN = getattr(args, "dry_run", DRY_RUN)
