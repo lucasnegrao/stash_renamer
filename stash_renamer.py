@@ -51,42 +51,38 @@ def normalize_height(v: Optional[int]) -> str:
 
 
 def makeFilename(scene_info: Dict[str, str], query: str) -> str:
-    new_filename = str(query).strip()
+    # Trim template
+    s = str(query or "").strip()
 
-    def replace_or_remove(token: str, key: str):
-        nonlocal new_filename
-        if token in new_filename:
-            value = scene_info.get(key)
-            if value is None or str(value).strip() == "":
-                # Remove the token and any surrounding separators
-                # Handle patterns like "- $token -", "- $token", "$token -", etc.
-                patterns = [
-                    rf"\s*-\s*\{re.escape(token)}\s*-\s*",  # - $token -
-                    rf"\s*-\s*\{re.escape(token)}\s*",      # - $token
-                    rf"\s*\{re.escape(token)}\s*-\s*",      # $token -
-                    rf"\s*\{re.escape(token)}\s*",          # $token (fallback)
-                ]
-                for pattern in patterns:
-                    if re.search(pattern, new_filename):
-                        new_filename = re.sub(pattern, " ", new_filename)  # Replace with space to avoid concatenation
-                        break
-            else:
-                new_filename = new_filename.replace(token, str(value).strip())
+    # Replace tokens with values or empty strings
+    tokens = {
+        "$date": (scene_info.get("date") or "").strip(),
+        "$performer": (scene_info.get("performer") or "").strip(),
+        "$title": (scene_info.get("title") or "").strip(),
+        "$studio": (scene_info.get("studio") or "").strip(),
+        "$height": (scene_info.get("height") or "").strip(),
+    }
+    for token, value in tokens.items():
+        s = s.replace(token, value if value else "")
 
-    replace_or_remove("$date", "date")
-    replace_or_remove("$performer", "performer")
-    replace_or_remove("$title", "title")
-    replace_or_remove("$studio", "studio")
-    replace_or_remove("$height", "height")
+    # Normalize hyphen separators to " - "
+    s = re.sub(r"\s*-\s*", " - ", s)
 
-    # Clean up any remaining double separators and trim
-    new_filename = re.sub(r"\s*-\s*-\s*", " - ", new_filename)  # Fix double separators
-    new_filename = re.sub(r"^\s*-\s*", "", new_filename)        # Remove leading separator
-    new_filename = re.sub(r"\s*-\s*$", "", new_filename)        # Remove trailing separator
-    new_filename = re.sub(r"\[\W*\]", "", new_filename)         # Remove empty brackets
-    new_filename = re.sub(r"\s{2,}", " ", new_filename)         # Collapse multiple spaces
-    new_filename = new_filename.strip()
-    return new_filename
+    # Collapse duplicate separators created by empty tokens
+    s = re.sub(r"(?:\s*-\s*){2,}", " - ", s)
+
+    # Remove leading/trailing separators and common punctuation left behind
+    s = re.sub(r"^\s*[-–—_:|,]+\s*", "", s)
+    s = re.sub(r"\s*[-–—_:|,]+\s*$", "", s)
+
+    # Remove empty bracket-like groups that might be left
+    s = re.sub(r"\[\W*\]", "", s)
+    s = re.sub(r"\(\W*\)", "", s)
+    s = re.sub(r"\{\W*\}", "", s)
+
+    # Final space normalization
+    s = re.sub(r"\s{2,}", " ", s).strip()
+    return s
 
 
 def import_config_from_path(path: str) -> Optional[SimpleNamespace]:
