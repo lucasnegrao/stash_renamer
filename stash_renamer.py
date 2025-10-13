@@ -256,7 +256,18 @@ def path_like_match(path: str, pattern: Optional[str]) -> bool:
     return sub in path
 
 
-def iterate_scenes(scene_filter: dict, path_like: Optional[str]) -> List[dict]:
+def path_excluded(path: str, pattern: Optional[str]) -> bool:
+    """
+    Return True if the given path should be excluded based on the pattern.
+    LIKE-style with % wildcards interpreted as substring.
+    """
+    if not pattern:
+        return False
+    sub = pattern.replace("%", "")
+    return sub in path
+
+
+def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_like: Optional[str]) -> List[dict]:
     total = get_total_scenes(scene_filter)
     pages = math.ceil(total / BATCH_SIZE)
     results: List[dict] = []
@@ -266,12 +277,12 @@ def iterate_scenes(scene_filter: dict, path_like: Optional[str]) -> List[dict]:
         for scene in scenes:
             if scene.get("files"):
                 scene["path"] = scene["files"][0]["path"]
-                if path_like_match(scene["path"], path_like):
+                if path_like_match(scene["path"], path_like) and not path_excluded(scene["path"], exclude_path_like):
                     results.append(scene)
     return results
 
 
-def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str]):
+def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str]):
     # Resolve tags if provided
     tag_ids: Optional[List[str]] = None
     if tag_names:
@@ -286,7 +297,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
 
     scene_filter = build_scene_filter(base_filter, tag_ids)
 
-    scenes = iterate_scenes(scene_filter, path_like)
+    scenes = iterate_scenes(scene_filter, path_like, exclude_path_like)
     if not scenes:
         logPrint("[Warn] There are no scenes to change with this query")
         return
@@ -425,6 +436,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--template", dest="template", help="Filename template. Required for no-tag mode or for --tag when no --config.")
     parser.add_argument("--config", dest="config_json", help="Path to JSON with [{\"tag\": \"...\", \"template\": \"...\"}, ...] mappings.")
     parser.add_argument("--path-like", dest="path_like", help="Optional substring to match in file path (LIKE-style with %% wildcards interpreted as substring).")
+    parser.add_argument("--exclude-path-like", dest="exclude_path_like", help="Optional substring to exclude matching file paths (LIKE-style with %% wildcards interpreted as substring).")
     parser.add_argument("--filter", dest="scene_filter", help="JSON string for SceneFilterType. Merged with tag filter if provided.")
     parser.add_argument("--interactive", action="store_true", help="Run in interactive mode (also bootstraps API config if missing).")
     return parser
@@ -459,6 +471,7 @@ def interactive_prompt() -> argparse.Namespace:
     args.debug_mode = not yn.startswith("n")
 
     args.path_like = input("Optional path substring (LIKE-style e.g., /mnt/media/%): ").strip() or None
+    args.exclude_path_like = input("Optional EXCLUDE path substring (LIKE-style e.g., /mnt/media/tmp%): ").strip() or None
 
     tags_raw = input("Enter tag names (comma-separated). Leave blank for no-tag mode: ").strip()
     args.tags = [t.strip() for t in tags_raw.split(",") if t.strip()] or None
@@ -562,6 +575,7 @@ def run():
                 base_filter=base_filter,
                 tag_names=[tag_name],
                 path_like=getattr(args, "path_like", None),
+                exclude_path_like=getattr(args, "exclude_path_like", None),
             )
             logPrint("====================")
             executed_any = True
@@ -574,6 +588,7 @@ def run():
                 base_filter=base_filter,
                 tag_names=None,
                 path_like=getattr(args, "path_like", None),
+                exclude_path_like=getattr(args, "exclude_path_like", None),
             )
             executed_any = True
         else:
