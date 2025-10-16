@@ -112,8 +112,8 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
     """Fetch plugin settings from Stash via GraphQL"""
     # Try to get plugin settings directly
     query = """
-    query GetPluginSettings($plugin_id: ID!) {
-      pluginSettings(plugin_id: $plugin_id)
+    query configuration{
+      plugins(include: $plugin_id)
     }
     """
     
@@ -143,7 +143,7 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
                 return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
             
             data = result.get("data", {})
-            settings_json = data.get("pluginSettings")
+            settings_json = data["configuration"]["plugins"]["stash_renamer"]
             
             if settings_json:
                 if isinstance(settings_json, str):
