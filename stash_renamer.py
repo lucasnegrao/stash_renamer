@@ -388,7 +388,7 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
       studio { name }
       performers { name gender }
       tags { name }
-      groups { sceneGroup { Group{ id name } } }
+      groups {  Group{ id name }  }
     }
   }
 }
