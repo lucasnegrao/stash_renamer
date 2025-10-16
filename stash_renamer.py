@@ -284,6 +284,46 @@ def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
     return result["data"]
 
 
+def move_files_via_graphql(file_ids: List[str], destination_folder: str, destination_basename: Optional[str] = None) -> bool:
+    """
+    Move files using the GraphQL moveFiles mutation.
+    
+    Args:
+        file_ids: List of file IDs to move
+        destination_folder: Target directory path
+        destination_basename: New filename (optional, if None uses existing basename)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    mutation = """
+mutation moveFiles($input: MoveFilesInput!) {
+  moveFiles(input: $input)
+}
+"""
+    
+    variables = {
+        "input": {
+            "ids": file_ids,
+            "destination_folder": destination_folder
+        }
+    }
+    
+    # Add destination_basename only if provided
+    if destination_basename:
+        variables["input"]["destination_basename"] = destination_basename
+    
+    try:
+        data = __callGraphQL(mutation, variables)
+        result = data.get("moveFiles", False)
+        if not result:
+            logPrint(f"[Error] GraphQL moveFiles returned false for files {file_ids}")
+        return result
+    except Exception as e:
+        logPrint(f"[Error] GraphQL moveFiles failed for files {file_ids}: {e}")
+        return False
+
+
 def find_tag_ids_by_names(names: List[str]) -> Dict[str, str]:
     """
     Resolve tag names to IDs via the GraphQL API.
@@ -344,7 +384,7 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
       id
       title
       date
-      files { path }
+      files { id path }
       studio { name }
       performers { name gender }
       tags { name }
@@ -539,9 +579,39 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             continue
 
         if not DRY_RUN:
+            # Extract file IDs from scene data
+            file_ids = []
+            scene_files = scene.get("files") or []
+            for file_info in scene_files:
+                if file_info.get("path") == current_path:
+                    file_ids.append(file_info.get("id"))
+            
+            if not file_ids:
+                logPrint(f"[Error] No file ID found for path: {current_path}")
+                if collect_operations:
+                    operations.append({
+                        "scene_id": scene['id'],
+                        "status": "error",
+                        "error": "No file ID found for path",
+                        "old_filename": current_filename,
+                        "new_filename": new_filename,
+                        "old_path": current_path,
+                        "new_path": new_path
+                    })
+                continue
+            
             if os.path.isfile(current_path):
                 try:
-                    os.rename(current_path, new_path)
+                    # Use GraphQL moveFiles mutation instead of os.rename
+                    success = move_files_via_graphql(
+                        file_ids=file_ids,
+                        destination_folder=target_directory,
+                        destination_basename=new_filename
+                    )
+                    
+                    if not success:
+                        raise Exception("GraphQL moveFiles returned false")
+                        
                 except Exception as e:
                     logPrint(f"[OS] File failed to rename ({current_filename}) due to: {e}")
                     with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
@@ -558,34 +628,20 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                         })
                     continue
 
-                if os.path.isfile(new_path):
-                    logPrint(f"[OS] File Renamed! ({current_filename})")
-                    if USING_LOG:
-                        with open("rename_log.txt", "a", encoding="utf-8") as fh:
-                            print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
-                    if collect_operations:
-                        operations.append({
-                            "scene_id": scene['id'],
-                            "status": "success",
-                            "old_filename": current_filename,
-                            "new_filename": new_filename,
-                            "old_path": current_path,
-                            "new_path": new_path
-                        })
-                else:
-                    logPrint(f"[OS] File failed to rename ? ({current_filename})")
-                    with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
-                        print(f"{current_path} -> {new_path}", file=fh)
-                    if collect_operations:
-                        operations.append({
-                            "scene_id": scene['id'],
-                            "status": "error",
-                            "error": "File not found after rename",
-                            "old_filename": current_filename,
-                            "new_filename": new_filename,
-                            "old_path": current_path,
-                            "new_path": new_path
-                        })
+                # Success - the GraphQL mutation handles the actual file move
+                logPrint(f"[OS] File Renamed! ({current_filename})")
+                if USING_LOG:
+                    with open("rename_log.txt", "a", encoding="utf-8") as fh:
+                        print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
+                if collect_operations:
+                    operations.append({
+                        "scene_id": scene['id'],
+                        "status": "success",
+                        "old_filename": current_filename,
+                        "new_filename": new_filename,
+                        "old_path": current_path,
+                        "new_path": new_path
+                    })
             else:
                 logPrint(f"[OS] File doesn't exist on disk ({current_path})")
                 if collect_operations:
