@@ -20,6 +20,8 @@ def read_json_input():
 
 def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
     """Fallback method - fetch from configuration.plugins"""
+    log.LogDebug("Trying fallback method to fetch settings")
+    
     query = """
     query Configuration {
       configuration {
@@ -55,14 +57,20 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
                 else:
                     plugins = plugins_json
                 
+                log.LogDebug(f"Found {len(plugins)} plugins in config")
+                
                 # Find our plugin settings
                 for plugin_id, plugin_data in plugins.items():
                     if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
                         settings = plugin_data.get("settings", {})
-                        log.LogDebug(f"Fallback found plugin '{plugin_id}' with settings: {json.dumps(settings)}")
+                        log.LogInfo(f"Fallback found plugin '{plugin_id}' with settings: {json.dumps(settings)}")
                         return settings
+                
+                log.LogWarning("Plugin 'stash_renamer' not found in configuration")
+        else:
+            log.LogWarning(f"Fallback query failed: {response.status_code}")
     except Exception as e:
-        log.LogDebug(f"Fallback error: {e}")
+        log.LogWarning(f"Fallback error: {e}")
     
     return {}
 
@@ -115,6 +123,8 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
                 return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
         else:
             log.LogWarning(f"Failed to fetch plugin settings: {response.status_code}")
+            # Try fallback on failure
+            return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
     except Exception as e:
         log.LogWarning(f"Error fetching plugin settings: {e}")
     
