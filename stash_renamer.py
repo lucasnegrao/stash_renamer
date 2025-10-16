@@ -388,7 +388,7 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
       studio { name }
       performers { name gender }
       tags { name }
-      movies { movie { id name } }
+      groups { scenegroup { Group{ id name } } }
     }
   }
 }
@@ -481,7 +481,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
 
         # Skip if scene is part of a group/movie (optional)
         if SKIP_GROUPED:
-            movies = scene.get("movies") or []
+            movies = scene.get("groups") or []
             if movies:
                 if DEBUG_MODE:
                     logPrint(f"[DEBUG] Skipping grouped scene (ID: {scene['id']}): {os.path.basename(current_path)}")
