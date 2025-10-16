@@ -239,9 +239,11 @@ def run(input_data, output):
         args = input_data.get("args", {})
         log.LogDebug(f"Plugin args: {json.dumps(args)}")
         log.LogDebug(f"Plugin settings: {json.dumps(settings)}")
-        
+
         # Merge settings with args (args take precedence)
-        combined_args = {**settings, **args}
+
+        combined_args = {**settings}
+
         log.LogDebug(f"Combined args: {json.dumps(combined_args)}")
         
         # Helper to parse truthy values
