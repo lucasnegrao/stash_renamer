@@ -63,10 +63,35 @@ def logPrint(msg: str):
 
 
 def sanitize_filename(name: str) -> str:
-    if IS_WINDOWS:
-        return re.sub(r'[\/:"*?<>|#,]+', "", name)
-    name = name.replace("/", "-")
-    return re.sub(r"\s{2,}", " ", name).strip()
+    """
+    Sanitize filename/folder name by removing characters that are problematic
+    across different filesystems. Preserves spaces and hyphens.
+    
+    Removes:
+    - Windows forbidden: < > : " / \ | ? *
+    - Control characters (0-31, 127)
+    - Quotes: ' " ` 
+    - Hash and comma which can cause issues
+    - Leading/trailing dots and spaces (Windows compatibility)
+    """
+    if not name:
+        return ""
+    
+    # Remove control characters (ASCII 0-31 and 127)
+    name = ''.join(char for char in name if ord(char) >= 32 and ord(char) != 127)
+    
+    # Remove problematic characters across all platforms
+    # Windows forbidden: < > : " / \ | ? *
+    # Additional: ' ` # , (can cause issues in some contexts)
+    name = re.sub(r'[<>:"/\\|?*\'`#,]+', '', name)
+    
+    # Collapse multiple spaces to single space
+    name = re.sub(r'\s{2,}', ' ', name)
+    
+    # Remove leading/trailing dots and spaces (Windows doesn't allow these)
+    name = name.strip('. ')
+    
+    return name
 
 
 def normalize_height(v: Optional[int]) -> str:
