@@ -110,63 +110,66 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
 
 def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stash_renamer"):
     """Fetch plugin settings from Stash via GraphQL"""
-    # Try to get plugin settings directly
+
+    # Correct: declare $plugin_id and reference it (no quotes) + wrap 'plugins' under 'configuration'
     query = """
-    query configuration{
-      plugins(include: "$plugin_id")
+    query configuration($plugin_id: [String!]) {
+      configuration {
+        plugins(include: $plugin_id)
+      }
     }
     """
-    
+
     headers = {
-        "Accept-Encoding": "gzip, deflate, br",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Connection": "keep-alive",
-        "DNT": "1",
+        "Cookie": f"{cookie_name}={cookie_value}",
     }
-    
-    # Use session cookie authentication (when running as plugin)
-    headers["Cookie"] = f"{cookie_name}={cookie_value}"
-   
-    variables = {"plugin_id": plugin_id}
-    
+
+    # Send a list for [String!]
+    variables = {"plugin_id": [plugin_id]}
+
     try:
         response = requests.post(
             server_url,
             json={"query": query, "variables": variables},
             headers=headers,
         )
-        
-        if response.status_code == 200:
-            result = response.json()
-            
-            # Check for errors
-            if result.get("errors"):
-                log.LogDebug(f"GraphQL errors: {result['errors']}")
-                # Fall back to configuration query
-                return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
-            
-            data = result.get("data", {})
-            settings_json = data["configuration"]["plugins"]["stash_renamer"]
-            
-            if settings_json:
-                if isinstance(settings_json, str):
-                    settings = json.loads(settings_json)
-                else:
-                    settings = settings_json
-                log.LogInfo(f"Found plugin settings: {json.dumps(settings)}")
-                return settings
-            else:
-                log.LogDebug("No pluginSettings in response, trying fallback")
-                return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
-        else:
-            log.LogWarning(f"Yei ow Failed to fetch plugin settings: {response.status_code}")
-            # Try fallback on failure
+
+        # Helpful diagnostics when things go wrong
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            log.LogWarning(f"Fetch plugin settings failed: {response.status_code} {body}")
             return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
+
+        result = response.json()
+
+        # GraphQL-level errors
+        if result.get("errors"):
+            log.LogDebug(f"GraphQL errors: {result['errors']}")
+            return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
+
+        data = result.get("data", {})
+        # Path: data.configuration.plugins is a map keyed by plugin id
+        plugins = data.get("configuration", {}).get("plugins", {})
+        settings_json = plugins.get(plugin_id)
+
+        if settings_json is None:
+            log.LogDebug("Plugin not found in response, using fallback.")
+            return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
+
+        # Some Stash fields return JSON as a string; handle both
+        settings = json.loads(settings_json) if isinstance(settings_json, str) else settings_json
+        log.LogInfo(f"Found plugin settings: {json.dumps(settings)}")
+        return settings
+
     except Exception as e:
         log.LogWarning(f"Error fetching plugin settings: {e}")
-    
-    return {}
+        return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
+
 
 def main():
     input_data = None
