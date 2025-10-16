@@ -337,7 +337,7 @@ def run(input_data, output):
         print(json_output, file=sys.stdout, flush=True)
         
         # Also set output dict for compatibility
-        output["output"] = "ok"
+        #output["output"] = "ok"
         
     except Exception as e:
         import traceback
