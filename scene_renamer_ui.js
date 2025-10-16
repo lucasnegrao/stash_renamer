@@ -443,6 +443,26 @@
                   React.createElement(
                     "th",
                     {
+                      onClick: () => handleSort("old_path"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "Old Path ",
+                    sortField === "old_path" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("new_path"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "New Path ",
+                    sortField === "new_path" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
                       onClick: () => handleSort("error"),
                       style: { cursor: "pointer", userSelect: "none" },
                     },
@@ -493,6 +513,24 @@
                         title: op.new_filename,
                       },
                       op.new_filename
+                    ),
+                    React.createElement(
+                      "td",
+                      {
+                        className: "text-truncate",
+                        style: { maxWidth: "300px" },
+                        title: op.old_path,
+                      },
+                      op.old_path || ""
+                    ),
+                    React.createElement(
+                      "td",
+                      {
+                        className: "text-truncate",
+                        style: { maxWidth: "300px" },
+                        title: op.new_path,
+                      },
+                      op.new_path || ""
                     ),
                     React.createElement(
                       "td",
