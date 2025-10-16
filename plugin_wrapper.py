@@ -319,18 +319,6 @@ def run(input_data, output):
         # Output success with operations list
         log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
         
-        # Write operations to a temporary JSON file for UI access
-        operations_file = os.path.join(os.path.dirname(__file__), "renamer_operations.json")
-        try:
-            with open(operations_file, "w", encoding="utf-8") as f:
-                json.dump(operations if operations else [], f, indent=2)
-            log.LogInfo(f"Operations written to {operations_file}")
-        except Exception as e:
-            log.LogWarning(f"Could not write operations file: {e}")
-        
-        # Include a summary in the output
-        output["output"] = f"Completed {len(operations) if operations else 0} operations"
-        
         # Log each operation for visibility
         if operations:
             log.LogInfo("="*50)
@@ -342,6 +330,14 @@ def run(input_data, output):
                 if op.get("error"):
                     log.LogWarning(f"   Error: {op['error']}")
             log.LogInfo("="*50)
+        
+        # IMPORTANT: Output JSON to stdout so the UI can access it via the GraphQL mutation response
+        # This is the key - Stash will capture stdout and return it in runPluginOperation
+        json_output = json.dumps({"operations": operations if operations else []})
+        print(json_output, file=sys.stdout, flush=True)
+        
+        # Also set output dict for compatibility
+        output["output"] = "ok"
         
     except Exception as e:
         import traceback

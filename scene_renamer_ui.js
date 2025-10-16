@@ -42,27 +42,34 @@
         });
 
         const result = await response.json();
-        
-        // Wait a moment for the operation to complete
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Try to fetch the operations file that the plugin writes
-        try {
-          const opsResponse = await fetch("/plugin/stash_renamer/renamer_operations.json");
-          if (opsResponse.ok) {
-            const opsData = await opsResponse.json();
-            if (opsData && Array.isArray(opsData) && opsData.length > 0) {
-              setOperations(opsData);
-              setStatus(`Completed! Found ${opsData.length} operations.`);
+
+        // The plugin outputs JSON to stdout, which Stash captures and returns here
+        if (result.data && result.data.runPluginOperation) {
+          try {
+            // Parse the JSON output from the plugin
+            const pluginOutput = JSON.parse(result.data.runPluginOperation);
+
+            if (
+              pluginOutput.operations &&
+              Array.isArray(pluginOutput.operations)
+            ) {
+              setOperations(pluginOutput.operations);
+              setStatus(
+                `Completed! Found ${pluginOutput.operations.length} operations.`
+              );
             } else {
-              setStatus("Completed! No operations found. Check Settings → Logs → Plugins for details.");
+              setStatus(
+                "Completed! No operations returned. Check Settings → Logs → Plugins for details."
+              );
             }
-          } else {
-            setStatus("Completed! Check Settings → Logs → Plugins for details.");
+          } catch (parseError) {
+            console.error("Failed to parse plugin output:", parseError);
+            setStatus(
+              "Completed! Check Settings → Logs → Plugins for the rename operations list."
+            );
           }
-        } catch (fetchError) {
-          // Fallback: operations file not accessible, check logs
-          setStatus("Completed! Check Settings → Logs → Plugins for the rename operations list.");
+        } else {
+          setStatus("Completed! Check Settings → Logs → Plugins for details.");
         }
       } catch (error) {
         setStatus("Error: " + error.message);
@@ -207,12 +214,20 @@
                     React.createElement("td", null, op.scene_id),
                     React.createElement(
                       "td",
-                      { className: "text-truncate", style: { maxWidth: "250px" }, title: op.old_filename },
+                      {
+                        className: "text-truncate",
+                        style: { maxWidth: "250px" },
+                        title: op.old_filename,
+                      },
                       op.old_filename
                     ),
                     React.createElement(
                       "td",
-                      { className: "text-truncate", style: { maxWidth: "250px" }, title: op.new_filename },
+                      {
+                        className: "text-truncate",
+                        style: { maxWidth: "250px" },
+                        title: op.new_filename,
+                      },
                       op.new_filename
                     ),
                     React.createElement(
