@@ -52,7 +52,7 @@ def logPrint(msg: str):
         elif "[DEBUG]" in msg:
             stash_log.LogDebug(msg)
         elif "[DRY]" in msg or "[DRY_RUN]" in msg:
-            stash_log.LogInfo(msg)  # Dry run messages are important
+            stash_log.LogTrace(msg)  # Dry run messages are important
         elif "[OS]" in msg:
             stash_log.LogInfo(msg)  # File operations
         else:

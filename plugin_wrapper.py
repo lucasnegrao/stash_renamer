@@ -320,16 +320,16 @@ def run(input_data, output):
         log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
         
         # Log each operation for visibility
-        if operations:
-            log.LogInfo("="*50)
-            log.LogInfo("RENAME OPERATIONS:")
-            log.LogInfo("="*50)
-            for i, op in enumerate(operations, 1):
-                status_marker = "✓" if op["status"] == "success" else "○" if op["status"] == "pending" else "✗"
-                log.LogInfo(f"{i}. [{status_marker}] {op['old_filename']} → {op['new_filename']}")
-                if op.get("error"):
-                    log.LogWarning(f"   Error: {op['error']}")
-            log.LogInfo("="*50)
+        # if operations:
+            # log.LogInfo("="*50)
+            # log.LogInfo("RENAME OPERATIONS:")
+            # log.LogInfo("="*50)
+            # for i, op in enumerate(operations, 1):
+            #     status_marker = "✓" if op["status"] == "success" else "○" if op["status"] == "pending" else "✗"
+            #     log.LogInfo(f"{i}. [{status_marker}] {op['old_filename']} → {op['new_filename']}")
+            #     if op.get("error"):
+            #         log.LogWarning(f"   Error: {op['error']}")
+            # log.LogInfo("="*50)
         json_output = json.dumps({"operations": operations if operations else []})
         #print(json_output, file=sys.stdout, flush=True)
         
