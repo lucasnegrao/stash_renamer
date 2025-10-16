@@ -329,6 +329,10 @@ def run(input_data, output):
         filter_groups = to_list(combined_args.get("filterGroups") or combined_args.get("filter_groups"))
         filter_tags = to_list(combined_args.get("filterTags") or combined_args.get("filter_tags"))
         
+        # Path builder options
+        path_template = combined_args.get("pathTemplate") or combined_args.get("path_template") or ""
+        path_is_absolute = is_true(combined_args.get("pathIsAbsolute") or combined_args.get("path_is_absolute"))
+
         # Build options dict for renamer.run
         options = {
             "server_url": server_url,
@@ -338,7 +342,6 @@ def run(input_data, output):
             "dry_run": dry_run,
             # Flags (UI only toggles when explicitly set)
             "skip_grouped": is_true(args.get("skipGrouped")),
-            "move_to_studio_folder": is_true(args.get("moveToStudio")) or is_true(args.get("moveToStudioFolder")),
             "debug_mode": is_true(args.get("debugMode")) or is_true(args.get("debug")),
             # Path filters
             "path_like": path_like or None,
@@ -366,6 +369,11 @@ def run(input_data, output):
             options["filter_groups"] = filter_groups
         if filter_tags:
             options["filter_tags"] = filter_tags
+        # New: path builder
+        if path_template:
+          options["path_template"] = path_template
+        if path_is_absolute:
+          options["path_is_absolute"] = path_is_absolute
         
         log.LogInfo("Invoking renamer...")
         from stash_renamer import run as renamer_run

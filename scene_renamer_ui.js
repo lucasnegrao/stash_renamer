@@ -115,7 +115,9 @@
     const [template, setTemplate] = React.useState("$studio - $date - $title");
     const [dryRun, setDryRun] = React.useState(true);
     const [skipGrouped, setSkipGrouped] = React.useState(false);
-    const [moveToStudioFolder, setMoveToStudioFolder] = React.useState(false);
+    // Remove moveToStudioFolder; add path builder states
+    const [pathTemplate, setPathTemplate] = React.useState("");
+    const [pathIsAbsolute, setPathIsAbsolute] = React.useState(false);
     const [pathLike, setPathLike] = React.useState("");
     const [excludePathLike, setExcludePathLike] = React.useState("");
     const [debugMode, setDebugMode] = React.useState(false);
@@ -256,10 +258,13 @@
                 template: template,
                 dry_run: dryRun.toString(),
                 skipGrouped: skipGrouped.toString(),
-                moveToStudioFolder: moveToStudioFolder.toString(),
+                // removed: moveToStudioFolder
                 pathLike: pathLike,
                 excludePathLike: excludePathLike,
                 debugMode: debugMode.toString(),
+                // Path builder
+                pathTemplate: pathTemplate,
+                pathIsAbsolute: pathIsAbsolute.toString(),
                 // New args
                 tags: tags, // comma-separated
                 performerGenders: performerGenders.join(","),
@@ -395,14 +400,17 @@
           setSkipGrouped(
             toBool(settings.skipGrouped ?? settings.skip_grouped, skipGrouped)
           );
-          setMoveToStudioFolder(
-            toBool(
-              settings.moveToStudioFolder ?? settings.move_to_studio_folder,
-              moveToStudioFolder
-            )
-          );
+          // removed: setMoveToStudioFolder(...)
           setDebugMode(
             toBool(settings.debugMode ?? settings.debug_mode, debugMode)
+          );
+
+          // Path builder defaults
+          setPathTemplate(
+            settings.pathTemplate ?? settings.path_template ?? ""
+          );
+          setPathIsAbsolute(
+            toBool(settings.pathIsAbsolute ?? settings.path_is_absolute, false)
           );
 
           // New: tag selection and filters
@@ -501,6 +509,59 @@
         )
       ),
 
+      // Path Builder
+      React.createElement("hr", null),
+      React.createElement("h4", null, "Path Builder"),
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Path Template:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: pathTemplate,
+            onChange: (e) => setPathTemplate(e.target.value),
+            placeholder: "e.g., $studio/$date or $up/Archive/$studio",
+          }),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Build destination folder using filename tokens. Use $up for parent in relative paths."
+          )
+        )
+      ),
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            "div",
+            { className: "form-check" },
+            React.createElement("input", {
+              type: "checkbox",
+              className: "form-check-input",
+              id: "pathIsAbsolute",
+              checked: pathIsAbsolute,
+              onChange: (e) => setPathIsAbsolute(e.target.checked),
+            }),
+            React.createElement(
+              "label",
+              { className: "form-check-label", htmlFor: "pathIsAbsolute" },
+              "Absolute Path (otherwise relative to current file)"
+            )
+          )
+        )
+      ),
+
       // Options
       React.createElement("hr", null),
       React.createElement("h4", null, "Options"),
@@ -551,32 +612,6 @@
               "label",
               { className: "form-check-label", htmlFor: "skipGrouped" },
               "Skip Grouped Scenes"
-            )
-          )
-        )
-      ),
-
-      // Move to Studio Folder checkbox
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "div",
-          { className: "col-sm-10 offset-sm-2" },
-          React.createElement(
-            "div",
-            { className: "form-check" },
-            React.createElement("input", {
-              type: "checkbox",
-              className: "form-check-input",
-              id: "moveToStudioFolder",
-              checked: moveToStudioFolder,
-              onChange: (e) => setMoveToStudioFolder(e.target.checked),
-            }),
-            React.createElement(
-              "label",
-              { className: "form-check-label", htmlFor: "moveToStudioFolder" },
-              "Move to Studio Subfolder (create studio-named folders)"
             )
           )
         )

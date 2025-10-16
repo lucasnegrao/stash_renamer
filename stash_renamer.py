@@ -13,7 +13,7 @@ USING_LOG = True
 DRY_RUN = False
 DEBUG_MODE = True
 SKIP_GROUPED = False
-MOVE_TO_STUDIO_FOLDER = False
+MOVE_TO_STUDIO_FOLDER = False  # ...existing code, no longer used by path builder...
 
 IS_WINDOWS = os.name == "nt"
 
@@ -23,6 +23,10 @@ CONFIG = None  # type: Optional[SimpleNamespace]
 # New globals for filters
 PERFORMER_GENDERS = None  # type: Optional[set]
 FILTERS = {}              # type: Dict[str, object]
+
+# New globals for path building
+PATH_TEMPLATE: Optional[str] = None
+PATH_IS_ABSOLUTE: bool = False
 
 # Try to import Stash logging if available (when running as plugin)
 USING_STASH_LOG = False
@@ -91,6 +95,63 @@ def sanitize_filename(name: str) -> str:
     name = name.strip('. ')
     
     return name
+
+def _sanitize_path_component(seg: str) -> str:
+    """
+    Sanitize a single path segment using the same rules as filenames.
+    Does not allow path separators in the segment.
+    """
+    return sanitize_filename(seg or "")
+
+def _build_target_directory(current_directory: str, scene_info: Dict[str, str], path_template: str, is_absolute: bool) -> str:
+    """
+    Build a target directory from a template using the same tokens as filenames.
+    Special token:
+      - $up -> parent directory (only meaningful in relative mode)
+    Slashes (/) in the template denote subfolders.
+    """
+    # Replace tokens similarly to makeFilename, but allow separators
+    raw = str(path_template or "")
+    # Minimal token replacement, reuse makeFilename for consistency
+    replaced = makeFilename(scene_info, raw)
+
+    # Expand $up occurrences after token replacement to literal .. marker
+    replaced = replaced.replace("$up", "..")
+
+    # Normalize multiple slashes
+    replaced = re.sub(r"[\\/]+", "/", replaced).strip()
+
+    # Split into segments
+    parts = [p.strip() for p in replaced.split("/")]
+
+    if is_absolute:
+        # Build a normalized absolute path from parts
+        stack: List[str] = []
+        for seg in parts:
+            if not seg or seg == ".":
+                continue
+            if seg == "..":
+                if stack:
+                    stack.pop()
+                continue
+            stack.append(_sanitize_path_component(seg))
+        # Prepend os.sep to make absolute (best-effort cross-platform)
+        final_dir = os.sep + os.path.join(*stack) if stack else os.sep
+        return final_dir
+    else:
+        # Relative to current_directory; support .. to go up
+        base = current_directory
+        for seg in parts:
+            if not seg or seg == ".":
+                continue
+            if seg == "..":
+                # ascend but don't go above filesystem root
+                parent = os.path.dirname(base.rstrip(os.sep)) or base
+                # Avoid empty path; keep root when already at root
+                base = parent if parent else base
+            else:
+                base = os.path.join(base, _sanitize_path_component(seg))
+        return base
 
 
 def makeFilename(scene_info: Dict[str, str], query: str) -> str:
@@ -434,7 +495,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
     operations = []
     
     if DEBUG_MODE:
-        logPrint(f"[DEBUG] Starting edit_run with MOVE_TO_STUDIO_FOLDER={MOVE_TO_STUDIO_FOLDER}, DRY_RUN={DRY_RUN}")
+        logPrint(f"[DEBUG] Starting edit_run with DRY_RUN={DRY_RUN}, PATH_TEMPLATE={'set' if PATH_TEMPLATE else 'none'}, PATH_IS_ABSOLUTE={PATH_IS_ABSOLUTE}")
     
     # Resolve tags if provided
     tag_ids: Optional[List[str]] = None
@@ -552,33 +613,36 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             continue
         new_filename = new_filename_core + file_extension
 
-        # Determine target directory (studio subfolder if enabled and studio exists)
-        target_directory = current_directory
-        if MOVE_TO_STUDIO_FOLDER and studio_name:
-            sanitized_studio = sanitize_filename(studio_name)
-            target_directory = os.path.join(current_directory, sanitized_studio)
-            if DEBUG_MODE:
-                logPrint(f"[DEBUG] Studio folder move enabled - target directory: {target_directory}")
-            if not os.path.exists(target_directory):
-                if not DRY_RUN:
-                    try:
-                        os.makedirs(target_directory, exist_ok=True)
-                        logPrint(f"[OS] Created studio folder: {target_directory}")
-                    except Exception as e:
-                        logPrint(f"[Error] Failed to create studio folder {target_directory}: {e}")
-                        target_directory = current_directory
-                else:
-                    logPrint(f"[DRY] Would create studio folder: {target_directory}")
-        elif DEBUG_MODE:
-            logPrint(f"[DEBUG] Studio folder move disabled - keeping same directory: {target_directory}")
+        # Determine target directory via path builder (absolute or relative)
+        current_directory = os.path.dirname(current_path)
+        if PATH_TEMPLATE:
+            try:
+                final_directory = _build_target_directory(
+                    current_directory=current_directory,
+                    scene_info=scene_info,
+                    path_template=PATH_TEMPLATE,
+                    is_absolute=PATH_IS_ABSOLUTE,
+                )
+                if DEBUG_MODE:
+                    logPrint(f"[DEBUG] Path builder: current='{current_directory}' -> target='{final_directory}'")
+                if not os.path.exists(final_directory):
+                    if not DRY_RUN:
+                        os.makedirs(final_directory, exist_ok=True)
+                        logPrint(f"[OS] Created target folder: {final_directory}")
+                    else:
+                        logPrint(f"[DRY] Would create target folder: {final_directory}")
+            except Exception as e:
+                logPrint(f"[Error] Failed to build/create target folder from template '{PATH_TEMPLATE}': {e}")
+                final_directory = current_directory
+        else:
+            final_directory = current_directory
 
-        # Calculate the final path - ensure consistency with the actual operation
-        final_directory = target_directory if MOVE_TO_STUDIO_FOLDER and studio_name else current_directory
         new_path = os.path.join(final_directory, new_filename)
-        
-        if DEBUG_MODE:
-            logPrint(f"[DEBUG] Directory check: current='{current_directory}' target='{target_directory}' final='{final_directory}'")
 
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Directory check: current='{current_directory}' final='{final_directory}'")
+
+        # Handle Windows path length limitation (try to reduce path length if too long)
         if IS_WINDOWS and len(new_path) > 240:
             logPrint(f"[Warn] The Path is too long ({new_path})")
             if scene_info.get("date"):
@@ -636,66 +700,52 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     })
                 continue
             
-            if os.path.isfile(current_path):
-                try:
-                    # Use GraphQL moveFiles mutation instead of os.rename
-                    if DEBUG_MODE:
-                        logPrint(f"[DEBUG] GraphQL call: destination_folder='{final_directory}', destination_basename='{new_filename}'")
+            # Use GraphQL moveFiles mutation instead of os.rename
+            try:
+                if DEBUG_MODE:
+                    logPrint(f"[DEBUG] GraphQL call: destination_folder='{final_directory}', destination_basename='{new_filename}'")
+                
+                success = move_files_via_graphql(
+                    file_ids=file_ids,
+                    destination_folder=final_directory,
+                    destination_basename=new_filename
+                )
+                
+                if not success:
+                    raise Exception("GraphQL moveFiles returned false")
                     
-                    success = move_files_via_graphql(
-                        file_ids=file_ids,
-                        destination_folder=final_directory,
-                        destination_basename=new_filename
-                    )
-                    
-                    if not success:
-                        raise Exception("GraphQL moveFiles returned false")
-                        
-                except Exception as e:
-                    logPrint(f"[OS] File failed to rename ({current_filename}) due to: {e}")
-                    with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
-                        print(f"{current_path} -> {new_path}", file=fh)
-                    if collect_operations:
-                        operations.append({
-                            "scene_id": scene['id'],
-                            "title": scene_title,
-                            "status": "error",
-                            "error": str(e),
-                            "old_filename": current_filename,
-                            "new_filename": new_filename,
-                            "old_path": current_path,
-                            "new_path": new_path
-                        })
-                    continue
-
-                # Success - the GraphQL mutation handles the actual file move
-                logPrint(f"[OS] File Renamed! ({current_filename})")
-                if USING_LOG:
-                    with open("rename_log.txt", "a", encoding="utf-8") as fh:
-                        print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
-                if collect_operations:
-                    operations.append({
-                        "scene_id": scene['id'],
-                        "title": scene_title,
-                        "status": "success",
-                        "old_filename": current_filename,
-                        "new_filename": new_filename,
-                        "old_path": current_path,
-                        "new_path": new_path
-                    })
-            else:
-                logPrint(f"[OS] File doesn't exist on disk ({current_path})")
+            except Exception as e:
+                logPrint(f"[OS] File failed to rename ({current_filename}) due to: {e}")
+                with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
+                    print(f"{current_path} -> {new_path}", file=fh)
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
                         "title": scene_title,
                         "status": "error",
-                        "error": "File doesn't exist on disk",
+                        "error": str(e),
                         "old_filename": current_filename,
                         "new_filename": new_filename,
                         "old_path": current_path,
                         "new_path": new_path
                     })
+                continue
+
+            # Success - the GraphQL mutation handles the actual file move
+            logPrint(f"[OS] File Renamed! ({current_filename})")
+            if USING_LOG:
+                with open("rename_log.txt", "a", encoding="utf-8") as fh:
+                    print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene['id'],
+                    "title": scene_title,
+                    "status": "success",
+                    "old_filename": current_filename,
+                    "new_filename": new_filename,
+                    "old_path": current_path,
+                    "new_path": new_path
+                })
         else:
             # Show dry run with clearer indication if file is moving to a different directory
             if os.path.dirname(current_path) != os.path.dirname(new_path):
@@ -728,17 +778,20 @@ def run(options: dict, collect_operations: bool = False):
       - scene_filter: dict (GraphQL SceneFilterType), optional
       - path_like, exclude_path_like: str, optional
       - scene_ids: List[str] or comma-separated str, optional
-      - performer_genders: str|List[str] for filename token composition (GenderEnum)
-      - filter_performer_genders: str|List[str] to include scenes with any of these performer genders
+      - performer_genders: str|List[str] for filename token composition
+      - filter_performer_genders: str|List[str] for inclusion filtering
       - filter_organized: bool
       - filter_interactive: bool
       - filter_min_scene_markers: int
-      - filter_studio: str|List[str] (exact match)
-      - filter_groups: List[str] (exact match)
-      - filter_tags: List[str] (client-side; GraphQL tag filter still supported via tags/tag_template_pairs)
-      - Flags: using_log, dry_run, debug_mode, skip_grouped, move_to_studio_folder
+      - filter_studio: str|List[str]
+      - filter_groups: List[str]
+      - filter_tags: List[str]
+      - path_template: str (optional) Directory template using same tokens as filenames.
+          Special token: $up for parent (only in relative mode).
+      - path_is_absolute: bool (optional) If true, build absolute path; otherwise relative to current file directory.
+      - Flags: using_log, dry_run, debug_mode, skip_grouped
     """
-    global USING_LOG, DRY_RUN, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG, PERFORMER_GENDERS, FILTERS
+    global USING_LOG, DRY_RUN, DEBUG_MODE, SKIP_GROUPED, CONFIG, PERFORMER_GENDERS, FILTERS, PATH_TEMPLATE, PATH_IS_ABSOLUTE
 
     # Configure connection (cookie-only auth)
     server_url = options.get("server_url")
@@ -758,9 +811,12 @@ def run(options: dict, collect_operations: bool = False):
     DRY_RUN = options.get("dry_run", DRY_RUN)
     DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
     SKIP_GROUPED = options.get("skip_grouped", SKIP_GROUPED)
-    MOVE_TO_STUDIO_FOLDER = options.get("move_to_studio_folder", MOVE_TO_STUDIO_FOLDER)
 
-    # Parse genders
+    # Configure path builder
+    PATH_TEMPLATE = options.get("path_template") or None
+    PATH_IS_ABSOLUTE = bool(options.get("path_is_absolute", False))
+
+    # Parse genders and build FILTERS
     def parse_genders(val):
         if not val:
             return None
