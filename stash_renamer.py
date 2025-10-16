@@ -154,9 +154,55 @@ def _build_target_directory(current_directory: str, scene_info: Dict[str, str], 
         return base
 
 
+def _apply_array_index_tokens(template: str, scene_info: Dict[str, object]) -> str:
+    """
+    Replace array-index tokens like:
+      $groups[0]        -> first group name
+      $groups[0-4]      -> first 5 group names (inclusive range)
+      $performers[1-3]  -> performers 2..4
+      $tags[0]          -> first tag
+      $urls[0-2]        -> first 3 urls
+    Arrays are read from scene_info keys: groups_list, performers_list, tags_list, urls_list.
+    """
+    pattern = re.compile(r"\$(groups|performers|tags|urls)\[(\d+)(?:-(\d+))?\]")
+    arrays = {
+        "groups": scene_info.get("groups_list") or [],
+        "performers": scene_info.get("performers_list") or [],
+        "tags": scene_info.get("tags_list") or [],
+        "urls": scene_info.get("urls_list") or [],
+    }
+
+    def repl(m: re.Match) -> str:
+        name = m.group(1)
+        start = int(m.group(2))
+        end_str = m.group(3)
+        items: List[str] = []
+        src = arrays.get(name) or []
+        # Ensure list of strings
+        src = [str(x) for x in src if str(x)]
+        if not src:
+            return ""
+        if end_str is None:
+            # Single index
+            if 0 <= start < len(src):
+                items = [src[start]]
+        else:
+            end = int(end_str)
+            if end < start:
+                start, end = end, start
+            # Inclusive range
+            items = src[start : min(end + 1, len(src))]
+        return sanitize_filename(" ".join(items)) if items else ""
+
+    return pattern.sub(repl, template)
+
+
 def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     # Trim template
     s = str(query or "").strip()
+
+    # First, resolve array-index tokens (uses lists from scene_info)
+    s = _apply_array_index_tokens(s, scene_info)
 
     # Replace tokens with values or empty strings
     tokens = {
@@ -179,7 +225,7 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
         "$resume_time": (scene_info.get("resume_time") or "").strip(),
         "$play_duration": (scene_info.get("play_duration") or "").strip(),
         "$play_count": (scene_info.get("play_count") or "").strip(),
-        # Collections
+        # Collections (string-joined)
         "$tags": (scene_info.get("tags") or "").strip(),
         "$groups": (scene_info.get("groups") or "").strip(),
         "$scene_markers_count": (scene_info.get("scene_markers_count") or "").strip(),
@@ -586,12 +632,16 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     names.append(p.get("name") or "")
             else:
                 names.append(p.get("name") or "")
-        performer_name = " ".join([n for n in names if n]).strip()
+        performer_names_list = [n for n in names if n]
+        performer_name = " ".join(performer_names_list).strip()
 
         # Derived collections for tokens
-        tag_names_join = " ".join([(t.get("name") or "").strip() for t in (scene.get("tags") or []) if (t.get("name") or "").strip()])
-        group_names_join = " ".join([((g.get("group") or {}).get("name") or "").strip() for g in (scene.get("groups") or []) if ((g.get("group") or {}).get("name") or "").strip()])
-        urls_join = " ".join(scene.get("urls") or [])
+        tag_names_list = [(t.get("name") or "").strip() for t in (scene.get("tags") or []) if (t.get("name") or "").strip()]
+        tag_names_join = " ".join(tag_names_list)
+        group_names_list = [((g.get("group") or {}).get("name") or "").strip() for g in (scene.get("groups") or []) if ((g.get("group") or {}).get("name") or "").strip()]
+        group_names_join = " ".join(group_names_list)
+        urls_list = scene.get("urls") or []
+        urls_join = " ".join(urls_list)
         scene_markers_count = str(len(scene.get("scene_markers") or []))
 
         scene_title = scene.get("title") or ""
@@ -623,6 +673,11 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             "groups": group_names_join,
             "scene_markers_count": scene_markers_count,
             "performers": performer_name,
+            # Lists for array-index tokens
+            "tags_list": tag_names_list,
+            "groups_list": group_names_list,
+            "performers_list": performer_names_list,
+            "urls_list": urls_list,
             # Existing
             "studio": studio_name,
             "height": "",  # Not fetched here
