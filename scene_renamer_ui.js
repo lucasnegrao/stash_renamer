@@ -141,13 +141,13 @@
 
    const TestPage = () => {
      const componentsToLoad = [
-       PluginApi.loadableComponents.SceneCard,
+       PluginApi.loadableComponents.TagSelect,
        PluginApi.loadableComponents.PerformerSelect,
      ];
      const componentsLoading =
        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-     const { SceneCard, LoadingIndicator, PerformerSelect } =
+     const { TagSelect, LoadingIndicator, PerformerSelect } =
        PluginApi.components;
 
      if (componentsLoading) return React.createElement(LoadingIndicator);
@@ -158,7 +158,7 @@
        React.createElement(
          "div",
          null,
-         React.createElement(PerformerSelect, {
+         React.createElement(TagSelect, {
            isMulti: true,
            onSelect: () => {},
            values: [],
