@@ -204,7 +204,41 @@
     const [groupSearch, setGroupSearch] = React.useState("");
     // New: studio search
     const [studioSearch, setStudioSearch] = React.useState("");
+ const TestPage = () => {
+   const componentsToLoad = [
+     PluginApi.loadableComponents.SceneCard,
+     PluginApi.loadableComponents.PerformerSelect,
+   ];
+   const componentsLoading =
+     PluginApi.hooks.useLoadComponents(componentsToLoad);
 
+   const { SceneCard, LoadingIndicator, PerformerSelect } =
+     PluginApi.components;
+
+   // read a random scene and show a scene card for it
+   const { data } = GQL.useFindScenesQuery({
+     variables: {
+       filter: {
+         per_page: 1,
+         sort: "random",
+       },
+     },
+   });
+
+   const scene = data?.findScenes.scenes[0];
+
+   if (componentsLoading) return <LoadingIndicator />;
+
+   return (
+     <div>
+       <div>This is a test page.</div>
+       {!!scene && <SceneCard scene={data.findScenes.scenes[0]} />}
+       <div>
+         <PerformerSelect isMulti onSelect={() => {}} values={[]} />
+       </div>
+     </div>
+   );
+ };
     // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
 
