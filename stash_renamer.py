@@ -211,6 +211,27 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     s = re.sub(r"\s{2,}", " ", s).strip()
     return s
 
+def _normalize_slashes(s: str) -> str:
+    return str(s or "").replace("\\", "/")
+
+def _like_to_regex(pattern: str) -> re.Pattern:
+    """
+    Convert a SQL-LIKE style pattern to a compiled regex:
+      - % matches any sequence (including path separators)
+      - _ matches any single character
+    We anchor the pattern (fullmatch) to mimic LIKE semantics.
+    """
+    pat = _normalize_slashes(pattern)
+    buf: List[str] = []
+    for ch in pat:
+        if ch == "%":
+            buf.append(".*")
+        elif ch == "_":
+            buf.append(".")
+        else:
+            buf.append(re.escape(ch))
+    regex = "^" + "".join(buf) + "$"
+    return re.compile(regex)
 
 def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
     if CONFIG is None:
@@ -389,21 +410,30 @@ def build_scene_filter(base_filter: Optional[dict], tag_ids: Optional[List[str]]
 
 
 def path_like_match(path: str, pattern: Optional[str]) -> bool:
+    """
+    LIKE-style matcher:
+      - % matches any sequence
+      - _ matches any single character
+    Examples:
+      - /mnt/library/adult/uncategorized/%  -> matches files in that folder and any depth below
+      - /mnt/library/adult/uncategorized/%/% -> matches only files one-or-more levels deeper (i.e., subdirectories only)
+    """
     if not pattern:
         return True
-    sub = pattern.replace("%", "")
-    return sub in path
+    p = _normalize_slashes(path).lower()
+    r = _like_to_regex(pattern.lower())
+    return bool(r.fullmatch(p))
 
 
 def path_excluded(path: str, pattern: Optional[str]) -> bool:
     """
-    Return True if the given path should be excluded based on the pattern.
-    LIKE-style with % wildcards interpreted as substring.
+    Exclude if LIKE-style pattern matches.
     """
     if not pattern:
         return False
-    sub = pattern.replace("%", "")
-    return sub in path
+    p = _normalize_slashes(path).lower()
+    r = _like_to_regex(pattern.lower())
+    return bool(r.fullmatch(p))
 
 
 def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_like: Optional[str]) -> List[dict]:
