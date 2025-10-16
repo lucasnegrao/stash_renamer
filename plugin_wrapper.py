@@ -330,11 +330,15 @@ def run(input_data, output):
                 if op.get("error"):
                     log.LogWarning(f"   Error: {op['error']}")
             log.LogInfo("="*50)
+        json_output = json.dumps({"operations": operations if operations else []})
+        #print(json_output, file=sys.stdout, flush=True)
         
-        # Set operations in output dict - Stash will return this via GraphQL
-        # Include old_path and new_path for UI display
-        output["operations"] = operations if operations else []
-        output["output"] = "ok"
+        # # Also set output dict for compatibility
+        output["output"] = json_output
+        # # Set operations in output dict - Stash will return this via GraphQL
+        # # Include old_path and new_path for UI display
+        # output["operations"] = operations if operations else []
+        # output["output"] = operations if operations else []
         
     except Exception as e:
         import traceback
