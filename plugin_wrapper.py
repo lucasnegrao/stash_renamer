@@ -19,13 +19,16 @@ def read_json_input():
     return None
 
 def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
-    """Fetch settings using configuration query (correct method)"""
+    """Fetch settings using configuration query"""
     log.LogDebug("Fetching plugin settings from configuration")
     
+    # The correct query format for Stash - configuration is a Query type, not nested
     query = """
-    query Configuration {
+    query {
       configuration {
-        general
+        general {
+          databasePath
+        }
         plugins
       }
     }
@@ -46,13 +49,37 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
             cookies=cookies
         )
         
+        log.LogDebug(f"Configuration query status: {response.status_code}")
+        
         if response.status_code == 200:
             result = response.json()
+            
+            # Check for GraphQL errors
+            if "errors" in result:
+                log.LogWarning(f"GraphQL errors: {result['errors']}")
+                return {}
+            
             data = result.get("data", {})
+            if not data:
+                log.LogWarning("No data in configuration response")
+                return {}
+            
             config = data.get("configuration", {})
+            if not config:
+                log.LogWarning("No configuration in response")
+                return {}
+            
             plugins_config = config.get("plugins")
             
             if plugins_config:
+                # Parse if it's a JSON string
+                if isinstance(plugins_config, str):
+                    try:
+                        plugins_config = json.loads(plugins_config)
+                    except json.JSONDecodeError as e:
+                        log.LogWarning(f"Failed to parse plugins JSON: {e}")
+                        return {}
+                
                 # plugins_config is a dict with plugin_id as keys
                 log.LogDebug(f"Found {len(plugins_config)} plugins in config")
                 log.LogDebug(f"Available plugin IDs: {list(plugins_config.keys())}")
@@ -61,7 +88,7 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
                 plugin_id = "stash_renamer"
                 if plugin_id in plugins_config:
                     plugin_data = plugins_config[plugin_id]
-                    log.LogDebug(f"Plugin data keys: {list(plugin_data.keys())}")
+                    log.LogDebug(f"Plugin data type: {type(plugin_data)}, keys: {list(plugin_data.keys()) if isinstance(plugin_data, dict) else 'N/A'}")
                     
                     # Settings are directly in the plugin data
                     settings = plugin_data
@@ -69,10 +96,15 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
                     return settings
                 else:
                     log.LogWarning(f"Plugin '{plugin_id}' not found in configuration. Available: {list(plugins_config.keys())}")
+            else:
+                log.LogWarning("No plugins in configuration")
         else:
             log.LogWarning(f"Configuration query failed: {response.status_code}")
+            log.LogDebug(f"Response: {response.text[:500]}")
     except Exception as e:
         log.LogWarning(f"Fallback error: {e}")
+        import traceback
+        log.LogDebug(traceback.format_exc())
     
     return {}
 
