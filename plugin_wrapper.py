@@ -363,7 +363,7 @@ def run(input_data, output):
         #print(json_output, file=sys.stdout, flush=True)
         
         # # Also set output dict for compatibility
-        output["output"] = json_output
+        output["output"] = operations #json_output
         # # Set operations in output dict - Stash will return this via GraphQL
         # # Include old_path and new_path for UI display
         # output["operations"] = operations if operations else []
