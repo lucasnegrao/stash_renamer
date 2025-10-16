@@ -1,11 +1,56 @@
 (function () {
-  "use strict";
+  ("use strict");
 
   const PluginApi = window.PluginApi;
   const React = PluginApi.React;
   const { Button } = PluginApi.libraries.Bootstrap;
   const { Link, NavLink } = PluginApi.libraries.ReactRouterDOM;
   const { faFileSignature } = PluginApi.libraries.FontAwesomeSolid;
+
+  // Generic GraphQL caller (no explicit auth needed from UI)
+  async function gql(query, variables) {
+    const resp = await fetch("/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+    const json = await resp.json();
+    if (json.errors) {
+      throw new Error(JSON.stringify(json.errors));
+    }
+    return json.data;
+  }
+
+  // Fetch plugin settings from Stash configuration
+  async function fetchPluginSettings(pluginId = "stash_renamer") {
+    const query = `
+      query configuration($plugin_id: [ID!]) {
+        configuration {
+          plugins(include: $plugin_id)
+        }
+      }
+    `;
+    try {
+      const data = await gql(query, { plugin_id: [pluginId] });
+      const plugins =
+        (data && data.configuration && data.configuration.plugins) || {};
+      let settingsRaw = plugins[pluginId];
+
+      // Handle JSON-as-string or object
+      if (!settingsRaw) return {};
+      if (typeof settingsRaw === "string") {
+        try {
+          settingsRaw = JSON.parse(settingsRaw);
+        } catch {
+          return {};
+        }
+      }
+      return settingsRaw || {};
+    } catch (e) {
+      console.warn("Failed to fetch plugin settings:", e);
+      return {};
+    }
+  }
 
   // Scene Renamer UI Page
   const SceneRenamerPage = () => {
@@ -161,6 +206,65 @@
         setRunning(false);
       }
     };
+
+    // Load defaults from plugin settings (once)
+    React.useEffect(() => {
+      let mounted = true;
+
+      const toBool = (v, defVal) => {
+        if (v === undefined || v === null) return defVal;
+        if (typeof v === "boolean") return v;
+        if (typeof v === "number") return v !== 0;
+        const s = String(v).trim().toLowerCase();
+        return ["true", "1", "yes", "y", "on"].includes(s);
+      };
+
+      fetchPluginSettings("stash_renamer")
+        .then((settings) => {
+          if (!mounted) return;
+
+          // Accept both camelCase and snake_case keys
+          if (settings.template) setTemplate(settings.template);
+          if (
+            settings.pathLike !== undefined ||
+            settings.path_like !== undefined
+          ) {
+            setPathLike(settings.pathLike ?? settings.path_like ?? "");
+          }
+          if (
+            settings.excludePathLike !== undefined ||
+            settings.exclude_path_like !== undefined
+          ) {
+            setExcludePathLike(
+              settings.excludePathLike ?? settings.exclude_path_like ?? ""
+            );
+          }
+
+          setDryRun(toBool(settings.dryRun ?? settings.dry_run, dryRun));
+          setFemaleOnly(
+            toBool(settings.femaleOnly ?? settings.female_only, femaleOnly)
+          );
+          setSkipGrouped(
+            toBool(settings.skipGrouped ?? settings.skip_grouped, skipGrouped)
+          );
+          setMoveToStudioFolder(
+            toBool(
+              settings.moveToStudioFolder ?? settings.move_to_studio_folder,
+              moveToStudioFolder
+            )
+          );
+          setDebugMode(
+            toBool(settings.debugMode ?? settings.debug_mode, debugMode)
+          );
+        })
+        .catch((e) => {
+          console.warn("Settings load failed:", e);
+        });
+
+      return () => {
+        mounted = false;
+      };
+    }, []);
 
     return React.createElement(
       "div",
