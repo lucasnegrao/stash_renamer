@@ -2,6 +2,9 @@ name: Scene Renamer
 description: Rename scene files based on metadata with customizable templates
 version: 1.0.0
 url: https://github.com/lucasnegrao/stash_renamer
+ui:
+  javascript:
+    - scene_renamer_ui.js
 settings:
   template:
     displayName: Filename Template
