@@ -110,6 +110,35 @@
     return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
   }
 
+  // New: fetch all studios
+  async function fetchAllStudios() {
+    const query = `
+      query findStudios($filter: FindFilterType!) {
+        findStudios(filter: $filter) {
+          count
+          studios { name }
+        }
+      }
+    `;
+    const perPage = 100;
+    let page = 1;
+    let out = [];
+    for (;;) {
+      const data = await gql(query, { filter: { per_page: perPage, page } });
+      const res = (data && data.findStudios) || {};
+      const list = (res.studios || []).map((s) => s.name).filter(Boolean);
+      out = out.concat(list);
+      const count = typeof res.count === "number" ? res.count : null;
+      if (count != null) {
+        if (page * perPage >= count) break;
+      } else if (list.length < perPage) {
+        break;
+      }
+      page += 1;
+    }
+    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+  }
+
   // Scene Renamer UI Page
   const SceneRenamerPage = () => {
     const [template, setTemplate] = React.useState("$studio - $date - $title");
@@ -156,16 +185,25 @@
     // Available catalogs and picker states
     const [availableTags, setAvailableTags] = React.useState([]);
     const [availableGroups, setAvailableGroups] = React.useState([]);
+    // New: studios catalog
+    const [availableStudios, setAvailableStudios] = React.useState([]);
     const [loadingTags, setLoadingTags] = React.useState(false);
     const [loadingGroups, setLoadingGroups] = React.useState(false);
+    // New: loading studios
+    const [loadingStudios, setLoadingStudios] = React.useState(false);
     const [showSelectTagsPicker, setShowSelectTagsPicker] =
       React.useState(false);
     const [showFilterTagsPicker, setShowFilterTagsPicker] =
       React.useState(false);
     const [showFilterGroupsPicker, setShowFilterGroupsPicker] =
       React.useState(false);
+    // New: studio picker toggle
+    const [showFilterStudiosPicker, setShowFilterStudiosPicker] =
+      React.useState(false);
     const [tagSearch, setTagSearch] = React.useState("");
     const [groupSearch, setGroupSearch] = React.useState("");
+    // New: studio search
+    const [studioSearch, setStudioSearch] = React.useState("");
 
     // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
@@ -287,8 +325,6 @@
         });
 
         const result = await response.json();
-
-        console.log("GraphQL result:", result);
 
         // The plugin outputs JSON which Stash returns here
         if (result.data && result.data.runPluginOperation) {
@@ -473,6 +509,19 @@
         console.warn("Failed to load groups:", e);
       } finally {
         setLoadingGroups(false);
+      }
+    };
+    // New: lazy-load studios on first open
+    const ensureStudiosLoaded = async () => {
+      if (availableStudios.length || loadingStudios) return;
+      try {
+        setLoadingStudios(true);
+        const all = await fetchAllStudios();
+        setAvailableStudios(all);
+      } catch (e) {
+        console.warn("Failed to load studios:", e);
+      } finally {
+        setLoadingStudios(false);
       }
     };
 
@@ -983,7 +1032,7 @@
         )
       ),
 
-      // Studio filter
+      // Studio filter (with Browse picker)
       React.createElement(
         "div",
         { className: "form-group row" },
@@ -995,13 +1044,111 @@
         React.createElement(
           "div",
           { className: "col-sm-10" },
-          React.createElement("input", {
-            type: "text",
-            className: "form-control",
-            value: filterStudio,
-            onChange: (e) => setFilterStudio(e.target.value),
-            placeholder: "Comma-separated exact studio names",
-          })
+          React.createElement(
+            "div",
+            { className: "d-flex" },
+            React.createElement("input", {
+              type: "text",
+              className: "form-control",
+              value: filterStudio,
+              onChange: (e) => setFilterStudio(e.target.value),
+              placeholder: "Comma-separated exact studio names",
+            }),
+            React.createElement(
+              Button,
+              {
+                className: "ml-2",
+                onClick: async () => {
+                  await ensureStudiosLoaded();
+                  setShowFilterStudiosPicker((v) => !v);
+                },
+              },
+              "Browse…"
+            )
+          ),
+          showFilterStudiosPicker &&
+            React.createElement(
+              "div",
+              {
+                className: "border rounded p-2 mt-2",
+                style: { maxHeight: "280px", overflow: "auto" },
+              },
+              React.createElement(
+                "div",
+                { className: "d-flex mb-2" },
+                React.createElement("input", {
+                  type: "text",
+                  className: "form-control",
+                  placeholder: "Search studios…",
+                  value: studioSearch,
+                  onChange: (e) => setStudioSearch(e.target.value),
+                }),
+                React.createElement(
+                  Button,
+                  { className: "ml-2", onClick: () => setStudioSearch("") },
+                  "Clear"
+                )
+              ),
+              loadingStudios
+                ? React.createElement("div", null, "Loading studios…")
+                : React.createElement(
+                    React.Fragment,
+                    null,
+                    (availableStudios || [])
+                      .filter((n) =>
+                        n.toLowerCase().includes(studioSearch.toLowerCase())
+                      )
+                      .map((name) =>
+                        React.createElement(
+                          "div",
+                          { key: name, className: "form-check" },
+                          React.createElement("input", {
+                            type: "checkbox",
+                            id: `filter-studio-${name}`,
+                            className: "form-check-input",
+                            checked: csvToSet(filterStudio).has(name),
+                            onChange: (e) => {
+                              const next = csvToSet(filterStudio);
+                              if (e.target.checked) next.add(name);
+                              else next.delete(name);
+                              setFilterStudio(setToCsv(next));
+                            },
+                          }),
+                          React.createElement(
+                            "label",
+                            {
+                              className: "form-check-label",
+                              htmlFor: `filter-studio-${name}`,
+                            },
+                            name
+                          )
+                        )
+                      )
+                  ),
+              React.createElement(
+                "div",
+                { className: "mt-2 d-flex" },
+                React.createElement(
+                  Button,
+                  {
+                    variant: "secondary",
+                    onClick: () => setShowFilterStudiosPicker(false),
+                  },
+                  "Close"
+                ),
+                React.createElement(
+                  Button,
+                  {
+                    className: "ml-2",
+                    onClick: () => {
+                      setFilterStudio("");
+                      setStudioSearch("");
+                    },
+                  },
+                  "Clear All"
+                )
+              )
+            )
         )
       ),
 
