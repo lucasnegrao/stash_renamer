@@ -87,6 +87,7 @@
 
         const result = await response.json();
         if (result.data && result.data.runPluginOperation) {
+          console.log("GraphQL result:", result);
           const pluginData = JSON.parse(result.data.runPluginOperation);
           if (pluginData.scenes) {
             setAvailableScenes(pluginData.scenes);
