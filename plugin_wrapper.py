@@ -65,22 +65,25 @@ def run(input_data, output):
         port = server_conn.get("Port", 9999)
         server_url = f"{scheme}://{host}:{port}/graphql"
         
-        # Stash provides API key via SessionCookie
+        # Stash provides authentication via SessionCookie
         session_cookie = server_conn.get("SessionCookie")
         if session_cookie:
-            api_key = session_cookie.get("Value", "")
+            cookie_name = session_cookie.get("Name", "session")
+            cookie_value = session_cookie.get("Value", "")
         else:
             # No session cookie - maybe running in test mode
-            api_key = ""
+            cookie_name = ""
+            cookie_value = ""
             log.LogWarning("No SessionCookie found - authentication may fail")
         
         log.LogInfo(f"Server URL: {server_url}")
-        log.LogDebug(f"Has API key: {bool(api_key)}")
+        log.LogDebug(f"Has session cookie: {bool(cookie_value)}")
         
         # Set as environment variables for the main script
         os.environ["STASH_SERVER_URL"] = server_url
-        if api_key:
-            os.environ["STASH_API_KEY"] = api_key
+        if cookie_value:
+            os.environ["STASH_COOKIE_NAME"] = cookie_name
+            os.environ["STASH_COOKIE_VALUE"] = cookie_value
         
         # Extract plugin arguments
         args = input_data.get("args", {})

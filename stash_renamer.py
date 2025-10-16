@@ -198,7 +198,19 @@ def load_or_create_config(interactive_ok: bool) -> SimpleNamespace:
     
     # 1) Environment overrides
     env_server = os.getenv("STASH_SERVER_URL")
+    env_cookie_name = os.getenv("STASH_COOKIE_NAME")
+    env_cookie_value = os.getenv("STASH_COOKIE_VALUE")
     env_api = os.getenv("STASH_API_KEY")
+    
+    # Prefer cookie authentication (for plugin mode)
+    if env_server and env_cookie_name and env_cookie_value:
+        return SimpleNamespace(
+            server_url=env_server,
+            cookie_name=env_cookie_name,
+            cookie_value=env_cookie_value
+        )
+    
+    # Fall back to API key authentication (for standalone mode)
     if env_server and env_api:
         return SimpleNamespace(server_url=env_server, api_key=env_api)
 
@@ -244,8 +256,16 @@ def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
         "Accept": "application/json",
         "Connection": "keep-alive",
         "DNT": "1",
-        "ApiKey": CONFIG.api_key,
     }
+    
+    # Handle authentication - either Cookie or ApiKey
+    if hasattr(CONFIG, 'cookie_name') and hasattr(CONFIG, 'cookie_value'):
+        # Use session cookie authentication (when running as plugin)
+        headers["Cookie"] = f"{CONFIG.cookie_name}={CONFIG.cookie_value}"
+    elif hasattr(CONFIG, 'api_key') and CONFIG.api_key:
+        # Use API key authentication (when running standalone)
+        headers["ApiKey"] = CONFIG.api_key
+    
     payload = {"query": query}
     if variables is not None:
         payload["variables"] = variables # type: ignore
