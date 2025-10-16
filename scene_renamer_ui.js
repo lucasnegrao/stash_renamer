@@ -163,15 +163,6 @@
            onSelect: () => {},
            values: [],
          })
-       ),
-       React.createElement(
-         "div",
-         null,
-         React.createElement(PerformerSelect, {
-           isMulti: true,
-           onSelect: () => {},
-           values: [],
-         })
        )
      );
    };
