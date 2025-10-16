@@ -17,6 +17,8 @@ USING_LOG = True
 DRY_RUN = False
 FEMALE_ONLY = False
 DEBUG_MODE = True
+SKIP_GROUPED = False
+MOVE_TO_STUDIO_FOLDER = False
 
 IS_WINDOWS = os.name == "nt"
 
@@ -230,6 +232,7 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
       studio { name }
       performers { name gender }
       tags { name }
+      movies { movie { id name } }
     }
   }
 }
@@ -309,6 +312,14 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         if not current_path:
             continue
 
+        # Skip if scene is part of a group/movie (optional)
+        if SKIP_GROUPED:
+            movies = scene.get("movies") or []
+            if movies:
+                if DEBUG_MODE:
+                    logPrint(f"[DEBUG] Skipping grouped scene (ID: {scene['id']}): {os.path.basename(current_path)}")
+                continue
+
         current_directory = os.path.dirname(current_path)
         current_filename = os.path.basename(current_path)
         file_extension = os.path.splitext(current_filename)[1] or ""
@@ -347,7 +358,24 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             logPrint(f"[Error] New filename resolved empty for scene {scene['id']}, skipping.")
             continue
         new_filename = new_filename_core + file_extension
-        new_path = os.path.join(current_directory, new_filename)
+
+        # Determine target directory (studio subfolder if enabled and studio exists)
+        target_directory = current_directory
+        if MOVE_TO_STUDIO_FOLDER and studio_name:
+            sanitized_studio = sanitize_filename(studio_name)
+            target_directory = os.path.join(current_directory, sanitized_studio)
+            if not os.path.exists(target_directory):
+                if not DRY_RUN:
+                    try:
+                        os.makedirs(target_directory, exist_ok=True)
+                        logPrint(f"[OS] Created studio folder: {target_directory}")
+                    except Exception as e:
+                        logPrint(f"[Error] Failed to create studio folder {target_directory}: {e}")
+                        target_directory = current_directory
+                else:
+                    logPrint(f"[DRY] Would create studio folder: {target_directory}")
+
+        new_path = os.path.join(target_directory, new_filename)
 
         if IS_WINDOWS and len(new_path) > 240:
             logPrint(f"[Warn] The Path is too long ({new_path})")
@@ -431,6 +459,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-debug", dest="debug_mode", action="store_false", help="Disable debug output.")
     parser.set_defaults(debug_mode=DEBUG_MODE)
 
+    parser.add_argument("--skip-grouped", dest="skip_grouped", action="store_true", help="Skip scenes that are part of a group/movie.")
+    parser.add_argument("--no-skip-grouped", dest="skip_grouped", action="store_false", help="Do not skip grouped scenes (default).")
+    parser.set_defaults(skip_grouped=SKIP_GROUPED)
+
+    parser.add_argument("--move-to-studio-folder", dest="move_to_studio_folder", action="store_true", help="Move scenes to a studio-named subfolder if studio exists.")
+    parser.add_argument("--no-move-to-studio-folder", dest="move_to_studio_folder", action="store_false", help="Do not move to studio folder (default).")
+    parser.set_defaults(move_to_studio_folder=MOVE_TO_STUDIO_FOLDER)
+
     # Selection
     parser.add_argument("--tag", action="append", dest="tags", help="Tag name to select scenes by. Repeatable.")
     parser.add_argument("--template", dest="template", help="Filename template. Required for no-tag mode or for --tag when no --config.")
@@ -469,6 +505,12 @@ def interactive_prompt() -> argparse.Namespace:
 
     yn = (input("Enable debug output? [Y/n]: ").strip().lower() or "y")
     args.debug_mode = not yn.startswith("n")
+
+    yn = (input("Skip scenes in groups/movies? [y/N]: ").strip().lower() or "n")
+    args.skip_grouped = yn.startswith("y")
+
+    yn = (input("Move scenes to studio subfolders? [y/N]: ").strip().lower() or "n")
+    args.move_to_studio_folder = yn.startswith("y")
 
     args.path_like = input("Optional path substring (LIKE-style e.g., /mnt/media/%): ").strip() or None
     args.exclude_path_like = input("Optional EXCLUDE path substring (LIKE-style e.g., /mnt/media/tmp%): ").strip() or None
@@ -516,7 +558,7 @@ def load_config_mappings(path: str) -> List[Dict[str, str]]:
 
 
 def run():
-    global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, CONFIG
+    global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG
 
     args = parse_args()
     
@@ -531,6 +573,8 @@ def run():
     DRY_RUN = getattr(args, "dry_run", DRY_RUN)
     FEMALE_ONLY = getattr(args, "female_only", FEMALE_ONLY)
     DEBUG_MODE = getattr(args, "debug_mode", DEBUG_MODE)
+    SKIP_GROUPED = getattr(args, "skip_grouped", SKIP_GROUPED)
+    MOVE_TO_STUDIO_FOLDER = getattr(args, "move_to_studio_folder", MOVE_TO_STUDIO_FOLDER)
 
     if DRY_RUN:
         try:
@@ -593,6 +637,67 @@ def run():
             executed_any = True
         else:
             logPrint("[Info] No tags and no template provided. Nothing to do.")
+
+    # If dry-run, show command to execute for real
+    if DRY_RUN and executed_any:
+        cmd_parts = [sys.executable, os.path.abspath(__file__)]
+        
+        # Add flags based on current settings
+        cmd_parts.append("--no-dry-run")
+        
+        if USING_LOG:
+            cmd_parts.append("--log")
+        else:
+            cmd_parts.append("--no-log")
+            
+        if FEMALE_ONLY:
+            cmd_parts.append("--female-only")
+            
+        if DEBUG_MODE:
+            cmd_parts.append("--debug")
+        else:
+            cmd_parts.append("--no-debug")
+            
+        if SKIP_GROUPED:
+            cmd_parts.append("--skip-grouped")
+            
+        if MOVE_TO_STUDIO_FOLDER:
+            cmd_parts.append("--move-to-studio-folder")
+        
+        # Add tags if any
+        if getattr(args, "tags", None):
+            for tag in args.tags:
+                cmd_parts.append("--tag")
+                cmd_parts.append(f'"{tag}"')
+        
+        # Add template if single template mode
+        if getattr(args, "template", None):
+            cmd_parts.append("--template")
+            cmd_parts.append(f'"{args.template}"')
+        
+        # Add config JSON if provided
+        if getattr(args, "config_json", None):
+            cmd_parts.append("--config")
+            cmd_parts.append(f'"{args.config_json}"')
+        
+        # Add path filters
+        if getattr(args, "path_like", None):
+            cmd_parts.append("--path-like")
+            cmd_parts.append(f'"{args.path_like}"')
+            
+        if getattr(args, "exclude_path_like", None):
+            cmd_parts.append("--exclude-path-like")
+            cmd_parts.append(f'"{args.exclude_path_like}"')
+        
+        # Add scene filter if provided
+        if getattr(args, "scene_filter", None):
+            cmd_parts.append("--filter")
+            cmd_parts.append(f"'{args.scene_filter}'")
+        
+        logPrint("\n" + "="*60)
+        logPrint("[DRY_RUN] To execute this rename operation, run:")
+        logPrint(" ".join(cmd_parts))
+        logPrint("="*60)
 
     if getattr(args, "interactive", False):
         try:
