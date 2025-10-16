@@ -312,10 +312,10 @@ def run(input_data, output):
             scene_ids = [s.strip() for s in selected_scenes.split(",") if s.strip()]
             log.LogInfo(f"Processing only selected scenes: {len(scene_ids)} scenes")
 
-        # New filters and token options
+        # New filters and token options (support UNKNOWN)
         performer_genders = to_list(combined_args.get("performerGenders") or combined_args.get("performer_genders"))
         filter_performer_genders = to_list(combined_args.get("filterPerformerGenders") or combined_args.get("filter_performer_genders"))
-        # Prefer explicit UI args for tri-state booleans
+        # Prefer explicit UI args for tri-state booleans ('' -> Any/None)
         filter_organized = tri_to_bool(args.get("filterOrganized", combined_args.get("filterOrganized") or combined_args.get("filter_organized")))
         filter_interactive = tri_to_bool(args.get("filterInteractive", combined_args.get("filterInteractive") or combined_args.get("filter_interactive")))
         # Min scene markers
@@ -348,10 +348,10 @@ def run(input_data, output):
             options["tags"] = tags
         if scene_ids:
             options["scene_ids"] = scene_ids
-        # New: token performer genders
+        # Token performer genders (affects $performers/$performer)
         if performer_genders:
             options["performer_genders"] = performer_genders
-        # New: scene-level filters
+        # Scene-level filters
         if filter_performer_genders:
             options["filter_performer_genders"] = filter_performer_genders
         if filter_organized is not None:
@@ -378,15 +378,11 @@ def run(input_data, output):
         import traceback
         error_msg = str(e)
         traceback_str = traceback.format_exc()
-        
         log.LogError(f"Error in plugin: {error_msg}")
         log.LogError("Full traceback:")
-        
-        # Log each line of traceback
         for line in traceback_str.split('\n'):
             if line.strip():
                 log.LogError(line)
-        
         output["error"] = error_msg
 
 if __name__ == "__main__":

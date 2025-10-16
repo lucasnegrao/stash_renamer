@@ -410,7 +410,12 @@ def scene_passes_filters(scene: dict) -> bool:
     filter_perf_genders = FILTERS.get("performer_genders")
     if filter_perf_genders and isinstance(filter_perf_genders, set):
         performers = scene.get("performers") or []
-        if not any((p.get("gender") or "").upper() in filter_perf_genders for p in performers):
+        def _matches_gender(p):
+            g = (p.get("gender") or "").upper()
+            if not g:
+                return "UNKNOWN" in filter_perf_genders
+            return g in filter_perf_genders
+        if not any(_matches_gender(p) for p in performers):
             return False
 
     return True
@@ -483,9 +488,10 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         performers = scene.get("performers") or []
         names: List[str] = []
         for p in performers:
-            # New: include only selected genders for token composition if configured
+            # Include only selected genders for token composition if configured (supports UNKNOWN)
             if PERFORMER_GENDERS:
-                if (p.get("gender") or "").upper() in PERFORMER_GENDERS:
+                g = (p.get("gender") or "").upper()
+                if g in PERFORMER_GENDERS or (not g and "UNKNOWN" in PERFORMER_GENDERS):
                     names.append(p.get("name") or "")
             else:
                 names.append(p.get("name") or "")
@@ -760,8 +766,8 @@ def run(options: dict, collect_operations: bool = False):
             return None
         vals = val if isinstance(val, list) else [val]
         out = {str(v).strip().upper() for v in vals if str(v).strip()}
-        # constrain to known enum values
-        allowed = {"MALE", "FEMALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY"}
+        # constrain to known enum values (+ UNKNOWN pseudo-gender)
+        allowed = {"MALE", "FEMALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY", "UNKNOWN"}
         out = {g for g in out if g in allowed}
         return out or None
 
