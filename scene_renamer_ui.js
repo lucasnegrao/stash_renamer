@@ -144,7 +144,7 @@
      const componentsLoading =
        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-     const { TagSelect, LoadingIndicator, PerformerSelect, StudioSelect } =
+     const { TagSelect, LoadingIndicator, PerformerSelect } =
        PluginApi.components;
 
      if (componentsLoading) return React.createElement(LoadingIndicator);
