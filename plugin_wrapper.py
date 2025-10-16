@@ -45,7 +45,21 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value):
         
         if response.status_code == 200:
             result = response.json()
-            plugins_json = result.get("data", {}).get("configuration", {}).get("plugins")
+            log.LogDebug(f"GraphQL response keys: {list(result.keys())}")
+            
+            data = result.get("data", {})
+            if not data:
+                log.LogWarning("No 'data' in GraphQL response")
+                return {}
+            
+            config = data.get("configuration", {})
+            if not config:
+                log.LogWarning("No 'configuration' in response data")
+                return {}
+            
+            plugins_json = config.get("plugins")
+            log.LogDebug(f"plugins type: {type(plugins_json)}")
+            
             if plugins_json:
                 # plugins_json might be a string or already a dict
                 if isinstance(plugins_json, str):
@@ -53,12 +67,16 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value):
                 else:
                     plugins = plugins_json
                 
+                log.LogDebug(f"Available plugins: {list(plugins.keys())}")
+                
                 # Find our plugin settings
                 for plugin_id, plugin_data in plugins.items():
                     if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
                         settings = plugin_data.get("settings", {})
-                        log.LogDebug(f"Found plugin settings: {json.dumps(settings)}")
+                        log.LogInfo(f"Found plugin '{plugin_id}' settings: {json.dumps(settings)}")
                         return settings
+                
+                log.LogWarning("Scene Renamer plugin not found in configuration")
         else:
             log.LogWarning(f"Failed to fetch plugin settings: {response.status_code}")
     except Exception as e:
