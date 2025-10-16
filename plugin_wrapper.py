@@ -47,7 +47,12 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value):
             result = response.json()
             plugins_json = result.get("data", {}).get("configuration", {}).get("plugins")
             if plugins_json:
-                plugins = json.loads(plugins_json)
+                # plugins_json might be a string or already a dict
+                if isinstance(plugins_json, str):
+                    plugins = json.loads(plugins_json)
+                else:
+                    plugins = plugins_json
+                
                 # Find our plugin settings
                 for plugin_id, plugin_data in plugins.items():
                     if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
