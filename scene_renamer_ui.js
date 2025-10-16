@@ -139,6 +139,35 @@
     return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
   }
 
+   const TestPage = () => {
+     const componentsToLoad = [
+       PluginApi.loadableComponents.SceneCard,
+       PluginApi.loadableComponents.PerformerSelect,
+     ];
+     const componentsLoading =
+       PluginApi.hooks.useLoadComponents(componentsToLoad);
+
+     const { SceneCard, LoadingIndicator, PerformerSelect } =
+       PluginApi.components;
+
+     if (componentsLoading) return React.createElement(LoadingIndicator);
+
+     return React.createElement(
+       "div",
+       null,
+       React.createElement("div", null, "This is a test page."),
+       React.createElement(
+         "div",
+         null,
+         React.createElement(PerformerSelect, {
+           isMulti: true,
+           onSelect: () => {},
+           values: [],
+         })
+       )
+     );
+   };
+
   // Scene Renamer UI Page
   const SceneRenamerPage = () => {
     const [template, setTemplate] = React.useState("$studio - $date - $title");
