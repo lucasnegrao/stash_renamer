@@ -453,6 +453,9 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
     """
     operations = []
     
+    if DEBUG_MODE:
+        logPrint(f"[DEBUG] Starting edit_run with MOVE_TO_STUDIO_FOLDER={MOVE_TO_STUDIO_FOLDER}, DRY_RUN={DRY_RUN}")
+    
     # Resolve tags if provided
     tag_ids: Optional[List[str]] = None
     if tag_names:
@@ -514,6 +517,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         }
         if DEBUG_MODE:
             logPrint(f"[DEBUG] Scene information: {scene_info}")
+            logPrint(f"[DEBUG] Template: {template}")
 
         new_filename_core = makeFilename(scene_info, template)
         if "None" in new_filename_core:
@@ -531,6 +535,8 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         if MOVE_TO_STUDIO_FOLDER and studio_name:
             sanitized_studio = sanitize_filename(studio_name)
             target_directory = os.path.join(current_directory, sanitized_studio)
+            if DEBUG_MODE:
+                logPrint(f"[DEBUG] Studio folder move enabled - target directory: {target_directory}")
             if not os.path.exists(target_directory):
                 if not DRY_RUN:
                     try:
@@ -541,8 +547,15 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                         target_directory = current_directory
                 else:
                     logPrint(f"[DRY] Would create studio folder: {target_directory}")
+        elif DEBUG_MODE:
+            logPrint(f"[DEBUG] Studio folder move disabled - keeping same directory: {target_directory}")
 
-        new_path = os.path.join(target_directory, new_filename)
+        # Calculate the final path - ensure consistency with the actual operation
+        final_directory = target_directory if MOVE_TO_STUDIO_FOLDER and studio_name else current_directory
+        new_path = os.path.join(final_directory, new_filename)
+        
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Directory check: current='{current_directory}' target='{target_directory}' final='{final_directory}'")
 
         if IS_WINDOWS and len(new_path) > 240:
             logPrint(f"[Warn] The Path is too long ({new_path})")
@@ -603,9 +616,12 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             if os.path.isfile(current_path):
                 try:
                     # Use GraphQL moveFiles mutation instead of os.rename
+                    if DEBUG_MODE:
+                        logPrint(f"[DEBUG] GraphQL call: destination_folder='{final_directory}', destination_basename='{new_filename}'")
+                    
                     success = move_files_via_graphql(
                         file_ids=file_ids,
-                        destination_folder=target_directory,
+                        destination_folder=final_directory,
                         destination_basename=new_filename
                     )
                     
@@ -655,7 +671,11 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                         "new_path": new_path
                     })
         else:
-            logPrint(f"[DRY] {current_filename} -> {new_filename}")
+            # Show dry run with clearer indication if file is moving to a different directory
+            if os.path.dirname(current_path) != os.path.dirname(new_path):
+                logPrint(f"[DRY] MOVE & RENAME: {current_filename} -> {new_path}")
+            else:
+                logPrint(f"[DRY] RENAME: {current_filename} -> {new_filename}")
             with open("renamer_dryrun.txt", "a", encoding="utf-8") as fh:
                 print(f"{current_path} -> {new_path}", file=fh)
             if collect_operations:
