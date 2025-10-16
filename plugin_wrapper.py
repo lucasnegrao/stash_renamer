@@ -225,19 +225,12 @@ def run(input_data, output):
             cookie_name = session_cookie.get("Name", "session")
             cookie_value = session_cookie.get("Value", "")
         else:
-            # No session cookie - maybe running in test mode
             cookie_name = ""
             cookie_value = ""
             log.LogWarning("No SessionCookie found - authentication may fail")
         
         log.LogInfo(f"Server URL: {server_url}")
         log.LogDebug(f"Has session cookie: {bool(cookie_value)}")
-        
-        # Set as environment variables for the main script
-        os.environ["STASH_SERVER_URL"] = server_url
-        if cookie_value:
-            os.environ["STASH_COOKIE_NAME"] = cookie_name
-            os.environ["STASH_COOKIE_VALUE"] = cookie_value
         
         # Fetch plugin settings from Stash
         settings = fetch_plugin_settings(server_url, cookie_name, cookie_value)
@@ -247,110 +240,81 @@ def run(input_data, output):
         log.LogDebug(f"Plugin args: {json.dumps(args)}")
         log.LogDebug(f"Plugin settings: {json.dumps(settings)}")
         
-        # For string values, merge settings with args (args take precedence)
-        # For boolean flags, only use args to avoid unwanted defaults from settings
+        # Merge settings with args (args take precedence)
         combined_args = {**settings, **args}
         log.LogDebug(f"Combined args: {json.dumps(combined_args)}")
         
-        # Check for mode from task
+        # Helper to parse truthy values
+        def is_true(v):
+            if isinstance(v, bool):
+                return v
+            if v is None:
+                return False
+            return str(v).strip().lower() in ("true", "1", "yes", "on")
+        
+        # Mode and dry-run
         mode = combined_args.get("mode", "")
-        dry_run = combined_args.get("dry_run", "false").lower() == "true" or mode == "dry_run"
-        
-
-        
-        # Build command line args for the main script
-        cmd_args = []
-        
-        # Dry run mode
+        dry_run = is_true(combined_args.get("dry_run")) or mode == "dry_run"
         if dry_run:
-            cmd_args.append("--dry-run")
             log.LogInfo("Running in DRY RUN mode")
-        else:
-            cmd_args.append("--no-dry-run")
         
-        # Template
-        template = combined_args.get("template", "")
-        if not template:
-            # Use a sensible default template
-            template = "$studio - $date - $title"
-            log.LogInfo(f"No template specified - using default: {template}")
-        
-        cmd_args.extend(["--template", template])
+        # Template (default if not provided)
+        template = combined_args.get("template") or "$studio - $date - $title"
         log.LogInfo(f"Template: {template}")
         
-        # Boolean flags - only enable if explicitly set to "true" in args (from UI)
-        # Check args first (UI input), ignore settings to avoid unwanted defaults
-        
-        log.LogDebug(f"femaleOnly check: args={args.get('femaleOnly')}, settings={settings.get('femaleOnly')}")
-        if args.get("femaleOnly") == "true":
-            cmd_args.append("--female-only")
-            log.LogDebug("Female performers only: enabled")
-        
-        log.LogDebug(f"skipGrouped check: args={args.get('skipGrouped')}, settings={settings.get('skipGrouped')}")
-        if args.get("skipGrouped") == "true":
-            cmd_args.append("--skip-grouped")
-            log.LogDebug("Skip grouped scenes: enabled")
-        
-        # Handle both moveToStudio (from ui.html) and moveToStudioFolder (from scene_renamer_ui.js)
-        log.LogDebug(f"moveToStudio check: args moveToStudio={args.get('moveToStudio')}, moveToStudioFolder={args.get('moveToStudioFolder')}, settings={settings.get('moveToStudioFolder')}")
-        if args.get("moveToStudio") == "true" or args.get("moveToStudioFolder") == "true":
-            cmd_args.append("--move-to-studio-folder")
-            log.LogDebug("Move to studio folder: enabled")
-        
-        # Debug mode - only enable if explicitly set to "true" in args
-        log.LogDebug(f"debugMode check: args debugMode={args.get('debugMode')}, debug={args.get('debug')}, settings={settings.get('debugMode')}")
-        if args.get("debugMode") == "true" or args.get("debug") == "true":
-            cmd_args.append("--debug")
-            log.LogDebug("Debug mode: enabled")
-        else:
-            cmd_args.append("--no-debug")
-            log.LogDebug("Debug mode: disabled")
-        
         # Path filters
-        path_like = combined_args.get("pathLike", "")
+        path_like = combined_args.get("pathLike") or ""
         if path_like:
-            cmd_args.extend(["--path-like", path_like])
             log.LogInfo(f"Path filter (include): {path_like}")
         
-        exclude_path_like = combined_args.get("excludePathLike", "")
+        exclude_path_like = combined_args.get("excludePathLike") or ""
         if exclude_path_like:
-            cmd_args.extend(["--exclude-path-like", exclude_path_like])
             log.LogInfo(f"Path filter (exclude): {exclude_path_like}")
         
         # Tags
-        tags = combined_args.get("tags", "")
+        tags = combined_args.get("tags") or []
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
         if tags:
-            if isinstance(tags, str):
-                tags = [t.strip() for t in tags.split(",") if t.strip()]
-            for tag in tags:
-                cmd_args.extend(["--tag", tag])
             log.LogInfo(f"Tags: {', '.join(tags)}")
         
         # Selected scenes (comma-separated list of scene IDs)
         selected_scenes = combined_args.get("selectedScenes", "")
-        if selected_scenes and selected_scenes.strip():
+        scene_ids = []
+        if isinstance(selected_scenes, str) and selected_scenes.strip():
             scene_ids = [s.strip() for s in selected_scenes.split(",") if s.strip()]
-            if scene_ids:
-                cmd_args.extend(["--scene-ids", ",".join(scene_ids)])
-                log.LogInfo(f"Processing only selected scenes: {len(scene_ids)} scenes")
+            log.LogInfo(f"Processing only selected scenes: {len(scene_ids)} scenes")
         
-        # Override sys.argv with our constructed arguments
-        sys.argv = [sys.argv[0]] + cmd_args
+        # Build options dict for renamer.run
+        options = {
+            "server_url": server_url,
+            "cookie_name": cookie_name,
+            "cookie_value": cookie_value,
+            "template": template,
+            "dry_run": dry_run,
+            # Flags (UI only toggles when explicitly set)
+            "female_only": is_true(args.get("femaleOnly")),
+            "skip_grouped": is_true(args.get("skipGrouped")),
+            "move_to_studio_folder": is_true(args.get("moveToStudio")) or is_true(args.get("moveToStudioFolder")),
+            "debug_mode": is_true(args.get("debugMode")) or is_true(args.get("debug")),
+            # Filters
+            "path_like": path_like or None,
+            "exclude_path_like": exclude_path_like or None,
+        }
+        if tags:
+            options["tags"] = tags
+        if scene_ids:
+            options["scene_ids"] = scene_ids
         
-        log.LogInfo(f"Running stash_renamer with args: {' '.join(cmd_args)}")
-        
-        # Import and run the main script
+        log.LogInfo("Invoking renamer...")
         from stash_renamer import run as renamer_run
         
         # Call with collect_operations=True to get the list of rename operations
-        operations = renamer_run(collect_operations=True)
+        operations = renamer_run(options, collect_operations=True)
         
-        # Output success with operations list
         log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
-        
         output["output"] = {"operations": operations if operations else []} #json_output
 
-        
     except Exception as e:
         import traceback
         error_msg = str(e)
