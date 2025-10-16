@@ -249,7 +249,7 @@
     };
     const TestPage = () => {
       const componentsToLoad = [
-        PluginApi.loadableComponents.SceneCard,
+        PluginApi.loadableComponents.StudioSelect,
         PluginApi.loadableComponents.PerformerSelect,
       ];
       const componentsLoading =
