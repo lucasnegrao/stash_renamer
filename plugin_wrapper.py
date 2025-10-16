@@ -102,11 +102,13 @@ def run(input_data, output):
         
         # Template
         template = args.get("template", "")
-        if template:
-            cmd_args.extend(["--template", template])
-            log.LogInfo(f"Template: {template}")
-        else:
-            log.LogWarning("No template specified - using default")
+        if not template:
+            # Use a sensible default template
+            template = "$studio - $date - $title"
+            log.LogInfo(f"No template specified - using default: {template}")
+        
+        cmd_args.extend(["--template", template])
+        log.LogInfo(f"Template: {template}")
         
         # Boolean flags
         if args.get("femaleOnly"):
