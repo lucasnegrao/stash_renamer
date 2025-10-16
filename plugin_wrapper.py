@@ -242,7 +242,7 @@ def run(input_data, output):
 
         # Merge settings with args (args take precedence)
 
-        combined_args = {**settings}
+        combined_args = {**settings, **args}
 
         log.LogDebug(f"Combined args: {json.dumps(combined_args)}")
         
