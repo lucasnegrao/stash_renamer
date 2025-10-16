@@ -19,12 +19,13 @@ def read_json_input():
     return None
 
 def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
-    """Fallback method - fetch from configuration.plugins"""
-    log.LogDebug("Trying fallback method to fetch settings")
+    """Fetch settings using configuration query (correct method)"""
+    log.LogDebug("Fetching plugin settings from configuration")
     
     query = """
     query Configuration {
       configuration {
+        general
         plugins
       }
     }
@@ -49,26 +50,27 @@ def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
             result = response.json()
             data = result.get("data", {})
             config = data.get("configuration", {})
-            plugins_json = config.get("plugins")
+            plugins_config = config.get("plugins")
             
-            if plugins_json:
-                if isinstance(plugins_json, str):
-                    plugins = json.loads(plugins_json)
+            if plugins_config:
+                # plugins_config is a dict with plugin_id as keys
+                log.LogDebug(f"Found {len(plugins_config)} plugins in config")
+                log.LogDebug(f"Available plugin IDs: {list(plugins_config.keys())}")
+                
+                # Our plugin ID is "stash_renamer" (from the YAML filename)
+                plugin_id = "stash_renamer"
+                if plugin_id in plugins_config:
+                    plugin_data = plugins_config[plugin_id]
+                    log.LogDebug(f"Plugin data keys: {list(plugin_data.keys())}")
+                    
+                    # Settings are directly in the plugin data
+                    settings = plugin_data
+                    log.LogInfo(f"Found settings for '{plugin_id}': {json.dumps(settings)}")
+                    return settings
                 else:
-                    plugins = plugins_json
-                
-                log.LogDebug(f"Found {len(plugins)} plugins in config")
-                
-                # Find our plugin settings
-                for plugin_id, plugin_data in plugins.items():
-                    if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
-                        settings = plugin_data.get("settings", {})
-                        log.LogInfo(f"Fallback found plugin '{plugin_id}' with settings: {json.dumps(settings)}")
-                        return settings
-                
-                log.LogWarning("Plugin 'stash_renamer' not found in configuration")
+                    log.LogWarning(f"Plugin '{plugin_id}' not found in configuration. Available: {list(plugins_config.keys())}")
         else:
-            log.LogWarning(f"Fallback query failed: {response.status_code}")
+            log.LogWarning(f"Configuration query failed: {response.status_code}")
     except Exception as e:
         log.LogWarning(f"Fallback error: {e}")
     
