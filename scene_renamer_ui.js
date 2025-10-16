@@ -247,42 +247,6 @@
         return 0;
       });
     };
-    const TestPage = () => {
-      const componentsToLoad = [
-        PluginApi.loadableComponents.StudioSelect,
-        PluginApi.loadableComponents.PerformerSelect,
-      ];
-      const componentsLoading =
-        PluginApi.hooks.useLoadComponents(componentsToLoad);
-
-      const { StudioSelect, LoadingIndicator, PerformerSelect } =
-        PluginApi.components;
-
-      if (componentsLoading) return React.createElement(LoadingIndicator);
-
-      return React.createElement(
-        "div",
-        null,
-        React.createElement(
-          "div",
-          null,
-          React.createElement(StudioSelect, {
-            isMulti: true,
-            onSelect: () => {},
-            values: [],
-          })
-        ),
-        React.createElement(
-          "div",
-          null,
-          React.createElement(PerformerSelect, {
-            isMulti: true,
-            onSelect: () => {},
-            values: [],
-          })
-        )
-      );
-    };
 
     // Scene selection handlers for operations table
     const handleSceneSelection = (sceneId, checked) => {
