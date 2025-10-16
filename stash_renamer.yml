@@ -3,67 +3,54 @@ description: Rename scene files based on metadata with customizable templates
 version: 1.0.0
 url: https://github.com/lucasnegrao/stash_renamer
 settings:
-  serverUrl:
-    displayName: Stash Server URL
-    type: STRING
-    description: "URL to your Stash GraphQL endpoint (e.g., http://localhost:9999/graphql)"
-  apiKey:
-    displayName: Stash API Key
-    type: STRING
-    description: "Your Stash API key from Settings > Security"
   template:
     displayName: Filename Template
     type: STRING
     description: "Template for renaming files. Tokens: $studio, $date, $title, $performer, $height"
-    #defaultValue: "$studio - $date - $title - $performer"
   femaleOnly:
     displayName: Female Performers Only
     type: BOOLEAN
     description: Include only female performers in $performer token
-    #defaultValue: false
   skipGrouped:
     displayName: Skip Grouped Scenes
     type: BOOLEAN
     description: Skip scenes that are part of a group/movie
-    #defaultValue: false
   moveToStudioFolder:
     displayName: Move to Studio Folder
     type: BOOLEAN
     description: Move scenes to a studio-named subfolder if studio exists
-    #defaultValue: false
   pathLike:
     displayName: Path Filter (Include)
     type: STRING
     description: "Optional substring to match in file path (e.g., /mnt/media/)"
-    #defaultValue: ""
   excludePathLike:
     displayName: Path Filter (Exclude)
     type: STRING
     description: Optional substring to exclude matching file paths
-    #defaultValue: ""
   debugMode:
     displayName: Debug Mode
     type: BOOLEAN
     description: Enable debug output for troubleshooting
-    #defaultValue: true
 exec:
-  - python
-  - "{pluginDir}/stash_renamer.py"
-  - "--no-dry-run"
+  - python3
+  - "{pluginDir}/plugin_wrapper.py"
 interface: raw
 tasks:
   - name: Rename Scenes (Dry Run)
     description: Preview what files would be renamed without making changes
     defaultArgs:
       mode: dry_run
-  - name: Rename Scenes
+      dry_run: "true"
+  - name: Rename Scenes  
     description: Rename scene files based on configured template
     defaultArgs:
       mode: rename
+      dry_run: "false"
   - name: Rename Tagged Scenes
     description: Rename scenes with specific tags
     defaultArgs:
       mode: tag_rename
+      dry_run: "false"
 hooks:
   - name: Scene Renamer UI
     description: Interactive UI for configuring and running scene renaming

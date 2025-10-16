@@ -108,27 +108,54 @@ def load_config_from_plugin_settings() -> Optional[SimpleNamespace]:
     """
     try:
         if not sys.stdin.isatty():
-            input_data = json.loads(sys.stdin.read())
-            plugin_config = input_data.get("server_connection", {})
+            stdin_content = sys.stdin.read()
+            if not stdin_content.strip():
+                return None
             
-            # If running as plugin, Stash provides connection info
-            if plugin_config:
-                scheme = plugin_config.get("Scheme", "http")
-                host = plugin_config.get("Host", "localhost")
-                port = plugin_config.get("Port", 9999)
-                api_key = plugin_config.get("ApiKey", "")
+            input_data = json.loads(stdin_content)
+            
+            # Debug: log what we received
+            if DEBUG_MODE:
+                logPrint(f"[DEBUG] Plugin input keys: {list(input_data.keys())}")
+            
+            # Method 1: Check for server_connection (Stash auto-provides this)
+            server_conn = input_data.get("server_connection", {})
+            if server_conn:
+                scheme = server_conn.get("Scheme", "http")
+                host = server_conn.get("Host", "localhost")
+                port = server_conn.get("Port", 9999)
+                api_key = server_conn.get("ApiKey", "")
                 server_url = f"{scheme}://{host}:{port}/graphql"
                 if server_url and api_key:
+                    if DEBUG_MODE:
+                        logPrint(f"[DEBUG] Using server_connection: {server_url}")
                     return SimpleNamespace(server_url=server_url, api_key=api_key)
             
-            # Otherwise check plugin settings
-            settings = input_data.get("args", {}).get("pluginSettings", {})
-            server_url = settings.get("serverUrl", "")
-            api_key = settings.get("apiKey", "")
-            if server_url and api_key:
-                return SimpleNamespace(server_url=server_url, api_key=api_key)
-    except Exception:
-        pass
+            # Method 2: Check plugin settings from args
+            args = input_data.get("args", {})
+            if isinstance(args, dict):
+                # Settings might be directly in args
+                server_url = args.get("serverUrl", "")
+                api_key = args.get("apiKey", "")
+                if server_url and api_key:
+                    if DEBUG_MODE:
+                        logPrint(f"[DEBUG] Using settings from args: {server_url}")
+                    return SimpleNamespace(server_url=server_url, api_key=api_key)
+            
+            # Method 3: Check for pluginConfig or plugin_config
+            for key in ["pluginConfig", "plugin_config", "pluginSettings"]:
+                settings = input_data.get(key, {})
+                if isinstance(settings, dict):
+                    server_url = settings.get("serverUrl", "")
+                    api_key = settings.get("apiKey", "")
+                    if server_url and api_key:
+                        if DEBUG_MODE:
+                            logPrint(f"[DEBUG] Using settings from {key}: {server_url}")
+                        return SimpleNamespace(server_url=server_url, api_key=api_key)
+            
+    except Exception as e:
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Error reading plugin input: {e}")
     return None
 
 
@@ -505,6 +532,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-move-to-studio-folder", dest="move_to_studio_folder", action="store_false", help="Do not move to studio folder (default).")
     parser.set_defaults(move_to_studio_folder=MOVE_TO_STUDIO_FOLDER)
 
+    # Connection (for plugin use)
+    parser.add_argument("--server-url", dest="server_url", help="Stash GraphQL server URL (e.g., http://localhost:9999/graphql)")
+    parser.add_argument("--api-key", dest="api_key", help="Stash API key")
+    
     # Selection
     parser.add_argument("--tag", action="append", dest="tags", help="Tag name to select scenes by. Repeatable.")
     parser.add_argument("--template", dest="template", help="Filename template. Required for no-tag mode or for --tag when no --config.")
@@ -600,11 +631,17 @@ def run():
 
     args = parse_args()
     
-    # Initialize config early, before interactive prompt if needed
-    is_interactive = getattr(args, "interactive", False)
-    CONFIG = load_or_create_config(interactive_ok=is_interactive)
+    # Check if server URL and API key were provided via command line (for plugin use)
+    if hasattr(args, 'server_url') and args.server_url and hasattr(args, 'api_key') and args.api_key:
+        CONFIG = SimpleNamespace(server_url=args.server_url, api_key=args.api_key)
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Using config from command-line args: {args.server_url}")
+    else:
+        # Initialize config early, before interactive prompt if needed
+        is_interactive = getattr(args, "interactive", False)
+        CONFIG = load_or_create_config(interactive_ok=is_interactive)
     
-    if is_interactive:
+    if getattr(args, "interactive", False):
         args = interactive_prompt()
 
     USING_LOG = getattr(args, "using_log", USING_LOG)
