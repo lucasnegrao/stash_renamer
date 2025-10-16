@@ -141,13 +141,13 @@
 
    const TestPage = () => {
      const componentsToLoad = [
-       PluginApi.loadableComponents.SceneCard,
+       PluginApi.loadableComponents.SudioSelect,
        PluginApi.loadableComponents.PerformerSelect,
      ];
      const componentsLoading =
        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-     const { SceneCard, LoadingIndicator, PerformerSelect } =
+     const { StudioSelect, LoadingIndicator, PerformerSelect } =
        PluginApi.components;
 
      if (componentsLoading) return React.createElement(LoadingIndicator);
@@ -155,7 +155,15 @@
      return React.createElement(
        "div",
        null,
-       React.createElement("div", null, "This is a test page."),
+       React.createElement(
+         "div",
+         null,
+         React.createElement(StudioSelect, {
+           isMulti: true,
+           onSelect: () => {},
+           values: [],
+         })
+       ),
        React.createElement(
          "div",
          null,
