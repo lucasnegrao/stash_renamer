@@ -18,8 +18,8 @@ def read_json_input():
         return json.loads(stdin_data)
     return None
 
-def fetch_plugin_settings(server_url, cookie_name, cookie_value):
-    """Fetch plugin settings from Stash via GraphQL"""
+def fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value):
+    """Fallback method - fetch from configuration.plugins"""
     query = """
     query Configuration {
       configuration {
@@ -45,38 +45,74 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value):
         
         if response.status_code == 200:
             result = response.json()
-            log.LogDebug(f"GraphQL response keys: {list(result.keys())}")
-            
             data = result.get("data", {})
-            if not data:
-                log.LogWarning("No 'data' in GraphQL response")
-                return {}
-            
             config = data.get("configuration", {})
-            if not config:
-                log.LogWarning("No 'configuration' in response data")
-                return {}
-            
             plugins_json = config.get("plugins")
-            log.LogDebug(f"plugins type: {type(plugins_json)}")
             
             if plugins_json:
-                # plugins_json might be a string or already a dict
                 if isinstance(plugins_json, str):
                     plugins = json.loads(plugins_json)
                 else:
                     plugins = plugins_json
                 
-                log.LogDebug(f"Available plugins: {list(plugins.keys())}")
-                
                 # Find our plugin settings
                 for plugin_id, plugin_data in plugins.items():
                     if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
                         settings = plugin_data.get("settings", {})
-                        log.LogInfo(f"Found plugin '{plugin_id}' settings: {json.dumps(settings)}")
+                        log.LogDebug(f"Fallback found plugin '{plugin_id}' with settings: {json.dumps(settings)}")
                         return settings
-                
-                log.LogWarning("Scene Renamer plugin not found in configuration")
+    except Exception as e:
+        log.LogDebug(f"Fallback error: {e}")
+    
+    return {}
+
+def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stash_renamer"):
+    """Fetch plugin settings from Stash via GraphQL"""
+    # Try to get plugin settings directly
+    query = """
+    query GetPluginSettings($plugin_id: ID!) {
+      pluginSettings(plugin_id: $plugin_id)
+    }
+    """
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    
+    cookies = {cookie_name: cookie_value} if cookie_name and cookie_value else {}
+    variables = {"plugin_id": plugin_id}
+    
+    try:
+        response = requests.post(
+            server_url,
+            json={"query": query, "variables": variables},
+            headers=headers,
+            cookies=cookies
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Check for errors
+            if result.get("errors"):
+                log.LogDebug(f"GraphQL errors: {result['errors']}")
+                # Fall back to configuration query
+                return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
+            
+            data = result.get("data", {})
+            settings_json = data.get("pluginSettings")
+            
+            if settings_json:
+                if isinstance(settings_json, str):
+                    settings = json.loads(settings_json)
+                else:
+                    settings = settings_json
+                log.LogInfo(f"Found plugin settings: {json.dumps(settings)}")
+                return settings
+            else:
+                log.LogDebug("No pluginSettings in response, trying fallback")
+                return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
         else:
             log.LogWarning(f"Failed to fetch plugin settings: {response.status_code}")
     except Exception as e:
