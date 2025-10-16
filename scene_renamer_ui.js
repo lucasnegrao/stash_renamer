@@ -54,7 +54,7 @@
             );
 
             // Parse the JSON output from the plugin
-            const pluginData = JSON.parse(result.data);
+            const pluginData = JSON.parse(result.data.runPluginOperation);
             console.log("Parsed plugin data:", pluginData);
 
             if (pluginData.operations && Array.isArray(pluginData.operations)) {

@@ -334,10 +334,10 @@ def run(input_data, output):
             # IMPORTANT: Output JSON to stdout so the UI can access it via the GraphQL mutation response
         # This is the key - Stash will capture stdout and return it in runPluginOperation
         json_output = json.dumps(operations if operations else [])
-        print(json_output, file=sys.stdout, flush=True)
+        #print(json_output, file=sys.stdout, flush=True)
         
         # Also set output dict for compatibility
-        #output["output"] = "ok"
+        output["output"] = json_output
         
     except Exception as e:
         import traceback
