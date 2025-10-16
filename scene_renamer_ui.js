@@ -11,9 +11,44 @@
   const SceneRenamerPage = () => {
     const [template, setTemplate] = React.useState("$studio - $date - $title");
     const [dryRun, setDryRun] = React.useState(true);
+    const [femaleOnly, setFemaleOnly] = React.useState(false);
+    const [skipGrouped, setSkipGrouped] = React.useState(false);
+    const [moveToStudioFolder, setMoveToStudioFolder] = React.useState(false);
+    const [pathLike, setPathLike] = React.useState("");
+    const [excludePathLike, setExcludePathLike] = React.useState("");
+    const [debugMode, setDebugMode] = React.useState(false);
     const [status, setStatus] = React.useState("");
     const [running, setRunning] = React.useState(false);
     const [operations, setOperations] = React.useState([]);
+    const [sortField, setSortField] = React.useState(null);
+    const [sortDirection, setSortDirection] = React.useState("asc");
+
+    // Sort function
+    const handleSort = (field) => {
+      const newDirection =
+        sortField === field && sortDirection === "asc" ? "desc" : "asc";
+      setSortField(field);
+      setSortDirection(newDirection);
+    };
+
+    // Get sorted operations
+    const getSortedOperations = () => {
+      if (!sortField) return operations;
+
+      return [...operations].sort((a, b) => {
+        let aVal = a[sortField];
+        let bVal = b[sortField];
+
+        // Handle undefined values
+        if (aVal === undefined) return 1;
+        if (bVal === undefined) return -1;
+
+        // Compare
+        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      });
+    };
 
     const runRename = async (mode) => {
       setRunning(true);
@@ -36,13 +71,19 @@
                 mode: mode,
                 template: template,
                 dry_run: dryRun.toString(),
+                femaleOnly: femaleOnly.toString(),
+                skipGrouped: skipGrouped.toString(),
+                moveToStudioFolder: moveToStudioFolder.toString(),
+                pathLike: pathLike,
+                excludePathLike: excludePathLike,
+                debugMode: debugMode.toString(),
               },
             },
           }),
         });
 
         const result = await response.json();
-        
+
         console.log("GraphQL result:", result);
 
         // The plugin outputs JSON which Stash returns here
@@ -120,6 +161,10 @@
         )
       ),
 
+      // Settings accordion/collapsible
+      React.createElement("hr", null),
+      React.createElement("h4", null, "Options"),
+
       // Dry run checkbox
       React.createElement(
         "div",
@@ -133,17 +178,182 @@
             React.createElement("input", {
               type: "checkbox",
               className: "form-check-input",
+              id: "dryRun",
               checked: dryRun,
               onChange: (e) => setDryRun(e.target.checked),
             }),
             React.createElement(
               "label",
-              { className: "form-check-label" },
+              { className: "form-check-label", htmlFor: "dryRun" },
               "Dry Run (Preview only, no actual renaming)"
             )
           )
         )
       ),
+
+      // Female Only checkbox
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            "div",
+            { className: "form-check" },
+            React.createElement("input", {
+              type: "checkbox",
+              className: "form-check-input",
+              id: "femaleOnly",
+              checked: femaleOnly,
+              onChange: (e) => setFemaleOnly(e.target.checked),
+            }),
+            React.createElement(
+              "label",
+              { className: "form-check-label", htmlFor: "femaleOnly" },
+              "Female Performers Only (for $performer token)"
+            )
+          )
+        )
+      ),
+
+      // Skip Grouped checkbox
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            "div",
+            { className: "form-check" },
+            React.createElement("input", {
+              type: "checkbox",
+              className: "form-check-input",
+              id: "skipGrouped",
+              checked: skipGrouped,
+              onChange: (e) => setSkipGrouped(e.target.checked),
+            }),
+            React.createElement(
+              "label",
+              { className: "form-check-label", htmlFor: "skipGrouped" },
+              "Skip Grouped Scenes (part of a movie/group)"
+            )
+          )
+        )
+      ),
+
+      // Move to Studio Folder checkbox
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            "div",
+            { className: "form-check" },
+            React.createElement("input", {
+              type: "checkbox",
+              className: "form-check-input",
+              id: "moveToStudioFolder",
+              checked: moveToStudioFolder,
+              onChange: (e) => setMoveToStudioFolder(e.target.checked),
+            }),
+            React.createElement(
+              "label",
+              { className: "form-check-label", htmlFor: "moveToStudioFolder" },
+              "Move to Studio Subfolder (create studio-named folders)"
+            )
+          )
+        )
+      ),
+
+      // Debug Mode checkbox
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            "div",
+            { className: "form-check" },
+            React.createElement("input", {
+              type: "checkbox",
+              className: "form-check-input",
+              id: "debugMode",
+              checked: debugMode,
+              onChange: (e) => setDebugMode(e.target.checked),
+            }),
+            React.createElement(
+              "label",
+              { className: "form-check-label", htmlFor: "debugMode" },
+              "Debug Mode (detailed logging)"
+            )
+          )
+        )
+      ),
+
+      // Path filters
+      React.createElement("hr", null),
+      React.createElement("h5", null, "Path Filters (Optional)"),
+
+      // Path Like (include)
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Include Path:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: pathLike,
+            onChange: (e) => setPathLike(e.target.value),
+            placeholder: "e.g., /mnt/media/scenes/",
+          }),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Only rename files with paths containing this substring"
+          )
+        )
+      ),
+
+      // Exclude Path Like
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Exclude Path:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: excludePathLike,
+            onChange: (e) => setExcludePathLike(e.target.value),
+            placeholder: "e.g., /mnt/media/temp/",
+          }),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Skip files with paths containing this substring"
+          )
+        )
+      ),
+
+      React.createElement("hr", null),
 
       // Run button
       React.createElement(
@@ -190,17 +400,62 @@
                 React.createElement(
                   "tr",
                   null,
-                  React.createElement("th", null, "Status"),
-                  React.createElement("th", null, "Scene ID"),
-                  React.createElement("th", null, "Old Filename"),
-                  React.createElement("th", null, "New Filename"),
-                  React.createElement("th", null, "Error")
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("status"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "Status ",
+                    sortField === "status" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("scene_id"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "Scene ID ",
+                    sortField === "scene_id" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("old_filename"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "Old Filename ",
+                    sortField === "old_filename" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("new_filename"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "New Filename ",
+                    sortField === "new_filename" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  ),
+                  React.createElement(
+                    "th",
+                    {
+                      onClick: () => handleSort("error"),
+                      style: { cursor: "pointer", userSelect: "none" },
+                    },
+                    "Error ",
+                    sortField === "error" &&
+                      (sortDirection === "asc" ? "▲" : "▼")
+                  )
                 )
               ),
               React.createElement(
                 "tbody",
                 null,
-                operations.map((op, idx) =>
+                getSortedOperations().map((op, idx) =>
                   React.createElement(
                     "tr",
                     { key: idx },
