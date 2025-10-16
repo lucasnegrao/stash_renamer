@@ -249,8 +249,9 @@
     };
     const TestPage = () => {
       const componentsToLoad = [
-        PluginApi.loadableComponents.SceneCard,
+        PluginApi.loadableComponents.TagSelect,
         PluginApi.loadableComponents.PerformerSelect,
+        PluginApi.loadableComponents.StudioSelect,
       ];
       const componentsLoading =
         PluginApi.hooks.useLoadComponents(componentsToLoad);
