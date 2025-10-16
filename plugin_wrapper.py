@@ -331,13 +331,10 @@ def run(input_data, output):
                     log.LogWarning(f"   Error: {op['error']}")
             log.LogInfo("="*50)
         
-        # IMPORTANT: Output JSON to stdout so the UI can access it via the GraphQL mutation response
-        # This is the key - Stash will capture stdout and return it in runPluginOperation
+        # IMPORTANT: Build the JSON output that will be returned to the UI
+        # Set this in the output dict which gets printed by main()
         json_output = json.dumps({"operations": operations if operations else []})
-        print(json_output, file=sys.stdout, flush=True)
-        
-        # Also set output dict for compatibility
-        output["output"] = "ok"
+        output["output"] = json_output
         
     except Exception as e:
         import traceback

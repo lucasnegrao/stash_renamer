@@ -42,12 +42,25 @@
         });
 
         const result = await response.json();
+        
+        console.log("GraphQL result:", result);
 
-        // The plugin outputs JSON to stdout, which Stash captures and returns here
+        // The plugin outputs JSON which Stash returns here
         if (result.data && result.data.runPluginOperation) {
           try {
-            // Parse the JSON output from the plugin
-            const pluginOutput = JSON.parse(result.data.runPluginOperation);
+            console.log(
+              "Plugin output string:",
+              result.data.runPluginOperation
+            );
+
+            // The output is a JSON string containing another JSON string
+            // First parse gets us the wrapper object with "output" key
+            const outputWrapper = JSON.parse(result.data.runPluginOperation);
+            console.log("Output wrapper:", outputWrapper);
+
+            // Then parse the "output" value to get our operations
+            const pluginOutput = JSON.parse(outputWrapper.output);
+            console.log("Plugin output:", pluginOutput);
 
             if (
               pluginOutput.operations &&
@@ -64,6 +77,7 @@
             }
           } catch (parseError) {
             console.error("Failed to parse plugin output:", parseError);
+            console.error("Raw output was:", result.data.runPluginOperation);
             setStatus(
               "Completed! Check Settings → Logs → Plugins for the rename operations list."
             );
