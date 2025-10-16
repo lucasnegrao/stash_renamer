@@ -238,9 +238,12 @@ def run(input_data, output):
         # Extract plugin arguments (from task)
         args = input_data.get("args", {})
         log.LogDebug(f"Plugin args: {json.dumps(args)}")
+        log.LogDebug(f"Plugin settings: {json.dumps(settings)}")
         
-        # Merge settings with args (args take precedence for overrides)
+        # For string values, merge settings with args (args take precedence)
+        # For boolean flags, only use args to avoid unwanted defaults from settings
         combined_args = {**settings, **args}
+        log.LogDebug(f"Combined args: {json.dumps(combined_args)}")
         
         # Check for mode from task
         mode = combined_args.get("mode", "")
@@ -266,24 +269,33 @@ def run(input_data, output):
         cmd_args.extend(["--template", template])
         log.LogInfo(f"Template: {template}")
         
-        # Boolean flags
-        if combined_args.get("femaleOnly"):
+        # Boolean flags - only enable if explicitly set to "true" in args (from UI)
+        # Check args first (UI input), ignore settings to avoid unwanted defaults
+        
+        log.LogDebug(f"femaleOnly check: args={args.get('femaleOnly')}, settings={settings.get('femaleOnly')}")
+        if args.get("femaleOnly") == "true":
             cmd_args.append("--female-only")
             log.LogDebug("Female performers only: enabled")
         
-        if combined_args.get("skipGrouped"):
+        log.LogDebug(f"skipGrouped check: args={args.get('skipGrouped')}, settings={settings.get('skipGrouped')}")
+        if args.get("skipGrouped") == "true":
             cmd_args.append("--skip-grouped")
             log.LogDebug("Skip grouped scenes: enabled")
         
-        if combined_args.get("moveToStudioFolder"):
+        # Handle both moveToStudio (from ui.html) and moveToStudioFolder (from scene_renamer_ui.js)
+        log.LogDebug(f"moveToStudio check: args moveToStudio={args.get('moveToStudio')}, moveToStudioFolder={args.get('moveToStudioFolder')}, settings={settings.get('moveToStudioFolder')}")
+        if args.get("moveToStudio") == "true" or args.get("moveToStudioFolder") == "true":
             cmd_args.append("--move-to-studio-folder")
             log.LogDebug("Move to studio folder: enabled")
         
-        # Debug mode (default to true)
-        if combined_args.get("debugMode", True):
+        # Debug mode - only enable if explicitly set to "true" in args
+        log.LogDebug(f"debugMode check: args debugMode={args.get('debugMode')}, debug={args.get('debug')}, settings={settings.get('debugMode')}")
+        if args.get("debugMode") == "true" or args.get("debug") == "true":
             cmd_args.append("--debug")
+            log.LogDebug("Debug mode: enabled")
         else:
             cmd_args.append("--no-debug")
+            log.LogDebug("Debug mode: disabled")
         
         # Path filters
         path_like = combined_args.get("pathLike", "")
