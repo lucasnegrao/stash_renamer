@@ -84,16 +84,27 @@ def handle_task(plugin: StashPlugin, task_name: str, args: Dict[str, Any], confi
     # Import globals from stash_renamer
     global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG
     
-    # Setup config
-    server_conn = plugin.get_server_connection()
-    if server_conn["url"] and server_conn["api_key"]:
-        from types import SimpleNamespace
+    # Setup config - prioritize plugin settings, then server connection
+    from types import SimpleNamespace
+    
+    # Check if serverUrl and apiKey are in plugin settings
+    if config.get("serverUrl") and config.get("apiKey"):
         CONFIG = SimpleNamespace(
-            server_url=server_conn["url"],
-            api_key=server_conn["api_key"]
+            server_url=config["serverUrl"],
+            api_key=config["apiKey"]
         )
+        plugin.log(f"Using server URL from plugin settings: {config['serverUrl']}")
     else:
-        CONFIG = load_or_create_config(interactive_ok=False)
+        # Fall back to server connection from Stash
+        server_conn = plugin.get_server_connection()
+        if server_conn["url"] and server_conn["api_key"]:
+            CONFIG = SimpleNamespace(
+                server_url=server_conn["url"],
+                api_key=server_conn["api_key"]
+            )
+            plugin.log(f"Using server URL from Stash connection: {server_conn['url']}")
+        else:
+            CONFIG = load_or_create_config(interactive_ok=False)
     
     # Apply plugin config
     template = config.get("template", "$studio - $date - $title - $performer")

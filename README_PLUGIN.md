@@ -32,7 +32,13 @@ Transform your scene renamer script into a fully-featured Stash plugin with UI a
 
 3. **Restart Stash** or reload plugins from Settings → Plugins
 
-4. **Configure the plugin** in Stash Settings → Plugins → Scene Renamer
+4. **Configure the plugin** in Stash Settings → Plugins → Scene Renamer:
+   - **Server URL**: Your Stash GraphQL endpoint (e.g., `http://localhost:9999/graphql`)
+   - **API Key**: Your Stash API key from Settings → Security → API Key
+   - **Template**: Filename template with tokens
+   - Other options as needed
+
+> **Note**: When running as a plugin, Stash automatically provides connection info, so you typically don't need to manually set Server URL and API Key unless you want to connect to a different Stash instance.
 
 ### Option 2: Standalone with Task Integration
 
@@ -152,6 +158,11 @@ python stash_renamer.py --path-like '/mnt/media/scenes/' --template '$date - $ti
 
 Edit these in Stash UI under Settings → Plugins → Scene Renamer:
 
+#### Connection Settings
+- **Server URL**: Stash GraphQL endpoint (optional, auto-detected when running as plugin)
+- **API Key**: Your Stash API key (optional, auto-detected when running as plugin)
+
+#### Renaming Settings
 - **Template**: Default filename template
 - **Female Only**: Include only female performers
 - **Skip Grouped**: Skip scenes in groups/movies
@@ -160,21 +171,30 @@ Edit these in Stash UI under Settings → Plugins → Scene Renamer:
 - **Path Filter (Exclude)**: Skip matching paths
 - **Debug Mode**: Enable detailed logging
 
-### Environment Variables
+### Configuration Priority
 
-The script can also use environment variables:
+The plugin checks for configuration in this order:
+
+1. **Plugin Settings** (in Stash UI) - Recommended for plugin usage
+2. **Stash Server Connection** - Auto-detected when running as plugin
+3. **Environment Variables** - Good for command-line usage
+4. **config.py file** - Legacy support
+5. **Interactive Prompt** - Only with `--interactive` flag
+
+#### Environment Variables (for CLI usage)
 ```bash
 export STASH_SERVER_URL="http://localhost:9999/graphql"
 export STASH_API_KEY="your-api-key-here"
 ```
 
-### Config File
-
-Or create a `config.py` next to the script:
+#### Config File (for CLI usage)
+Create `config.py` next to the script:
 ```python
 server_url = "http://localhost:9999/graphql"
 api_key = "your-api-key-here"
 ```
+
+> **Tip**: When using as a Stash plugin, you don't need to manually configure Server URL and API Key - Stash provides this automatically!
 
 ## 📋 Template Tokens
 

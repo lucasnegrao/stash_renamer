@@ -3,6 +3,14 @@ description: Rename scene files based on metadata with customizable templates
 version: 1.0.0
 url: https://github.com/lucasnegrao/stash_renamer
 settings:
+  serverUrl:
+    displayName: Stash Server URL
+    type: STRING
+    description: "URL to your Stash GraphQL endpoint (e.g., http://localhost:9999/graphql)"
+  apiKey:
+    displayName: Stash API Key
+    type: STRING
+    description: "Your Stash API key from Settings > Security"
   template:
     displayName: Filename Template
     type: STRING

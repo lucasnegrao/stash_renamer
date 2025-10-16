@@ -101,21 +101,57 @@ def import_config_from_path(path: str) -> Optional[SimpleNamespace]:
     return None
 
 
+def load_config_from_plugin_settings() -> Optional[SimpleNamespace]:
+    """
+    Load configuration from plugin settings passed via stdin.
+    This is used when running as a Stash plugin.
+    """
+    try:
+        if not sys.stdin.isatty():
+            input_data = json.loads(sys.stdin.read())
+            plugin_config = input_data.get("server_connection", {})
+            
+            # If running as plugin, Stash provides connection info
+            if plugin_config:
+                scheme = plugin_config.get("Scheme", "http")
+                host = plugin_config.get("Host", "localhost")
+                port = plugin_config.get("Port", 9999)
+                api_key = plugin_config.get("ApiKey", "")
+                server_url = f"{scheme}://{host}:{port}/graphql"
+                if server_url and api_key:
+                    return SimpleNamespace(server_url=server_url, api_key=api_key)
+            
+            # Otherwise check plugin settings
+            settings = input_data.get("args", {}).get("pluginSettings", {})
+            server_url = settings.get("serverUrl", "")
+            api_key = settings.get("apiKey", "")
+            if server_url and api_key:
+                return SimpleNamespace(server_url=server_url, api_key=api_key)
+    except Exception:
+        pass
+    return None
+
+
 def load_or_create_config(interactive_ok: bool) -> SimpleNamespace:
-    # 0) Environment overrides
+    # 0) Plugin settings (if running as plugin)
+    plugin_cfg = load_config_from_plugin_settings()
+    if plugin_cfg:
+        return plugin_cfg
+    
+    # 1) Environment overrides
     env_server = os.getenv("STASH_SERVER_URL")
     env_api = os.getenv("STASH_API_KEY")
     if env_server and env_api:
         return SimpleNamespace(server_url=env_server, api_key=env_api)
 
-    # 1) Local config.py next to this script
+    # 2) Local config.py next to this script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_cfg_path = os.path.join(script_dir, "config.py")
     cfg = import_config_from_path(local_cfg_path)
     if cfg:
         return cfg
 
-    # 4) Not found: interactively prompt if allowed
+    # 3) Not found: interactively prompt if allowed
     if interactive_ok:
         print("Stash API config not found. Let's set it up.")
         default_url = "http://localhost:9999/graphql"
@@ -131,11 +167,13 @@ def load_or_create_config(interactive_ok: bool) -> SimpleNamespace:
             logPrint(f"[Warn] Failed to write config.py: {e}")
         return SimpleNamespace(server_url=server_url, api_key=api_key)
 
-    # 5) Otherwise, instruct the user
+    # 4) Otherwise, instruct the user
     raise RuntimeError(
-        "Stash API config not found. Provide STASH_SERVER_URL and STASH_API_KEY environment vars, "
-        "or create a config.py with server_url and api_key next to this script, "
-        "or run with --interactive to set it up."
+        "Stash API config not found. Options:\n"
+        "  1. Configure in plugin settings (serverUrl and apiKey)\n"
+        "  2. Set STASH_SERVER_URL and STASH_API_KEY environment vars\n"
+        "  3. Create config.py with server_url and api_key\n"
+        "  4. Run with --interactive to set it up"
     )
 
 
