@@ -113,7 +113,7 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
 
     # Correct: declare $plugin_id and reference it (no quotes) + wrap 'plugins' under 'configuration'
     query = """
-    query configuration($plugin_id: [String!]) {
+    query configuration($plugin_id: [ID!]) {
       configuration {
         plugins(include: $plugin_id)
       }
