@@ -141,7 +141,7 @@
 
    const TestPage = () => {
      const componentsToLoad = [
-       PluginApi.loadableComponents.SudioSelect,
+       PluginApi.loadableComponents.StudioSelect,
        PluginApi.loadableComponents.PerformerSelect,
      ];
      const componentsLoading =
