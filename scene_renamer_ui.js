@@ -249,8 +249,7 @@
     };
     const TestPage = () => {
       const componentsToLoad = [
-        PluginApi.loadableComponents.StudioSelect,
-        PluginApi.loadableComponents.TagSelect,
+        PluginApi.loadableComponents.SceneCard,
         PluginApi.loadableComponents.PerformerSelect,
       ];
       const componentsLoading =
@@ -264,15 +263,6 @@
       return React.createElement(
         "div",
         null,
-        React.createElement(
-          "div",
-          null
-          // React.createElement(TagSelect, {
-          //   isMulti: true,
-          //   onSelect: () => {},
-          //   values: [],
-          // })
-        ),
         React.createElement(
           "div",
           null,
