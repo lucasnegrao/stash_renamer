@@ -25,9 +25,40 @@ IS_WINDOWS = os.name == "nt"
 # Will hold server_url and api_key
 CONFIG = None  # type: Optional[SimpleNamespace]
 
+# Try to import Stash logging if available (when running as plugin)
+USING_STASH_LOG = False
+stash_log = None
+try:
+    import log as stash_log  # type: ignore
+    USING_STASH_LOG = True
+except ImportError:
+    pass
+
 
 def logPrint(msg: str):
-    if msg and ("[DEBUG]" not in msg or DEBUG_MODE):
+    if not msg:
+        return
+    
+    # Skip debug messages if debug mode is off
+    if "[DEBUG]" in msg and not DEBUG_MODE:
+        return
+    
+    # Use Stash logging if available (running as plugin)
+    if USING_STASH_LOG and stash_log:
+        if "[ERROR]" in msg or "[Error]" in msg:
+            stash_log.LogError(msg)
+        elif "[WARN]" in msg or "[Warn]" in msg:
+            stash_log.LogWarning(msg)
+        elif "[DEBUG]" in msg:
+            stash_log.LogDebug(msg)
+        elif "[DRY]" in msg or "[DRY_RUN]" in msg:
+            stash_log.LogInfo(msg)  # Dry run messages are important
+        elif "[OS]" in msg:
+            stash_log.LogInfo(msg)  # File operations
+        else:
+            stash_log.LogInfo(msg)
+    else:
+        # Fallback to regular print when not running as plugin
         print(msg)
 
 
