@@ -144,7 +144,7 @@
      const componentsLoading =
        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-     const { TagSelect, LoadingIndicator, PerformerSelect } =
+     const { TagSelect, LoadingIndicator, PerformerSelect, StudioSelect } =
        PluginApi.components;
 
      if (componentsLoading) return React.createElement(LoadingIndicator);
@@ -152,6 +152,14 @@
      return React.createElement(
        "div",
        null,
+       React.createElement(
+         "div",
+         null,
+         React.createElement(StudioSelect, {
+           onSelect: () => {},
+           values: [],
+         })
+       ),
        React.createElement(
          "div",
          null,
