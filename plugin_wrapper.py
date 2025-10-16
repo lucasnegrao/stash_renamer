@@ -118,11 +118,16 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
     """
     
     headers = {
+        "Accept-Encoding": "gzip, deflate, br",
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "Connection": "keep-alive",
+        "DNT": "1",
     }
     
-    cookies = {cookie_name: cookie_value} if cookie_name and cookie_value else {}
+    # Use session cookie authentication (when running as plugin)
+    headers["Cookie"] = f"{cookie_name}={cookie_value}"
+   
     variables = {"plugin_id": plugin_id}
     
     try:
@@ -130,7 +135,6 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
             server_url,
             json={"query": query, "variables": variables},
             headers=headers,
-            cookies=cookies
         )
         
         if response.status_code == 200:
