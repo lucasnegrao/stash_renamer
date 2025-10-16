@@ -249,9 +249,9 @@
     };
     const TestPage = () => {
       const componentsToLoad = [
+        PluginApi.loadableComponents.StudioSelect,
         PluginApi.loadableComponents.TagSelect,
         PluginApi.loadableComponents.PerformerSelect,
-        PluginApi.loadableComponents.StudioSelect,
       ];
       const componentsLoading =
         PluginApi.hooks.useLoadComponents(componentsToLoad);
@@ -276,24 +276,20 @@
         React.createElement(
           "div",
           null,
-          React.createElement(
-            "div",
-            null,
-            React.createElement(StudioSelect, {
-              isMulti: true,
-              onSelect: () => {},
-              values: [],
-            })
-          ),
-          React.createElement(
-            "div",
-            null,
-            React.createElement(PerformerSelect, {
-              isMulti: true,
-              onSelect: () => {},
-              values: [],
-            })
-          )
+          React.createElement(StudioSelect, {
+            isMulti: true,
+            onSelect: () => {},
+            values: [],
+          })
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement(PerformerSelect, {
+            isMulti: true,
+            onSelect: () => {},
+            values: [],
+          })
         )
       );
     };
