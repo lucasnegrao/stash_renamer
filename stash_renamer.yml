@@ -7,37 +7,37 @@ settings:
     displayName: Filename Template
     type: STRING
     description: "Template for renaming files. Tokens: $studio, $date, $title, $performer, $height"
-    default: "$studio - $date - $title - $performer"
+    defaultValue: "$studio - $date - $title - $performer"
   femaleOnly:
     displayName: Female Performers Only
     type: BOOLEAN
     description: Include only female performers in $performer token
-    default: false
+    defaultValue: false
   skipGrouped:
     displayName: Skip Grouped Scenes
     type: BOOLEAN
     description: Skip scenes that are part of a group/movie
-    default: false
+    defaultValue: false
   moveToStudioFolder:
     displayName: Move to Studio Folder
     type: BOOLEAN
     description: Move scenes to a studio-named subfolder if studio exists
-    default: false
+    defaultValue: false
   pathLike:
     displayName: Path Filter (Include)
     type: STRING
     description: "Optional substring to match in file path (e.g., /mnt/media/)"
-    default: ""
+    defaultValue: ""
   excludePathLike:
     displayName: Path Filter (Exclude)
     type: STRING
     description: Optional substring to exclude matching file paths
-    default: ""
+    defaultValue: ""
   debugMode:
     displayName: Debug Mode
     type: BOOLEAN
     description: Enable debug output for troubleshooting
-    default: true
+    defaultValue: true
 exec:
   - python
   - "{pluginDir}/stash_renamer.py"
