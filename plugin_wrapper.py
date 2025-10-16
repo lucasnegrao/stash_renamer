@@ -160,7 +160,7 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
                 log.LogDebug("No pluginSettings in response, trying fallback")
                 return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
         else:
-            log.LogWarning(f"Failed to fetch plugin settings: {response.status_code}")
+            log.LogWarning(f"Yei ow Failed to fetch plugin settings: {response.status_code}")
             # Try fallback on failure
             return fetch_plugin_settings_fallback(server_url, cookie_name, cookie_value)
     except Exception as e:
