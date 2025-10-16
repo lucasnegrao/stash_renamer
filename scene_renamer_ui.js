@@ -860,6 +860,356 @@
         )
       ),
 
+      // Organized tri-state
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Organized:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              className: "form-control",
+              value: organized,
+              onChange: (e) => setOrganized(e.target.value),
+            },
+            React.createElement("option", { value: "any" }, "Any"),
+            React.createElement("option", { value: "true" }, "Only organized"),
+            React.createElement(
+              "option",
+              { value: "false" },
+              "Only unorganized"
+            )
+          )
+        )
+      ),
+
+      // Interactive tri-state
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Interactive:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              className: "form-control",
+              value: interactive,
+              onChange: (e) => setInteractive(e.target.value),
+            },
+            React.createElement("option", { value: "any" }, "Any"),
+            React.createElement(
+              "option",
+              { value: "true" },
+              "Only interactive"
+            ),
+            React.createElement(
+              "option",
+              { value: "false" },
+              "Only non-interactive"
+            )
+          )
+        )
+      ),
+
+      // Min scene markers
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Min Scene Markers:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "number",
+            min: "0",
+            className: "form-control",
+            value: minSceneMarkers,
+            onChange: (e) =>
+              setMinSceneMarkers(e.target.value.replace(/\D/g, "")),
+            placeholder: "e.g., 1",
+          })
+        )
+      ),
+
+      // Studio filter
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Studio:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: filterStudio,
+            onChange: (e) => setFilterStudio(e.target.value),
+            placeholder: "Comma-separated exact studio names",
+          })
+        )
+      ),
+
+      // Groups filter with picker
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Groups:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "div",
+            { className: "d-flex" },
+            React.createElement("input", {
+              type: "text",
+              className: "form-control",
+              value: filterGroups,
+              onChange: (e) => setFilterGroups(e.target.value),
+              placeholder: "Comma-separated exact group names",
+            }),
+            React.createElement(
+              Button,
+              {
+                className: "ml-2",
+                onClick: async () => {
+                  await ensureGroupsLoaded();
+                  setShowFilterGroupsPicker((v) => !v);
+                },
+              },
+              "Browse…"
+            )
+          ),
+          showFilterGroupsPicker &&
+            React.createElement(
+              "div",
+              {
+                className: "border rounded p-2 mt-2",
+                style: { maxHeight: "280px", overflow: "auto" },
+              },
+              React.createElement(
+                "div",
+                { className: "d-flex mb-2" },
+                React.createElement("input", {
+                  type: "text",
+                  className: "form-control",
+                  placeholder: "Search groups…",
+                  value: groupSearch,
+                  onChange: (e) => setGroupSearch(e.target.value),
+                }),
+                React.createElement(
+                  Button,
+                  { className: "ml-2", onClick: () => setGroupSearch("") },
+                  "Clear"
+                )
+              ),
+              loadingGroups
+                ? React.createElement("div", null, "Loading groups…")
+                : React.createElement(
+                    React.Fragment,
+                    null,
+                    (availableGroups || [])
+                      .filter((n) =>
+                        n.toLowerCase().includes(groupSearch.toLowerCase())
+                      )
+                      .map((name) =>
+                        React.createElement(
+                          "div",
+                          { key: name, className: "form-check" },
+                          React.createElement("input", {
+                            type: "checkbox",
+                            id: `filter-group-${name}`,
+                            className: "form-check-input",
+                            checked: csvToSet(filterGroups).has(name),
+                            onChange: (e) => {
+                              const next = csvToSet(filterGroups);
+                              if (e.target.checked) next.add(name);
+                              else next.delete(name);
+                              setFilterGroups(setToCsv(next));
+                            },
+                          }),
+                          React.createElement(
+                            "label",
+                            {
+                              className: "form-check-label",
+                              htmlFor: `filter-group-${name}`,
+                            },
+                            name
+                          )
+                        )
+                      )
+                  ),
+              React.createElement(
+                "div",
+                { className: "mt-2 d-flex" },
+                React.createElement(
+                  Button,
+                  {
+                    variant: "secondary",
+                    onClick: () => setShowFilterGroupsPicker(false),
+                  },
+                  "Close"
+                ),
+                React.createElement(
+                  Button,
+                  {
+                    className: "ml-2",
+                    onClick: () => {
+                      setFilterGroups("");
+                      setGroupSearch("");
+                    },
+                  },
+                  "Clear All"
+                )
+              )
+            )
+        )
+      ),
+
+      // Tags filter with picker
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Tags:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "div",
+            { className: "d-flex" },
+            React.createElement("input", {
+              type: "text",
+              className: "form-control",
+              value: filterTags,
+              onChange: (e) => setFilterTags(e.target.value),
+              placeholder: "Comma-separated exact tag names",
+            }),
+            React.createElement(
+              Button,
+              {
+                className: "ml-2",
+                onClick: async () => {
+                  await ensureTagsLoaded();
+                  setShowFilterTagsPicker((v) => !v);
+                },
+              },
+              "Browse…"
+            )
+          ),
+          showFilterTagsPicker &&
+            React.createElement(
+              "div",
+              {
+                className: "border rounded p-2 mt-2",
+                style: { maxHeight: "280px", overflow: "auto" },
+              },
+              React.createElement(
+                "div",
+                { className: "d-flex mb-2" },
+                React.createElement("input", {
+                  type: "text",
+                  className: "form-control",
+                  placeholder: "Search tags…",
+                  value: tagSearch,
+                  onChange: (e) => setTagSearch(e.target.value),
+                }),
+                React.createElement(
+                  Button,
+                  { className: "ml-2", onClick: () => setTagSearch("") },
+                  "Clear"
+                )
+              ),
+              loadingTags
+                ? React.createElement("div", null, "Loading tags…")
+                : React.createElement(
+                    React.Fragment,
+                    null,
+                    (availableTags || [])
+                      .filter((n) =>
+                        n.toLowerCase().includes(tagSearch.toLowerCase())
+                      )
+                      .map((name) =>
+                        React.createElement(
+                          "div",
+                          { key: name, className: "form-check" },
+                          React.createElement("input", {
+                            type: "checkbox",
+                            id: `filter-tag-${name}`,
+                            className: "form-check-input",
+                            checked: csvToSet(filterTags).has(name),
+                            onChange: (e) => {
+                              const next = csvToSet(filterTags);
+                              if (e.target.checked) next.add(name);
+                              else next.delete(name);
+                              setFilterTags(setToCsv(next));
+                            },
+                          }),
+                          React.createElement(
+                            "label",
+                            {
+                              className: "form-check-label",
+                              htmlFor: `filter-tag-${name}`,
+                            },
+                            name
+                          )
+                        )
+                      )
+                  ),
+              React.createElement(
+                "div",
+                { className: "mt-2 d-flex" },
+                React.createElement(
+                  Button,
+                  {
+                    variant: "secondary",
+                    onClick: () => setShowFilterTagsPicker(false),
+                  },
+                  "Close"
+                ),
+                React.createElement(
+                  Button,
+                  {
+                    className: "ml-2",
+                    onClick: () => {
+                      setFilterTags("");
+                      setTagSearch("");
+                    },
+                  },
+                  "Clear All"
+                )
+              )
+            )
+        )
+      ),
+
       // Run button
       React.createElement(
         "div",
