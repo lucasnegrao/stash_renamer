@@ -312,11 +312,36 @@ def run(input_data, output):
         
         # Import and run the main script
         from stash_renamer import run as renamer_run
-        renamer_run()
         
-        # Output success
-        log.LogInfo("Scene Renamer completed successfully")
-        output["output"] = "ok"
+        # Call with collect_operations=True to get the list of rename operations
+        operations = renamer_run(collect_operations=True)
+        
+        # Output success with operations list
+        log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
+        
+        # Write operations to a temporary JSON file for UI access
+        operations_file = os.path.join(os.path.dirname(__file__), "renamer_operations.json")
+        try:
+            with open(operations_file, "w", encoding="utf-8") as f:
+                json.dump(operations if operations else [], f, indent=2)
+            log.LogInfo(f"Operations written to {operations_file}")
+        except Exception as e:
+            log.LogWarning(f"Could not write operations file: {e}")
+        
+        # Include a summary in the output
+        output["output"] = f"Completed {len(operations) if operations else 0} operations"
+        
+        # Log each operation for visibility
+        if operations:
+            log.LogInfo("="*50)
+            log.LogInfo("RENAME OPERATIONS:")
+            log.LogInfo("="*50)
+            for i, op in enumerate(operations, 1):
+                status_marker = "✓" if op["status"] == "success" else "○" if op["status"] == "pending" else "✗"
+                log.LogInfo(f"{i}. [{status_marker}] {op['old_filename']} → {op['new_filename']}")
+                if op.get("error"):
+                    log.LogWarning(f"   Error: {op['error']}")
+            log.LogInfo("="*50)
         
     except Exception as e:
         import traceback

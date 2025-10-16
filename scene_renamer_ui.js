@@ -13,10 +13,12 @@
     const [dryRun, setDryRun] = React.useState(true);
     const [status, setStatus] = React.useState("");
     const [running, setRunning] = React.useState(false);
+    const [operations, setOperations] = React.useState([]);
 
     const runRename = async (mode) => {
       setRunning(true);
       setStatus("Running...");
+      setOperations([]); // Clear previous results
 
       try {
         const response = await fetch("/graphql", {
@@ -40,7 +42,28 @@
         });
 
         const result = await response.json();
-        setStatus("Completed! Check Settings → Logs for details.");
+        
+        // Wait a moment for the operation to complete
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Try to fetch the operations file that the plugin writes
+        try {
+          const opsResponse = await fetch("/plugin/stash_renamer/renamer_operations.json");
+          if (opsResponse.ok) {
+            const opsData = await opsResponse.json();
+            if (opsData && Array.isArray(opsData) && opsData.length > 0) {
+              setOperations(opsData);
+              setStatus(`Completed! Found ${opsData.length} operations.`);
+            } else {
+              setStatus("Completed! No operations found. Check Settings → Logs → Plugins for details.");
+            }
+          } else {
+            setStatus("Completed! Check Settings → Logs → Plugins for details.");
+          }
+        } catch (fetchError) {
+          // Fallback: operations file not accessible, check logs
+          setStatus("Completed! Check Settings → Logs → Plugins for the rename operations list.");
+        }
       } catch (error) {
         setStatus("Error: " + error.message);
       } finally {
@@ -131,6 +154,77 @@
           "div",
           { className: "alert alert-info mt-3" },
           status
+        ),
+
+      // Operations list
+      operations.length > 0 &&
+        React.createElement(
+          "div",
+          { className: "mt-4" },
+          React.createElement("h3", null, "Rename Operations"),
+          React.createElement(
+            "div",
+            { className: "table-responsive" },
+            React.createElement(
+              "table",
+              { className: "table table-striped table-sm" },
+              React.createElement(
+                "thead",
+                null,
+                React.createElement(
+                  "tr",
+                  null,
+                  React.createElement("th", null, "Status"),
+                  React.createElement("th", null, "Scene ID"),
+                  React.createElement("th", null, "Old Filename"),
+                  React.createElement("th", null, "New Filename"),
+                  React.createElement("th", null, "Error")
+                )
+              ),
+              React.createElement(
+                "tbody",
+                null,
+                operations.map((op, idx) =>
+                  React.createElement(
+                    "tr",
+                    { key: idx },
+                    React.createElement(
+                      "td",
+                      null,
+                      React.createElement(
+                        "span",
+                        {
+                          className:
+                            op.status === "success"
+                              ? "badge badge-success"
+                              : op.status === "error"
+                              ? "badge badge-danger"
+                              : "badge badge-secondary",
+                        },
+                        op.status
+                      )
+                    ),
+                    React.createElement("td", null, op.scene_id),
+                    React.createElement(
+                      "td",
+                      { className: "text-truncate", style: { maxWidth: "250px" }, title: op.old_filename },
+                      op.old_filename
+                    ),
+                    React.createElement(
+                      "td",
+                      { className: "text-truncate", style: { maxWidth: "250px" }, title: op.new_filename },
+                      op.new_filename
+                    ),
+                    React.createElement(
+                      "td",
+                      { className: "text-danger" },
+                      op.error || ""
+                    )
+                  )
+                )
+              )
+            )
+          )
         ),
 
       // Help section

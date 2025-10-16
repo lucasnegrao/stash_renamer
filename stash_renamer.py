@@ -401,25 +401,36 @@ def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_li
     return results
 
 
-def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str]):
+def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], collect_operations: bool = False):
+    """
+    Run the rename operation.
+    
+    Args:
+        collect_operations: If True, return list of operations instead of just logging them
+        
+    Returns:
+        List of dicts with rename operations if collect_operations=True, otherwise None
+    """
+    operations = []
+    
     # Resolve tags if provided
     tag_ids: Optional[List[str]] = None
     if tag_names:
         mapping = find_tag_ids_by_names(tag_names)
         if not mapping:
             logPrint("[Warn] No tag IDs resolved; skipping tag-based selection.")
-            return
+            return operations if collect_operations else None
         tag_ids = [mapping[name] for name in tag_names if name in mapping]
         if not tag_ids:
             logPrint("[Warn] No tag IDs resolved; skipping.")
-            return
+            return operations if collect_operations else None
 
     scene_filter = build_scene_filter(base_filter, tag_ids)
 
     scenes = iterate_scenes(scene_filter, path_like, exclude_path_like)
     if not scenes:
         logPrint("[Warn] There are no scenes to change with this query")
-        return
+        return operations if collect_operations else None
 
     logPrint(f"Scenes count: {len(scenes)}")
 
@@ -535,6 +546,16 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     logPrint(f"[OS] File failed to rename ({current_filename}) due to: {e}")
                     with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
                         print(f"{current_path} -> {new_path}", file=fh)
+                    if collect_operations:
+                        operations.append({
+                            "scene_id": scene['id'],
+                            "status": "error",
+                            "error": str(e),
+                            "old_filename": current_filename,
+                            "new_filename": new_filename,
+                            "old_path": current_path,
+                            "new_path": new_path
+                        })
                     continue
 
                 if os.path.isfile(new_path):
@@ -542,16 +563,56 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     if USING_LOG:
                         with open("rename_log.txt", "a", encoding="utf-8") as fh:
                             print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
+                    if collect_operations:
+                        operations.append({
+                            "scene_id": scene['id'],
+                            "status": "success",
+                            "old_filename": current_filename,
+                            "new_filename": new_filename,
+                            "old_path": current_path,
+                            "new_path": new_path
+                        })
                 else:
                     logPrint(f"[OS] File failed to rename ? ({current_filename})")
                     with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
                         print(f"{current_path} -> {new_path}", file=fh)
+                    if collect_operations:
+                        operations.append({
+                            "scene_id": scene['id'],
+                            "status": "error",
+                            "error": "File not found after rename",
+                            "old_filename": current_filename,
+                            "new_filename": new_filename,
+                            "old_path": current_path,
+                            "new_path": new_path
+                        })
             else:
                 logPrint(f"[OS] File doesn't exist on disk ({current_path})")
+                if collect_operations:
+                    operations.append({
+                        "scene_id": scene['id'],
+                        "status": "error",
+                        "error": "File doesn't exist on disk",
+                        "old_filename": current_filename,
+                        "new_filename": new_filename,
+                        "old_path": current_path,
+                        "new_path": new_path
+                    })
         else:
             logPrint(f"[DRY] {current_filename} -> {new_filename}")
             with open("renamer_dryrun.txt", "a", encoding="utf-8") as fh:
                 print(f"{current_path} -> {new_path}", file=fh)
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene['id'],
+                    "status": "pending",
+                    "old_filename": current_filename,
+                    "new_filename": new_filename,
+                    "old_path": current_path,
+                    "new_path": new_path
+                })
+    
+    return operations if collect_operations else None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -677,9 +738,20 @@ def load_config_mappings(path: str) -> List[Dict[str, str]]:
     return out
 
 
-def run():
+def run(collect_operations: bool = False):
+    """
+    Main entry point for the renamer.
+    
+    Args:
+        collect_operations: If True, return list of rename operations instead of just executing
+        
+    Returns:
+        List of operation dicts if collect_operations=True, otherwise None
+    """
     global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG
 
+    all_operations = []
+    
     args = parse_args()
     
     # Check if server URL and API key were provided via command line (for plugin use)
@@ -740,26 +812,32 @@ def run():
             if not template or not template.strip():
                 logPrint(f"[Warn] Empty template for tag '{tag_name}', skipping.")
                 continue
-            edit_run(
+            ops = edit_run(
                 template=template,
                 base_filter=base_filter,
                 tag_names=[tag_name],
                 path_like=getattr(args, "path_like", None),
                 exclude_path_like=getattr(args, "exclude_path_like", None),
+                collect_operations=collect_operations,
             )
+            if ops:
+                all_operations.extend(ops)
             logPrint("====================")
             executed_any = True
     else:
         # No-tag mode: run for all scenes matching base_filter
         template = getattr(args, "template", None)
         if template and template.strip():
-            edit_run(
+            ops = edit_run(
                 template=template,
                 base_filter=base_filter,
                 tag_names=None,
                 path_like=getattr(args, "path_like", None),
                 exclude_path_like=getattr(args, "exclude_path_like", None),
+                collect_operations=collect_operations,
             )
+            if ops:
+                all_operations.extend(ops)
             executed_any = True
         else:
             logPrint("[Info] No tags and no template provided. Nothing to do.")
@@ -830,6 +908,8 @@ def run():
             input("Press Enter to continue...")
         except EOFError:
             pass
+    
+    return all_operations if collect_operations else None
 
 
 if __name__ == "__main__":
