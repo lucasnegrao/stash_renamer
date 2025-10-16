@@ -441,7 +441,7 @@ def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_li
     return results
 
 
-def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], collect_operations: bool = False):
+def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], scene_ids: Optional[List[str]] = None, collect_operations: bool = False):
     """
     Run the rename operation.
     
@@ -474,6 +474,17 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
     if not scenes:
         logPrint("[Warn] There are no scenes to change with this query")
         return operations if collect_operations else None
+
+    # Filter by scene IDs if provided
+    if scene_ids:
+        scene_id_set = set(scene_ids)
+        original_count = len(scenes)
+        scenes = [scene for scene in scenes if scene.get("id") in scene_id_set]
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Filtered scenes by IDs: {original_count} -> {len(scenes)} scenes")
+        if not scenes:
+            logPrint("[Warn] No scenes found matching the provided scene IDs")
+            return operations if collect_operations else None
 
     logPrint(f"Scenes count: {len(scenes)}")
 
@@ -604,6 +615,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
+                        "title": scene_title,
                         "status": "error",
                         "error": "No file ID found for path",
                         "old_filename": current_filename,
@@ -635,6 +647,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     if collect_operations:
                         operations.append({
                             "scene_id": scene['id'],
+                            "title": scene_title,
                             "status": "error",
                             "error": str(e),
                             "old_filename": current_filename,
@@ -652,6 +665,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
+                        "title": scene_title,
                         "status": "success",
                         "old_filename": current_filename,
                         "new_filename": new_filename,
@@ -663,6 +677,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
+                        "title": scene_title,
                         "status": "error",
                         "error": "File doesn't exist on disk",
                         "old_filename": current_filename,
@@ -681,6 +696,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             if collect_operations:
                 operations.append({
                     "scene_id": scene['id'],
+                    "title": scene_title,
                     "status": "pending",
                     "old_filename": current_filename,
                     "new_filename": new_filename,
@@ -730,6 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", dest="config_json", help="Path to JSON with [{\"tag\": \"...\", \"template\": \"...\"}, ...] mappings.")
     parser.add_argument("--path-like", dest="path_like", help="Optional substring to match in file path (LIKE-style with %% wildcards interpreted as substring).")
     parser.add_argument("--exclude-path-like", dest="exclude_path_like", help="Optional substring to exclude matching file paths (LIKE-style with %% wildcards interpreted as substring).")
+    parser.add_argument("--scene-ids", dest="scene_ids", help="Comma-separated list of scene IDs to process (if not provided, all matching scenes will be processed).")
     parser.add_argument("--filter", dest="scene_filter", help="JSON string for SceneFilterType. Merged with tag filter if provided.")
     parser.add_argument("--interactive", action="store_true", help="Run in interactive mode (also bootstraps API config if missing).")
     return parser
@@ -850,6 +867,14 @@ def run(collect_operations: bool = False):
     SKIP_GROUPED = getattr(args, "skip_grouped", SKIP_GROUPED)
     MOVE_TO_STUDIO_FOLDER = getattr(args, "move_to_studio_folder", MOVE_TO_STUDIO_FOLDER)
 
+    # Parse scene IDs if provided
+    scene_ids = None
+    scene_ids_str = getattr(args, "scene_ids", None)
+    if scene_ids_str and scene_ids_str.strip():
+        scene_ids = [s.strip() for s in scene_ids_str.split(",") if s.strip()]
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Processing specific scene IDs: {scene_ids}")
+
     if DRY_RUN:
         try:
             os.remove("renamer_dryrun.txt")
@@ -894,6 +919,7 @@ def run(collect_operations: bool = False):
                 tag_names=[tag_name],
                 path_like=getattr(args, "path_like", None),
                 exclude_path_like=getattr(args, "exclude_path_like", None),
+                scene_ids=scene_ids,
                 collect_operations=collect_operations,
             )
             if ops:
@@ -910,6 +936,7 @@ def run(collect_operations: bool = False):
                 tag_names=None,
                 path_like=getattr(args, "path_like", None),
                 exclude_path_like=getattr(args, "exclude_path_like", None),
+                scene_ids=scene_ids,
                 collect_operations=collect_operations,
             )
             if ops:

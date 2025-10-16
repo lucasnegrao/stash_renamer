@@ -23,6 +23,12 @@
     const [sortField, setSortField] = React.useState(null);
     const [sortDirection, setSortDirection] = React.useState("asc");
 
+    // Scene selection state
+    const [availableScenes, setAvailableScenes] = React.useState([]);
+    const [selectedScenes, setSelectedScenes] = React.useState(new Set());
+    const [loadingScenes, setLoadingScenes] = React.useState(false);
+    const [showSceneSelection, setShowSceneSelection] = React.useState(false);
+
     // Sort function
     const handleSort = (field) => {
       const newDirection =
@@ -48,6 +54,74 @@
         if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
         return 0;
       });
+    };
+
+    // Fetch scenes for selection
+    const fetchScenes = async () => {
+      setLoadingScenes(true);
+      try {
+        const response = await fetch("/graphql", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
+              runPluginOperation(plugin_id: $plugin_id, args: $args)
+            }`,
+            variables: {
+              plugin_id: "stash_renamer",
+              args: {
+                mode: "fetch_scenes",
+                template: template,
+                femaleOnly: femaleOnly.toString(),
+                skipGrouped: skipGrouped.toString(),
+                moveToStudioFolder: moveToStudioFolder.toString(),
+                pathLike: pathLike,
+                excludePathLike: excludePathLike,
+                debugMode: debugMode.toString(),
+              },
+            },
+          }),
+        });
+
+        const result = await response.json();
+        if (result.data && result.data.runPluginOperation) {
+          const pluginData = JSON.parse(result.data.runPluginOperation);
+          if (pluginData.scenes) {
+            setAvailableScenes(pluginData.scenes);
+            // Select all scenes by default
+            setSelectedScenes(
+              new Set(pluginData.scenes.map((s) => s.scene_id))
+            );
+            setShowSceneSelection(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching scenes:", error);
+        setStatus("Error fetching scenes: " + error.message);
+      } finally {
+        setLoadingScenes(false);
+      }
+    };
+
+    // Scene selection handlers
+    const handleSceneSelection = (sceneId, checked) => {
+      const newSelected = new Set(selectedScenes);
+      if (checked) {
+        newSelected.add(sceneId);
+      } else {
+        newSelected.delete(sceneId);
+      }
+      setSelectedScenes(newSelected);
+    };
+
+    const selectAllScenes = () => {
+      setSelectedScenes(new Set(availableScenes.map((s) => s.scene_id)));
+    };
+
+    const unselectAllScenes = () => {
+      setSelectedScenes(new Set());
     };
 
     const runRename = async (mode) => {
@@ -77,6 +151,10 @@
                 pathLike: pathLike,
                 excludePathLike: excludePathLike,
                 debugMode: debugMode.toString(),
+                selectedScenes:
+                  selectedScenes.size > 0
+                    ? Array.from(selectedScenes).join(",")
+                    : "",
               },
             },
           }),
@@ -352,6 +430,101 @@
           )
         )
       ),
+
+      React.createElement("hr", null),
+
+      // Scene Selection Section
+      React.createElement("h5", null, "Scene Selection"),
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "div",
+          { className: "col-sm-10 offset-sm-2" },
+          React.createElement(
+            Button,
+            {
+              variant: "info",
+              onClick: fetchScenes,
+              disabled: loadingScenes || running,
+              className: "mr-2",
+            },
+            loadingScenes ? "Loading..." : "Fetch Scenes for Selection"
+          ),
+          showSceneSelection &&
+            React.createElement(
+              "small",
+              { className: "form-text text-muted mt-2" },
+              `${selectedScenes.size} of ${availableScenes.length} scenes selected. Leave empty to process all matching scenes.`
+            )
+        )
+      ),
+
+      // Scene selection checkboxes (only show when scenes are loaded)
+      showSceneSelection &&
+        React.createElement(
+          "div",
+          { className: "form-group row" },
+          React.createElement(
+            "div",
+            { className: "col-sm-10 offset-sm-2" },
+            React.createElement(
+              "div",
+              { className: "mb-3" },
+              React.createElement(
+                Button,
+                {
+                  variant: "outline-secondary",
+                  size: "sm",
+                  onClick: selectAllScenes,
+                  className: "mr-2",
+                },
+                "Select All"
+              ),
+              React.createElement(
+                Button,
+                {
+                  variant: "outline-secondary",
+                  size: "sm",
+                  onClick: unselectAllScenes,
+                },
+                "Unselect All"
+              )
+            ),
+            React.createElement(
+              "div",
+              {
+                className: "border rounded p-3",
+                style: { maxHeight: "300px", overflowY: "auto" },
+              },
+              availableScenes.map((scene) =>
+                React.createElement(
+                  "div",
+                  { key: scene.scene_id, className: "form-check" },
+                  React.createElement("input", {
+                    type: "checkbox",
+                    className: "form-check-input",
+                    id: `scene_${scene.scene_id}`,
+                    checked: selectedScenes.has(scene.scene_id),
+                    onChange: (e) =>
+                      handleSceneSelection(scene.scene_id, e.target.checked),
+                  }),
+                  React.createElement(
+                    "label",
+                    {
+                      className: "form-check-label",
+                      htmlFor: `scene_${scene.scene_id}`,
+                      style: { fontSize: "0.9em" },
+                    },
+                    `${scene.title || "No Title"} - ${
+                      scene.current_filename || "No File"
+                    }`
+                  )
+                )
+              )
+            )
+          )
+        ),
 
       React.createElement("hr", null),
 
