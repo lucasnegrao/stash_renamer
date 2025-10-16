@@ -389,32 +389,6 @@
 
       React.createElement("hr", null),
 
-      // Scene Selection Section
-      React.createElement("h5", null, "Scene Selection"),
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "div",
-          { className: "col-sm-10 offset-sm-2" },
-          React.createElement(
-            Button,
-            {
-              variant: "info",
-              onClick: fetchScenes,
-              disabled: loadingScenes || running,
-              className: "mr-2",
-            },
-            loadingScenes ? "Loading..." : "Fetch Scenes for Selection"
-          ),
-          showSceneSelection &&
-            React.createElement(
-              "small",
-              { className: "form-text text-muted mt-2" },
-              `${selectedScenes.size} of ${availableScenes.length} scenes selected. Leave empty to process all matching scenes.`
-            )
-        )
-      ),
 
       // Scene selection checkboxes (only show when scenes are loaded)
       showSceneSelection &&
