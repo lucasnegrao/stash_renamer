@@ -155,7 +155,7 @@
        React.createElement(
          "div",
          null,
-         React.createElement(TagSelect, {
+         React.createElement(StudioSelect, {
            onSelect: () => {},
            values: [],
          })
