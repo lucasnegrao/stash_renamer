@@ -1,7 +1,5 @@
 import os
 import re
-import sys
-import json
 import math
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
@@ -10,18 +8,21 @@ import requests
 
 BATCH_SIZE = 100
 
-# Flags (can be overridden by CLI/interactive)
+# Flags (programmatic overrides via run(options))
 USING_LOG = True
 DRY_RUN = False
-FEMALE_ONLY = False
 DEBUG_MODE = True
 SKIP_GROUPED = False
 MOVE_TO_STUDIO_FOLDER = False
 
 IS_WINDOWS = os.name == "nt"
 
-# Will hold server_url and api_key
+# Connection/config
 CONFIG = None  # type: Optional[SimpleNamespace]
+
+# New globals for filters
+PERFORMER_GENDERS = None  # type: Optional[set]
+FILTERS = {}              # type: Dict[str, object]
 
 # Try to import Stash logging if available (when running as plugin)
 USING_STASH_LOG = False
@@ -92,29 +93,38 @@ def sanitize_filename(name: str) -> str:
     return name
 
 
-def normalize_height(v: Optional[int]) -> str:
-    if v is None:
-        return ""
-    try:
-        iv = int(v)
-    except Exception:
-        return ""
-    if iv == 4320:
-        return "8k"
-    if iv == 2160:
-        return "4k"
-    return f"{iv}p"
-
-
 def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     # Trim template
     s = str(query or "").strip()
 
     # Replace tokens with values or empty strings
     tokens = {
-        "$date": (scene_info.get("date") or "").strip(),
-        "$performer": (scene_info.get("performer") or "").strip(),
+        # Core
+        "$id": (scene_info.get("id") or "").strip(),
         "$title": (scene_info.get("title") or "").strip(),
+        "$code": (scene_info.get("code") or "").strip(),
+        "$details": (scene_info.get("details") or "").strip(),
+        "$director": (scene_info.get("director") or "").strip(),
+        "$urls": (scene_info.get("urls") or "").strip(),
+        "$date": (scene_info.get("date") or "").strip(),
+        "$rating100": (scene_info.get("rating100") or "").strip(),
+        "$organized": (scene_info.get("organized") or "").strip(),
+        "$o_counter": (scene_info.get("o_counter") or "").strip(),
+        "$interactive": (scene_info.get("interactive") or "").strip(),
+        "$interactive_speed": (scene_info.get("interactive_speed") or "").strip(),
+        "$created_at": (scene_info.get("created_at") or "").strip(),
+        "$updated_at": (scene_info.get("updated_at") or "").strip(),
+        "$last_played_at": (scene_info.get("last_played_at") or "").strip(),
+        "$resume_time": (scene_info.get("resume_time") or "").strip(),
+        "$play_duration": (scene_info.get("play_duration") or "").strip(),
+        "$play_count": (scene_info.get("play_count") or "").strip(),
+        # Collections
+        "$tags": (scene_info.get("tags") or "").strip(),
+        "$groups": (scene_info.get("groups") or "").strip(),
+        "$scene_markers_count": (scene_info.get("scene_markers_count") or "").strip(),
+        "$performers": (scene_info.get("performers") or "").strip(),
+        # Back-compat
+        "$performer": (scene_info.get("performer") or "").strip(),
         "$studio": (scene_info.get("studio") or "").strip(),
         "$height": (scene_info.get("height") or "").strip(),
     }
@@ -276,12 +286,28 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
     scenes {
       id
       title
+      code
+      details
+      director
+      urls
       date
+      rating100
+      organized
+      o_counter
+      interactive
+      interactive_speed
+      created_at
+      updated_at
+      last_played_at
+      resume_time
+      play_duration
+      play_count
       files { id path }
       studio { name }
       performers { name gender }
       tags { name }
-      groups {  group{ id name }  }
+      groups { group { id name } }
+      scene_markers { id }
     }
   }
 }
@@ -330,8 +356,64 @@ def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_li
             if scene.get("files"):
                 scene["path"] = scene["files"][0]["path"]
                 if path_like_match(scene["path"], path_like) and not path_excluded(scene["path"], exclude_path_like):
-                    results.append(scene)
+                    # Apply client-side filters (* and **)
+                    if scene_passes_filters(scene):
+                        results.append(scene)
     return results
+
+def scene_passes_filters(scene: dict) -> bool:
+    """
+    Apply client-side filters for fields marked with * and **:
+      * scene_markers, studio, groups, tags, performers
+      ** organized, interactive
+    Additional: performer gender filtering for scene inclusion.
+    """
+    # organized / interactive (booleans)
+    if "organized" in FILTERS and FILTERS.get("organized") is not None:
+        if bool(scene.get("organized")) != bool(FILTERS.get("organized")):
+            return False
+    if "interactive" in FILTERS and FILTERS.get("interactive") is not None:
+        if bool(scene.get("interactive")) != bool(FILTERS.get("interactive")):
+            return False
+
+    # scene_markers minimum
+    min_markers = FILTERS.get("min_scene_markers")
+    if isinstance(min_markers, int):
+        markers = scene.get("scene_markers") or []
+        if len(markers) < min_markers:
+            return False
+
+    # studio name set
+    studio_names = FILTERS.get("studio_names")
+    if studio_names:
+        studio_name = ((scene.get("studio") or {}).get("name") or "").strip()
+        if isinstance(studio_names, (set, list)) and studio_name not in studio_names:
+            return False
+
+    # group names set
+    group_names = FILTERS.get("group_names")
+    if group_names and isinstance(group_names, (set, list)):
+        groups = scene.get("groups") or []
+        names = [((g.get("group") or {}).get("name") or "").strip() for g in groups]
+        if not any(n in group_names for n in names if n):
+            return False
+
+    # tags names set (client-side fallback if tag_ids weren't used)
+    tag_names = FILTERS.get("tag_names")
+    if tag_names and isinstance(tag_names, set):
+        tags = scene.get("tags") or []
+        names = [(t.get("name") or "").strip() for t in tags]
+        if not any(n in tag_names for n in names if n):
+            return False
+
+    # performer genders filter (scene must have at least one matching)
+    filter_perf_genders = FILTERS.get("performer_genders")
+    if filter_perf_genders and isinstance(filter_perf_genders, set):
+        performers = scene.get("performers") or []
+        if not any((p.get("gender") or "").upper() in filter_perf_genders for p in performers):
+            return False
+
+    return True
 
 
 def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], scene_ids: Optional[List[str]] = None, collect_operations: bool = False):
@@ -398,26 +480,56 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         current_filename = os.path.basename(current_path)
         file_extension = os.path.splitext(current_filename)[1] or ""
 
-        scene_title = scene.get("title") or ""
-        scene_date = scene.get("date") or ""
-        studio_name = (scene.get("studio") or {}).get("name") or ""
-
         performers = scene.get("performers") or []
         names: List[str] = []
         for p in performers:
-            if FEMALE_ONLY:
-                if str(p.get("gender") or "") == "FEMALE":
+            # New: include only selected genders for token composition if configured
+            if PERFORMER_GENDERS:
+                if (p.get("gender") or "").upper() in PERFORMER_GENDERS:
                     names.append(p.get("name") or "")
             else:
                 names.append(p.get("name") or "")
         performer_name = " ".join([n for n in names if n]).strip()
 
+        # Derived collections for tokens
+        tag_names_join = " ".join([(t.get("name") or "").strip() for t in (scene.get("tags") or []) if (t.get("name") or "").strip()])
+        group_names_join = " ".join([((g.get("group") or {}).get("name") or "").strip() for g in (scene.get("groups") or []) if ((g.get("group") or {}).get("name") or "").strip()])
+        urls_join = " ".join(scene.get("urls") or [])
+        scene_markers_count = str(len(scene.get("scene_markers") or []))
+
+        scene_title = scene.get("title") or ""
+        scene_date = scene.get("date") or ""
+        studio_name = (scene.get("studio") or {}).get("name") or ""
+
         scene_info = {
+            # Scalars
+            "id": scene.get("id") or "",
             "title": scene_title,
+            "code": scene.get("code") or "",
+            "details": scene.get("details") or "",
+            "director": scene.get("director") or "",
+            "urls": urls_join,
             "date": scene_date,
-            "performer": performer_name,
+            "rating100": str(scene.get("rating100") or "") if scene.get("rating100") is not None else "",
+            "organized": "true" if scene.get("organized") else "false" if scene.get("organized") is not None else "",
+            "o_counter": str(scene.get("o_counter") or "") if scene.get("o_counter") is not None else "",
+            "interactive": "true" if scene.get("interactive") else "false" if scene.get("interactive") is not None else "",
+            "interactive_speed": str(scene.get("interactive_speed") or "") if scene.get("interactive_speed") is not None else "",
+            "created_at": scene.get("created_at") or "",
+            "updated_at": scene.get("updated_at") or "",
+            "last_played_at": scene.get("last_played_at") or "",
+            "resume_time": str(scene.get("resume_time") or "") if scene.get("resume_time") is not None else "",
+            "play_duration": str(scene.get("play_duration") or "") if scene.get("play_duration") is not None else "",
+            "play_count": str(scene.get("play_count") or "") if scene.get("play_count") is not None else "",
+            # Collections (stringified)
+            "tags": tag_names_join,
+            "groups": group_names_join,
+            "scene_markers_count": scene_markers_count,
+            "performers": performer_name,
+            # Existing
             "studio": studio_name,
             "height": "",  # Not fetched here
+            "performer": performer_name,  # alias
         }
         if DEBUG_MODE:
             logPrint(f"[DEBUG] Scene information: {scene_info}")
@@ -605,23 +717,22 @@ def run(options: dict, collect_operations: bool = False):
     Entry point when called programmatically.
 
     Expected options keys:
-      - server_url: str (e.g., http://localhost:9999/graphql)
-      - cookie_name: str
-      - cookie_value: str
-      - template: str (for no-tag mode), or:
-          - tags: List[str] and template: str
-          - config_inline: List[{"tag": str, "template": str}]
-      - scene_filter: dict (SceneFilterType), optional
-      - path_like: str, optional
-      - exclude_path_like: str, optional
+      - server_url: str, cookie_name: str, cookie_value: str
+      - template: str, or tags + template, or config_inline [{tag, template}]
+      - scene_filter: dict (GraphQL SceneFilterType), optional
+      - path_like, exclude_path_like: str, optional
       - scene_ids: List[str] or comma-separated str, optional
-      - Flags (all optional; fall back to module defaults):
-          using_log, dry_run, female_only, debug_mode, skip_grouped, move_to_studio_folder
-
-    Returns:
-      - List of operation dicts if collect_operations=True, otherwise None
+      - performer_genders: str|List[str] for filename token composition (GenderEnum)
+      - filter_performer_genders: str|List[str] to include scenes with any of these performer genders
+      - filter_organized: bool
+      - filter_interactive: bool
+      - filter_min_scene_markers: int
+      - filter_studio: str|List[str] (exact match)
+      - filter_groups: List[str] (exact match)
+      - filter_tags: List[str] (client-side; GraphQL tag filter still supported via tags/tag_template_pairs)
+      - Flags: using_log, dry_run, debug_mode, skip_grouped, move_to_studio_folder
     """
-    global USING_LOG, DRY_RUN, FEMALE_ONLY, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG
+    global USING_LOG, DRY_RUN, DEBUG_MODE, SKIP_GROUPED, MOVE_TO_STUDIO_FOLDER, CONFIG, PERFORMER_GENDERS, FILTERS
 
     # Configure connection (cookie-only auth)
     server_url = options.get("server_url")
@@ -639,10 +750,49 @@ def run(options: dict, collect_operations: bool = False):
     # Update flags from options
     USING_LOG = options.get("using_log", USING_LOG)
     DRY_RUN = options.get("dry_run", DRY_RUN)
-    FEMALE_ONLY = options.get("female_only", FEMALE_ONLY)
     DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
     SKIP_GROUPED = options.get("skip_grouped", SKIP_GROUPED)
     MOVE_TO_STUDIO_FOLDER = options.get("move_to_studio_folder", MOVE_TO_STUDIO_FOLDER)
+
+    # Parse genders
+    def parse_genders(val):
+        if not val:
+            return None
+        vals = val if isinstance(val, list) else [val]
+        out = {str(v).strip().upper() for v in vals if str(v).strip()}
+        # constrain to known enum values
+        allowed = {"MALE", "FEMALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY"}
+        out = {g for g in out if g in allowed}
+        return out or None
+
+    PERFORMER_GENDERS = parse_genders(options.get("performer_genders"))
+
+    # Build client-side FILTERS
+    FILTERS = {}
+    f_perf = parse_genders(options.get("filter_performer_genders"))
+    if f_perf:
+        FILTERS["performer_genders"] = f_perf
+    if "filter_organized" in options:
+        FILTERS["organized"] = bool(options.get("filter_organized"))
+    if "filter_interactive" in options:
+        FILTERS["interactive"] = bool(options.get("filter_interactive"))
+    if "filter_min_scene_markers" in options:
+        try:
+            value = options.get("filter_min_scene_markers")
+            if value is not None:
+                FILTERS["min_scene_markers"] = int(value)
+        except Exception:
+            pass
+    if "filter_studio" in options:
+        v = options.get("filter_studio")
+        names = v if isinstance(v, list) else [v]
+        FILTERS["studio_names"] = {str(n).strip() for n in names if str(n).strip()}
+    if "filter_groups" in options:
+        v = options.get("filter_groups") or []
+        FILTERS["group_names"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
+    if "filter_tags" in options:
+        v = options.get("filter_tags") or []
+        FILTERS["tag_names"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
 
     if DRY_RUN:
         try:
@@ -651,7 +801,7 @@ def run(options: dict, collect_operations: bool = False):
             pass
         logPrint("[DRY_RUN] DRY-RUN Enabled")
 
-    # Base scene filter
+    # Base scene filter (GraphQL)
     base_filter: Optional[dict] = options.get("scene_filter")
 
     # Accept scene IDs as list or comma-separated string
@@ -661,7 +811,7 @@ def run(options: dict, collect_operations: bool = False):
     if DEBUG_MODE and scene_ids:
         logPrint(f"[DEBUG] Processing specific scene IDs: {scene_ids}")
 
-    # Collect tag-template pairs
+    # Collect tag-template pairs (existing behavior)
     tag_template_pairs: List[Tuple[str, str]] = []
     config_inline = options.get("config_inline") or []
     if isinstance(config_inline, list):
@@ -678,7 +828,6 @@ def run(options: dict, collect_operations: bool = False):
             tag_template_pairs.append((t, template))
 
     all_operations: List[dict] = []
-    executed_any = False
 
     if tag_template_pairs:
         # Per-tag runs
@@ -698,7 +847,6 @@ def run(options: dict, collect_operations: bool = False):
             if ops:
                 all_operations.extend(ops)
             logPrint("====================")
-            executed_any = True
     else:
         # No-tag mode
         if template and template.strip():
@@ -713,14 +861,7 @@ def run(options: dict, collect_operations: bool = False):
             )
             if ops:
                 all_operations.extend(ops)
-            executed_any = True
         else:
             logPrint("[Info] No tags and no template provided. Nothing to do.")
 
-    # No CLI command echo (this module is programmatic-only now)
-
     return all_operations if collect_operations else None
-
-
-def __main__():
-    print("This module is intended to be imported and run(options), not executed directly.")

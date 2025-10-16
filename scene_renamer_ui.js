@@ -56,7 +56,6 @@
   const SceneRenamerPage = () => {
     const [template, setTemplate] = React.useState("$studio - $date - $title");
     const [dryRun, setDryRun] = React.useState(true);
-    const [femaleOnly, setFemaleOnly] = React.useState(false);
     const [skipGrouped, setSkipGrouped] = React.useState(false);
     const [moveToStudioFolder, setMoveToStudioFolder] = React.useState(false);
     const [pathLike, setPathLike] = React.useState("");
@@ -67,6 +66,31 @@
     const [operations, setOperations] = React.useState([]);
     const [sortField, setSortField] = React.useState(null);
     const [sortDirection, setSortDirection] = React.useState("asc");
+
+    // New: selection/filters
+    const GENDERS = [
+      "MALE",
+      "FEMALE",
+      "TRANSGENDER_MALE",
+      "TRANSGENDER_FEMALE",
+      "INTERSEX",
+      "NON_BINARY",
+    ];
+    // Which performers to include in $performer/$performers tokens
+    const [performerGenders, setPerformerGenders] = React.useState([]);
+    // Scene inclusion filter: any performer in these genders
+    const [filterPerformerGenders, setFilterPerformerGenders] = React.useState(
+      []
+    );
+    // Tri-state filters: 'any' | 'true' | 'false'
+    const [organized, setOrganized] = React.useState("any");
+    const [interactive, setInteractive] = React.useState("any");
+    const [minSceneMarkers, setMinSceneMarkers] = React.useState("");
+    const [filterStudio, setFilterStudio] = React.useState("");
+    const [filterGroups, setFilterGroups] = React.useState("");
+    const [filterTags, setFilterTags] = React.useState("");
+    // Optional tag-based selection (comma-separated)
+    const [tags, setTags] = React.useState("");
 
     // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
@@ -145,14 +169,24 @@
                 mode: mode,
                 template: template,
                 dry_run: dryRun.toString(),
-                femaleOnly: femaleOnly.toString(),
                 skipGrouped: skipGrouped.toString(),
                 moveToStudioFolder: moveToStudioFolder.toString(),
                 pathLike: pathLike,
                 excludePathLike: excludePathLike,
                 debugMode: debugMode.toString(),
+                // New args
+                tags: tags, // comma-separated
+                performerGenders: performerGenders.join(","),
+                filterPerformerGenders: filterPerformerGenders.join(","),
+                filterOrganized: organized === "any" ? "" : organized,
+                filterInteractive: interactive === "any" ? "" : interactive,
+                filterMinSceneMarkers: minSceneMarkers
+                  ? String(minSceneMarkers)
+                  : "",
+                filterStudio: filterStudio, // comma-separated exact names
+                filterGroups: filterGroups, // comma-separated exact names
+                filterTags: filterTags, // comma-separated exact names
                 selectedScenes:
-                  // Only pass selected scenes for actual renames, not dry runs
                   mode !== "dry_run" && selectedScenes.size > 0
                     ? Array.from(selectedScenes).join(",")
                     : "",
@@ -218,13 +252,44 @@
         const s = String(v).trim().toLowerCase();
         return ["true", "1", "yes", "y", "on"].includes(s);
       };
+      const toArray = (v) => {
+        if (Array.isArray(v)) return v.map(String);
+        if (typeof v === "string")
+          return v
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (v == null) return [];
+        try {
+          // sometimes JSON-encoded arrays are stored
+          const parsed = JSON.parse(v);
+          return Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch {
+          return [];
+        }
+      };
+      const toTri = (v) => {
+        if (
+          v === undefined ||
+          v === null ||
+          v === "" ||
+          String(v).toLowerCase() === "any"
+        )
+          return "any";
+        return toBool(v, false) ? "true" : "false";
+      };
+      const toCsv = (v, defVal = "") => {
+        if (Array.isArray(v)) return v.join(",");
+        if (typeof v === "string") return v;
+        return defVal;
+      };
 
       fetchPluginSettings("stash_renamer")
         .then((settings) => {
-          if (!mounted) return;
+          if (!mounted || !settings) return;
 
-          // Accept both camelCase and snake_case keys
           if (settings.template) setTemplate(settings.template);
+
           if (
             settings.pathLike !== undefined ||
             settings.path_like !== undefined
@@ -241,9 +306,6 @@
           }
 
           setDryRun(toBool(settings.dryRun ?? settings.dry_run, dryRun));
-          setFemaleOnly(
-            toBool(settings.femaleOnly ?? settings.female_only, femaleOnly)
-          );
           setSkipGrouped(
             toBool(settings.skipGrouped ?? settings.skip_grouped, skipGrouped)
           );
@@ -256,6 +318,34 @@
           setDebugMode(
             toBool(settings.debugMode ?? settings.debug_mode, debugMode)
           );
+
+          // New: tag selection and filters
+          setTags(toCsv(settings.tags ?? "", ""));
+          setPerformerGenders(
+            toArray(settings.performerGenders ?? settings.performer_genders)
+          );
+          setFilterPerformerGenders(
+            toArray(
+              settings.filterPerformerGenders ??
+                settings.filter_performer_genders
+            )
+          );
+          setOrganized(
+            toTri(settings.filterOrganized ?? settings.filter_organized)
+          );
+          setInteractive(
+            toTri(settings.filterInteractive ?? settings.filter_interactive)
+          );
+          const msm =
+            settings.filterMinSceneMarkers ?? settings.filter_min_scene_markers;
+          setMinSceneMarkers(msm != null ? String(msm) : "");
+          setFilterStudio(
+            toCsv(settings.filterStudio ?? settings.filter_studio, "")
+          );
+          setFilterGroups(
+            toCsv(settings.filterGroups ?? settings.filter_groups, "")
+          );
+          setFilterTags(toCsv(settings.filterTags ?? settings.filter_tags, ""));
         })
         .catch((e) => {
           console.warn("Settings load failed:", e);
@@ -289,20 +379,19 @@
             className: "form-control",
             value: template,
             onChange: (e) => setTemplate(e.target.value),
-            placeholder: "$studio - $date - $title - $performer",
+            placeholder: "$studio - $date - $title - $performers",
           }),
           React.createElement(
             "small",
             { className: "form-text text-muted" },
-            "Available tokens: $studio, $date, $title, $performer, $height"
+            "Tokens: $id $title $code $details $director $urls $date $rating100 $organized $o_counter $interactive $interactive_speed $created_at $updated_at $last_played_at $resume_time $play_duration $play_count $tags $groups $scene_markers_count $performers $studio"
           )
         )
       ),
 
-      // Settings accordion/collapsible
+      // Options
       React.createElement("hr", null),
       React.createElement("h4", null, "Options"),
-
       // Dry run checkbox
       React.createElement(
         "div",
@@ -323,33 +412,7 @@
             React.createElement(
               "label",
               { className: "form-check-label", htmlFor: "dryRun" },
-              "Dry Run (Preview only, no actual renaming)"
-            )
-          )
-        )
-      ),
-
-      // Female Only checkbox
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "div",
-          { className: "col-sm-10 offset-sm-2" },
-          React.createElement(
-            "div",
-            { className: "form-check" },
-            React.createElement("input", {
-              type: "checkbox",
-              className: "form-check-input",
-              id: "femaleOnly",
-              checked: femaleOnly,
-              onChange: (e) => setFemaleOnly(e.target.checked),
-            }),
-            React.createElement(
-              "label",
-              { className: "form-check-label", htmlFor: "femaleOnly" },
-              "Female Performers Only (for $performer token)"
+              "Dry Run (Preview only)"
             )
           )
         )
@@ -375,7 +438,7 @@
             React.createElement(
               "label",
               { className: "form-check-label", htmlFor: "skipGrouped" },
-              "Skip Grouped Scenes (part of a movie/group)"
+              "Skip Grouped Scenes"
             )
           )
         )
@@ -427,7 +490,7 @@
             React.createElement(
               "label",
               { className: "form-check-label", htmlFor: "debugMode" },
-              "Debug Mode (detailed logging)"
+              "Debug Mode"
             )
           )
         )
@@ -436,8 +499,7 @@
       // Path filters
       React.createElement("hr", null),
       React.createElement("h5", null, "Path Filters (Optional)"),
-
-      // Path Like (include)
+      // Include
       React.createElement(
         "div",
         { className: "form-group row" },
@@ -463,8 +525,7 @@
           )
         )
       ),
-
-      // Exclude Path Like
+      // Exclude
       React.createElement(
         "div",
         { className: "form-group row" },
@@ -488,6 +549,252 @@
             { className: "form-text text-muted" },
             "Skip files with paths containing this substring"
           )
+        )
+      ),
+
+      // Selection and Filters
+      React.createElement("hr", null),
+      React.createElement("h5", null, "Selection and Filters"),
+      // Tag-based selection
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Select by Tags:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: tags,
+            onChange: (e) => setTags(e.target.value),
+            placeholder: "Comma-separated tag names for selection (optional)",
+          }),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "If set, only scenes with these tags will be selected"
+          )
+        )
+      ),
+      // Performer genders for tokens
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Performer Genders (tokens):"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              multiple: true,
+              className: "form-control",
+              value: performerGenders,
+              onChange: (e) =>
+                setPerformerGenders(
+                  Array.from(e.target.selectedOptions).map((o) => o.value)
+                ),
+            },
+            GENDERS.map((g) =>
+              React.createElement("option", { key: g, value: g }, g)
+            )
+          ),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Only these genders will be included in $performers/$performer"
+          )
+        )
+      ),
+      // Performer genders filter
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Performer Genders:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              multiple: true,
+              className: "form-control",
+              value: filterPerformerGenders,
+              onChange: (e) =>
+                setFilterPerformerGenders(
+                  Array.from(e.target.selectedOptions).map((o) => o.value)
+                ),
+            },
+            GENDERS.map((g) =>
+              React.createElement("option", { key: g, value: g }, g)
+            )
+          ),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Include scenes with any of these performer genders"
+          )
+        )
+      ),
+      // Organized tri-state
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Organized:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              className: "form-control",
+              value: organized,
+              onChange: (e) => setOrganized(e.target.value),
+            },
+            React.createElement("option", { value: "any" }, "Any"),
+            React.createElement("option", { value: "true" }, "Only organized"),
+            React.createElement(
+              "option",
+              { value: "false" },
+              "Only unorganized"
+            )
+          )
+        )
+      ),
+      // Interactive tri-state
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Interactive:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement(
+            "select",
+            {
+              className: "form-control",
+              value: interactive,
+              onChange: (e) => setInteractive(e.target.value),
+            },
+            React.createElement("option", { value: "any" }, "Any"),
+            React.createElement(
+              "option",
+              { value: "true" },
+              "Only interactive"
+            ),
+            React.createElement(
+              "option",
+              { value: "false" },
+              "Only non-interactive"
+            )
+          )
+        )
+      ),
+      // Min scene markers
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Min Scene Markers:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "number",
+            min: "0",
+            className: "form-control",
+            value: minSceneMarkers,
+            onChange: (e) =>
+              setMinSceneMarkers(e.target.value.replace(/\D/g, "")),
+            placeholder: "e.g., 1",
+          })
+        )
+      ),
+      // Studio filter
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Studio:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: filterStudio,
+            onChange: (e) => setFilterStudio(e.target.value),
+            placeholder: "Comma-separated exact studio names",
+          })
+        )
+      ),
+      // Groups filter
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Groups:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: filterGroups,
+            onChange: (e) => setFilterGroups(e.target.value),
+            placeholder: "Comma-separated exact group names",
+          })
+        )
+      ),
+      // Tags filter
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Filter by Tags:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: filterTags,
+            onChange: (e) => setFilterTags(e.target.value),
+            placeholder: "Comma-separated exact tag names",
+          })
         )
       ),
 
