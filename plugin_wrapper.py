@@ -353,7 +353,7 @@ def run(input_data, output):
             # log.LogInfo("="*50)
             # log.LogInfo("RENAME OPERATIONS:")
             # log.LogInfo("="*50)
-            # for i, op in enumerate(operations, 1):
+            # for i, op in enumerate(operatio1ns, 1):
             #     status_marker = "✓" if op["status"] == "success" else "○" if op["status"] == "pending" else "✗"
             #     log.LogInfo(f"{i}. [{status_marker}] {op['old_filename']} → {op['new_filename']}")
             #     if op.get("error"):
@@ -363,7 +363,7 @@ def run(input_data, output):
         #print(json_output, file=sys.stdout, flush=True)
         
         # # Also set output dict for compatibility
-        output["output"] = operations #json_output
+        output["output"] = {"operations": operations if operations else []} #json_output
         # # Set operations in output dict - Stash will return this via GraphQL
         # # Include old_path and new_path for UI display
         # output["operations"] = operations if operations else []
