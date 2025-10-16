@@ -260,19 +260,17 @@
 
       if (componentsLoading) return React.createElement(LoadingIndicator);
 
-      return (
+      return React.createElement(
+        "div",
+        null,
         React.createElement(
           "div",
           null,
-          React.createElement(
-            "div",
-            null,
-            React.createElement(TagSelect, {
-              isMulti: true,
-              onSelect: () => {},
-              values: [],
-            })
-          )
+          React.createElement(TagSelect, {
+            isMulti: true,
+            onSelect: () => {},
+            values: [],
+          })
         ),
         React.createElement(
           "div",
