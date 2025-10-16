@@ -113,7 +113,7 @@ def fetch_plugin_settings(server_url, cookie_name, cookie_value, plugin_id="stas
     # Try to get plugin settings directly
     query = """
     query configuration{
-      plugins(include: $plugin_id)
+      plugins(include: '$plugin_id')
     }
     """
     
