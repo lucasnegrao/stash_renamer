@@ -258,24 +258,12 @@
       const { SceneCard, LoadingIndicator, PerformerSelect } =
         PluginApi.components;
 
-      const { data } = gql.useFindScenesQuery({
-        variables: {
-          filter: {
-            per_page: 1,
-            sort: "random",
-          },
-        },
-      });
-
-      const scene = data?.findScenes.scenes[0];
-
       if (componentsLoading) return React.createElement(LoadingIndicator);
 
       return React.createElement(
         "div",
         null,
         React.createElement("div", null, "This is a test page."),
-        scene && React.createElement(SceneCard, { scene }),
         React.createElement(
           "div",
           null,
