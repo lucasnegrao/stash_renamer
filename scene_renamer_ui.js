@@ -155,7 +155,15 @@
      return React.createElement(
        "div",
        null,
-       React.createElement("div", null, "This is a test page."),
+       React.createElement(
+         "div",
+         null,
+         React.createElement(PerformerSelect, {
+           isMulti: true,
+           onSelect: () => {},
+           values: [],
+         })
+       ),
        React.createElement(
          "div",
          null,
