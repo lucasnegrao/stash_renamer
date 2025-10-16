@@ -9,6 +9,7 @@ import sys
 import os
 
 import log
+import requests
 
 def read_json_input():
     """Read and parse JSON input from stdin"""
@@ -16,6 +17,49 @@ def read_json_input():
     if stdin_data:
         return json.loads(stdin_data)
     return None
+
+def fetch_plugin_settings(server_url, cookie_name, cookie_value):
+    """Fetch plugin settings from Stash via GraphQL"""
+    query = """
+    query Configuration {
+      configuration {
+        plugins
+      }
+    }
+    """
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    
+    cookies = {cookie_name: cookie_value} if cookie_name and cookie_value else {}
+    
+    try:
+        response = requests.post(
+            server_url,
+            json={"query": query},
+            headers=headers,
+            cookies=cookies
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            plugins_json = result.get("data", {}).get("configuration", {}).get("plugins")
+            if plugins_json:
+                plugins = json.loads(plugins_json)
+                # Find our plugin settings
+                for plugin_id, plugin_data in plugins.items():
+                    if "stash_renamer" in plugin_id.lower() or "scene renamer" in plugin_id.lower():
+                        settings = plugin_data.get("settings", {})
+                        log.LogDebug(f"Found plugin settings: {json.dumps(settings)}")
+                        return settings
+        else:
+            log.LogWarning(f"Failed to fetch plugin settings: {response.status_code}")
+    except Exception as e:
+        log.LogWarning(f"Error fetching plugin settings: {e}")
+    
+    return {}
 
 def main():
     input_data = None
@@ -85,13 +129,19 @@ def run(input_data, output):
             os.environ["STASH_COOKIE_NAME"] = cookie_name
             os.environ["STASH_COOKIE_VALUE"] = cookie_value
         
-        # Extract plugin arguments
+        # Fetch plugin settings from Stash
+        settings = fetch_plugin_settings(server_url, cookie_name, cookie_value)
+        
+        # Extract plugin arguments (from task)
         args = input_data.get("args", {})
         log.LogDebug(f"Plugin args: {json.dumps(args)}")
         
+        # Merge settings with args (args take precedence for overrides)
+        combined_args = {**settings, **args}
+        
         # Check for mode from task
-        mode = args.get("mode", "")
-        dry_run = args.get("dry_run", "false").lower() == "true" or mode == "dry_run"
+        mode = combined_args.get("mode", "")
+        dry_run = combined_args.get("dry_run", "false").lower() == "true" or mode == "dry_run"
         
         # Build command line args for the main script
         cmd_args = []
@@ -104,7 +154,7 @@ def run(input_data, output):
             cmd_args.append("--no-dry-run")
         
         # Template
-        template = args.get("template", "")
+        template = combined_args.get("template", "")
         if not template:
             # Use a sensible default template
             template = "$studio - $date - $title"
@@ -114,37 +164,37 @@ def run(input_data, output):
         log.LogInfo(f"Template: {template}")
         
         # Boolean flags
-        if args.get("femaleOnly"):
+        if combined_args.get("femaleOnly"):
             cmd_args.append("--female-only")
             log.LogDebug("Female performers only: enabled")
         
-        if args.get("skipGrouped"):
+        if combined_args.get("skipGrouped"):
             cmd_args.append("--skip-grouped")
             log.LogDebug("Skip grouped scenes: enabled")
         
-        if args.get("moveToStudioFolder"):
+        if combined_args.get("moveToStudioFolder"):
             cmd_args.append("--move-to-studio-folder")
             log.LogDebug("Move to studio folder: enabled")
         
         # Debug mode (default to true)
-        if args.get("debugMode", True):
+        if combined_args.get("debugMode", True):
             cmd_args.append("--debug")
         else:
             cmd_args.append("--no-debug")
         
         # Path filters
-        path_like = args.get("pathLike", "")
+        path_like = combined_args.get("pathLike", "")
         if path_like:
             cmd_args.extend(["--path-like", path_like])
             log.LogInfo(f"Path filter (include): {path_like}")
         
-        exclude_path_like = args.get("excludePathLike", "")
+        exclude_path_like = combined_args.get("excludePathLike", "")
         if exclude_path_like:
             cmd_args.extend(["--exclude-path-like", exclude_path_like])
             log.LogInfo(f"Path filter (exclude): {exclude_path_like}")
         
         # Tags
-        tags = args.get("tags", "")
+        tags = combined_args.get("tags", "")
         if tags:
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",") if t.strip()]
