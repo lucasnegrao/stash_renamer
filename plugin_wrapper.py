@@ -241,18 +241,43 @@ def run(input_data, output):
         log.LogDebug(f"Plugin settings: {json.dumps(settings)}")
 
         # Merge settings with args (args take precedence)
-
         combined_args = {**settings, **args}
-
         log.LogDebug(f"Combined args: {json.dumps(combined_args)}")
         
-        # Helper to parse truthy values
+        # Helpers
         def is_true(v):
             if isinstance(v, bool):
                 return v
             if v is None:
                 return False
             return str(v).strip().lower() in ("true", "1", "yes", "on")
+
+        def to_list(v):
+            if v is None:
+                return []
+            if isinstance(v, list):
+                return [str(x).strip() for x in v if str(x).strip()]
+            if isinstance(v, str):
+                return [s.strip() for s in v.split(",") if s.strip()]
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+            return []
+
+        def tri_to_bool(v):
+            if v is None:
+                return None
+            s = str(v).strip().lower()
+            if s in ("", "any"):
+                return None
+            if s in ("true", "1", "yes", "on"):
+                return True
+            if s in ("false", "0", "no", "off"):
+                return False
+            return None
         
         # Mode and dry-run
         mode = combined_args.get("mode", "")
@@ -265,15 +290,15 @@ def run(input_data, output):
         log.LogInfo(f"Template: {template}")
         
         # Path filters
-        path_like = combined_args.get("pathLike") or ""
+        path_like = combined_args.get("pathLike") or combined_args.get("path_like") or ""
         if path_like:
             log.LogInfo(f"Path filter (include): {path_like}")
         
-        exclude_path_like = combined_args.get("excludePathLike") or ""
+        exclude_path_like = combined_args.get("excludePathLike") or combined_args.get("exclude_path_like") or ""
         if exclude_path_like:
             log.LogInfo(f"Path filter (exclude): {exclude_path_like}")
         
-        # Tags
+        # Tags (selection)
         tags = combined_args.get("tags") or []
         if isinstance(tags, str):
             tags = [t.strip() for t in tags.split(",") if t.strip()]
@@ -286,6 +311,23 @@ def run(input_data, output):
         if isinstance(selected_scenes, str) and selected_scenes.strip():
             scene_ids = [s.strip() for s in selected_scenes.split(",") if s.strip()]
             log.LogInfo(f"Processing only selected scenes: {len(scene_ids)} scenes")
+
+        # New filters and token options
+        performer_genders = to_list(combined_args.get("performerGenders") or combined_args.get("performer_genders"))
+        filter_performer_genders = to_list(combined_args.get("filterPerformerGenders") or combined_args.get("filter_performer_genders"))
+        # Prefer explicit UI args for tri-state booleans
+        filter_organized = tri_to_bool(args.get("filterOrganized", combined_args.get("filterOrganized") or combined_args.get("filter_organized")))
+        filter_interactive = tri_to_bool(args.get("filterInteractive", combined_args.get("filterInteractive") or combined_args.get("filter_interactive")))
+        # Min scene markers
+        msm_val = args.get("filterMinSceneMarkers", combined_args.get("filterMinSceneMarkers") or combined_args.get("filter_min_scene_markers"))
+        try:
+            filter_min_scene_markers = int(msm_val) if msm_val not in (None, "") else None
+        except Exception:
+            filter_min_scene_markers = None
+        # Studio/Groups/Tags lists
+        filter_studio = to_list(combined_args.get("filterStudio") or combined_args.get("filter_studio"))
+        filter_groups = to_list(combined_args.get("filterGroups") or combined_args.get("filter_groups"))
+        filter_tags = to_list(combined_args.get("filterTags") or combined_args.get("filter_tags"))
         
         # Build options dict for renamer.run
         options = {
@@ -295,11 +337,10 @@ def run(input_data, output):
             "template": template,
             "dry_run": dry_run,
             # Flags (UI only toggles when explicitly set)
-            "female_only": is_true(args.get("femaleOnly")),
             "skip_grouped": is_true(args.get("skipGrouped")),
             "move_to_studio_folder": is_true(args.get("moveToStudio")) or is_true(args.get("moveToStudioFolder")),
             "debug_mode": is_true(args.get("debugMode")) or is_true(args.get("debug")),
-            # Filters
+            # Path filters
             "path_like": path_like or None,
             "exclude_path_like": exclude_path_like or None,
         }
@@ -307,11 +348,27 @@ def run(input_data, output):
             options["tags"] = tags
         if scene_ids:
             options["scene_ids"] = scene_ids
+        # New: token performer genders
+        if performer_genders:
+            options["performer_genders"] = performer_genders
+        # New: scene-level filters
+        if filter_performer_genders:
+            options["filter_performer_genders"] = filter_performer_genders
+        if filter_organized is not None:
+            options["filter_organized"] = filter_organized
+        if filter_interactive is not None:
+            options["filter_interactive"] = filter_interactive
+        if filter_min_scene_markers is not None:
+            options["filter_min_scene_markers"] = filter_min_scene_markers
+        if filter_studio:
+            options["filter_studio"] = filter_studio
+        if filter_groups:
+            options["filter_groups"] = filter_groups
+        if filter_tags:
+            options["filter_tags"] = filter_tags
         
         log.LogInfo("Invoking renamer...")
         from stash_renamer import run as renamer_run
-        
-        # Call with collect_operations=True to get the list of rename operations
         operations = renamer_run(options, collect_operations=True)
         
         log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
