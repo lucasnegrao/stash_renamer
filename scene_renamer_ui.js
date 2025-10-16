@@ -140,10 +140,7 @@
   }
 
    const TestPage = () => {
-     const componentsToLoad = [
-       PluginApi.loadableComponents.TagSelect,
-       PluginApi.loadableComponents.PerformerSelect,
-     ];
+     const componentsToLoad = [PluginApi.loadableComponents.PerformerSelect];
      const componentsLoading =
        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
