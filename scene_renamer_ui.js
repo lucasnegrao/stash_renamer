@@ -255,23 +255,46 @@
       const componentsLoading =
         PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-      const { SceneCard, LoadingIndicator, PerformerSelect } =
+      const { StudioSelect, LoadingIndicator, PerformerSelect, TagSelect } =
         PluginApi.components;
 
       if (componentsLoading) return React.createElement(LoadingIndicator);
 
-      return React.createElement(
-        "div",
-        null,
-        React.createElement("div", null, "This is a test page."),
+      return (
         React.createElement(
           "div",
           null,
-          React.createElement(PerformerSelect, {
-            isMulti: true,
-            onSelect: () => {},
-            values: [],
-          })
+          React.createElement(
+            "div",
+            null,
+            React.createElement(TagSelect, {
+              isMulti: true,
+              onSelect: () => {},
+              values: [],
+            })
+          )
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement(
+            "div",
+            null,
+            React.createElement(StudioSelect, {
+              isMulti: true,
+              onSelect: () => {},
+              values: [],
+            })
+          ),
+          React.createElement(
+            "div",
+            null,
+            React.createElement(PerformerSelect, {
+              isMulti: true,
+              onSelect: () => {},
+              values: [],
+            })
+          )
         )
       );
     };
