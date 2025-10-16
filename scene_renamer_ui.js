@@ -53,24 +53,18 @@
               result.data.runPluginOperation
             );
 
-            // The output is a JSON string containing another JSON string
-            // First parse gets us the wrapper object with "output" key
-            const outputWrapper = JSON.parse(result.data.runPluginOperation);
-            console.log("Output wrapper:", outputWrapper);
+            // Parse the JSON output from the plugin
+            const pluginData = JSON.parse(result.data.runPluginOperation);
+            console.log("Parsed plugin data:", pluginData);
 
-            // Then parse the "output" value to get our operations
-            const pluginOutput = JSON.parse(outputWrapper.output);
-            console.log("Plugin output:", pluginOutput);
-
-            if (
-              pluginOutput.operations &&
-              Array.isArray(pluginOutput.operations)
-            ) {
-              setOperations(pluginOutput.operations);
+            if (pluginData.operations && Array.isArray(pluginData.operations)) {
+              setOperations(pluginData.operations);
               setStatus(
-                `Completed! Found ${pluginOutput.operations.length} operations.`
+                `Completed! Found ${pluginData.operations.length} operations.`
               );
+              console.log("Operations set:", pluginData.operations);
             } else {
+              console.log("No operations array found in:", pluginData);
               setStatus(
                 "Completed! No operations returned. Check Settings → Logs → Plugins for details."
               );
@@ -83,6 +77,7 @@
             );
           }
         } else {
+          console.log("No runPluginOperation in result");
           setStatus("Completed! Check Settings → Logs → Plugins for details.");
         }
       } catch (error) {

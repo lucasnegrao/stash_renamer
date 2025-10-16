@@ -331,10 +331,10 @@ def run(input_data, output):
                     log.LogWarning(f"   Error: {op['error']}")
             log.LogInfo("="*50)
         
-        # IMPORTANT: Build the JSON output that will be returned to the UI
-        # Set this in the output dict which gets printed by main()
-        json_output = json.dumps({"operations": operations if operations else []})
-        output["output"] = json_output
+        # IMPORTANT: Put the operations directly in output
+        # main() will JSON-encode the entire output dict
+        output["operations"] = operations if operations else []
+        output["output"] = "ok"
         
     except Exception as e:
         import traceback
