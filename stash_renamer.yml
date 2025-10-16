@@ -6,7 +6,7 @@ settings:
   template:
     displayName: Filename Template
     type: STRING
-    description: Template for renaming files. Tokens: $studio, $date, $title, $performer, $height
+    description: "Template for renaming files. Tokens: $studio, $date, $title, $performer, $height"
     default: "$studio - $date - $title - $performer"
   femaleOnly:
     displayName: Female Performers Only
@@ -26,7 +26,7 @@ settings:
   pathLike:
     displayName: Path Filter (Include)
     type: STRING
-    description: Optional substring to match in file path (e.g., /mnt/media/)
+    description: "Optional substring to match in file path (e.g., /mnt/media/)"
     default: ""
   excludePathLike:
     displayName: Path Filter (Exclude)
