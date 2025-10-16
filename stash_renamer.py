@@ -481,8 +481,8 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
 
         # Skip if scene is part of a group/movie (optional)
         if SKIP_GROUPED:
-            movies = scene.get("groups") or []
-            if movies:
+            groups = scene.get("groups") or []
+            if groups:
                 if DEBUG_MODE:
                     logPrint(f"[DEBUG] Skipping grouped scene (ID: {scene['id']}): {os.path.basename(current_path)}")
                 continue
@@ -743,7 +743,7 @@ def interactive_prompt() -> argparse.Namespace:
     yn = (input("Enable debug output? [Y/n]: ").strip().lower() or "y")
     args.debug_mode = not yn.startswith("n")
 
-    yn = (input("Skip scenes in groups/movies? [y/N]: ").strip().lower() or "n")
+    yn = (input("Skip scenes in groups? [y/N]: ").strip().lower() or "n")
     args.skip_grouped = yn.startswith("y")
 
     yn = (input("Move scenes to studio subfolders? [y/N]: ").strip().lower() or "n")
