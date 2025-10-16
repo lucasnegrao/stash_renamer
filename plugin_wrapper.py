@@ -299,7 +299,8 @@ def run(input_data, output):
             
             log.LogInfo(f"Found {len(scenes)} scenes for selection")
             json_output = json.dumps({"scenes": scenes})
-            print(json_output, file=sys.stdout, flush=True)
+            output["output"] = json_output
+            # print(json_output, file=sys.stdout, flush=True)
             return
         
         # Build command line args for the main script
