@@ -155,7 +155,7 @@
        React.createElement(
          "div",
          null,
-         React.createElement(PerformerSelect, {
+         React.createElement(TagSelect, {
            isMulti: true,
            onSelect: () => {},
            values: [],
