@@ -23,11 +23,8 @@
     const [sortField, setSortField] = React.useState(null);
     const [sortDirection, setSortDirection] = React.useState("asc");
 
-    // Scene selection state
-    const [availableScenes, setAvailableScenes] = React.useState([]);
+    // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
-    const [loadingScenes, setLoadingScenes] = React.useState(false);
-    const [showSceneSelection, setShowSceneSelection] = React.useState(false);
 
     // Sort function
     const handleSort = (field) => {
@@ -56,57 +53,7 @@
       });
     };
 
-    // Fetch scenes for selection
-    const fetchScenes = async () => {
-      setLoadingScenes(true);
-      try {
-        const response = await fetch("/graphql", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query: `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
-              runPluginOperation(plugin_id: $plugin_id, args: $args)
-            }`,
-            variables: {
-              plugin_id: "stash_renamer",
-              args: {
-                mode: "fetch_scenes",
-                template: template,
-                femaleOnly: femaleOnly.toString(),
-                skipGrouped: skipGrouped.toString(),
-                moveToStudioFolder: moveToStudioFolder.toString(),
-                pathLike: pathLike,
-                excludePathLike: excludePathLike,
-                debugMode: debugMode.toString(),
-              },
-            },
-          }),
-        });
-
-        const result = await response.json();
-        if (result.data && result.data.runPluginOperation) {
-          console.log("GraphQL result:", result);
-          const pluginData = JSON.parse(result.data.runPluginOperation);
-          if (pluginData.scenes) {
-            setAvailableScenes(pluginData.scenes);
-            // Select all scenes by default
-            setSelectedScenes(
-              new Set(pluginData.scenes.map((s) => s.scene_id))
-            );
-            setShowSceneSelection(true);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching scenes:", error);
-        setStatus("Error fetching scenes: " + error.message);
-      } finally {
-        setLoadingScenes(false);
-      }
-    };
-
-    // Scene selection handlers
+    // Scene selection handlers for operations table
     const handleSceneSelection = (sceneId, checked) => {
       const newSelected = new Set(selectedScenes);
       if (checked) {
@@ -118,12 +65,19 @@
     };
 
     const selectAllScenes = () => {
-      setSelectedScenes(new Set(availableScenes.map((s) => s.scene_id)));
+      setSelectedScenes(new Set(operations.map((op) => op.scene_id)));
     };
 
     const unselectAllScenes = () => {
       setSelectedScenes(new Set());
     };
+
+    // When operations change, select all by default
+    React.useEffect(() => {
+      if (operations.length > 0) {
+        setSelectedScenes(new Set(operations.map((op) => op.scene_id)));
+      }
+    }, [operations]);
 
     const runRename = async (mode) => {
       setRunning(true);
@@ -153,7 +107,8 @@
                 excludePathLike: excludePathLike,
                 debugMode: debugMode.toString(),
                 selectedScenes:
-                  selectedScenes.size > 0
+                  // Only pass selected scenes for actual renames, not dry runs
+                  mode !== "dry_run" && selectedScenes.size > 0
                     ? Array.from(selectedScenes).join(",")
                     : "",
               },
@@ -562,6 +517,41 @@
           "div",
           { className: "mt-4" },
           React.createElement("h3", null, "Rename Operations"),
+
+          // Selection controls
+          React.createElement(
+            "div",
+            { className: "mb-3 d-flex align-items-center" },
+            React.createElement(
+              "small",
+              { className: "text-muted mr-3" },
+              `${selectedScenes.size} of ${operations.length} operations selected`
+            ),
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                className: "btn btn-sm btn-outline-secondary mr-2",
+                onClick: selectAllScenes,
+              },
+              "Select All"
+            ),
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                className: "btn btn-sm btn-outline-secondary mr-2",
+                onClick: unselectAllScenes,
+              },
+              "Unselect All"
+            ),
+            !dryRun &&
+              React.createElement(
+                "small",
+                { className: "text-info ml-3" },
+                "Only selected operations will be processed during rename."
+              )
+          ),
           React.createElement(
             "div",
             { className: "table-responsive" },
@@ -574,6 +564,21 @@
                 React.createElement(
                   "tr",
                   null,
+                  React.createElement(
+                    "th",
+                    { style: { width: "50px" } },
+                    React.createElement("input", {
+                      type: "checkbox",
+                      checked:
+                        operations.length > 0 &&
+                        selectedScenes.size === operations.length,
+                      onChange: (e) =>
+                        e.target.checked
+                          ? selectAllScenes()
+                          : unselectAllScenes(),
+                      title: "Select/Unselect All",
+                    })
+                  ),
                   React.createElement(
                     "th",
                     {
@@ -653,6 +658,16 @@
                   React.createElement(
                     "tr",
                     { key: idx },
+                    React.createElement(
+                      "td",
+                      null,
+                      React.createElement("input", {
+                        type: "checkbox",
+                        checked: selectedScenes.has(op.scene_id),
+                        onChange: (e) =>
+                          handleSceneSelection(op.scene_id, e.target.checked),
+                      })
+                    ),
                     React.createElement(
                       "td",
                       null,

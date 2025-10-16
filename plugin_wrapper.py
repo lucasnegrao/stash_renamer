@@ -249,59 +249,7 @@ def run(input_data, output):
         mode = combined_args.get("mode", "")
         dry_run = combined_args.get("dry_run", "false").lower() == "true" or mode == "dry_run"
         
-        # Handle fetch_scenes mode - just return available scenes for selection
-        if mode == "fetch_scenes":
-            log.LogInfo("Fetching scenes for selection")
-            
-            # Build basic command args for scene fetching
-            cmd_args = ["--dry-run"]  # Always dry run for fetching
-            
-            template = combined_args.get("template", "$studio - $date - $title")
-            cmd_args.extend(["--template", template])
-            
-            if args.get("femaleOnly") == "true":
-                cmd_args.append("--female-only")
-            if args.get("skipGrouped") == "true":
-                cmd_args.append("--skip-grouped")
-            if args.get("moveToStudioFolder") == "true" or args.get("moveToStudio") == "true":
-                cmd_args.append("--move-to-studio-folder")
-            if args.get("debugMode") == "true":
-                cmd_args.append("--debug")
-            else:
-                cmd_args.append("--no-debug")
-                
-            path_like = combined_args.get("pathLike", "")
-            if path_like:
-                cmd_args.extend(["--path-like", path_like])
-            exclude_path_like = combined_args.get("excludePathLike", "")
-            if exclude_path_like:
-                cmd_args.extend(["--exclude-path-like", exclude_path_like])
-            
-            # Override sys.argv
-            sys.argv = [sys.argv[0]] + cmd_args
-            
-            # Import and run the main script to get operations
-            from stash_renamer import run as renamer_run
-            operations = renamer_run(collect_operations=True)
-            
-            # Convert operations to scene list for UI
-            scenes = []
-            if operations:
-                for op in operations:
-                    scenes.append({
-                        "scene_id": op.get("scene_id", ""),
-                        "title": op.get("title", ""),
-                        "current_filename": op.get("old_filename", ""),
-                        "new_filename": op.get("new_filename", ""),
-                        "current_path": op.get("old_path", ""),
-                        "new_path": op.get("new_path", "")
-                    })
-            
-            log.LogInfo(f"Found {len(scenes)} scenes for selection")
-            json_output = json.dumps({"scenes": scenes})
-            output["output"] = json_output
-            # print(json_output, file=sys.stdout, flush=True)
-            return
+
         
         # Build command line args for the main script
         cmd_args = []
