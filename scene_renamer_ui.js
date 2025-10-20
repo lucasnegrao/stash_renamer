@@ -1641,8 +1641,7 @@
             )
           )
         ),
-      React.createElement(TestPage, null),
-      // Help section
+
       React.createElement("hr", null),
       React.createElement("h3", null, "How to Use"),
       React.createElement(
