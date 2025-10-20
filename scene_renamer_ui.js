@@ -247,46 +247,7 @@
         return 0;
       });
     };
-    const TestPage = () => {
-      const componentsToLoad = [
-        PluginApi.loadableComponents.SceneCard,
-        PluginApi.loadableComponents.PerformerSelect,
-      ];
-      const componentsLoading =
-        PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-      const { SceneCard, LoadingIndicator, PerformerSelect } =
-        PluginApi.components;
-
-      const { data } = gql.useFindScenesQuery({
-        variables: {
-          filter: {
-            per_page: 1,
-            sort: "random",
-          },
-        },
-      });
-
-      const scene = data?.findScenes.scenes[0];
-
-      if (componentsLoading) return React.createElement(LoadingIndicator);
-
-      return React.createElement(
-        "div",
-        null,
-        React.createElement("div", null, "This is a test page."),
-        scene && React.createElement(SceneCard, { scene }),
-        React.createElement(
-          "div",
-          null,
-          React.createElement(PerformerSelect, {
-            isMulti: true,
-            onSelect: () => {},
-            values: [],
-          })
-        )
-      );
-    };
 
     // Scene selection handlers for operations table
     const handleSceneSelection = (sceneId, checked) => {
