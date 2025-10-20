@@ -96,6 +96,15 @@ def sanitize_filename(name: str) -> str:
     
     return name
 
+def _extract_year(date_str: str) -> str:
+    """
+    Extract a 4-digit year from a date string (expects YYYY or YYYY-MM or YYYY-MM-DD).
+    Returns empty string if no year is found.
+    """
+    s = str(date_str or "").strip()
+    m = re.match(r"^(\d{4})", s)
+    return m.group(1) if m else ""
+
 def _sanitize_path_component(seg: str) -> str:
     """
     Sanitize a single path segment using the same rules as filenames.
@@ -179,6 +188,8 @@ def _apply_array_index_tokens(template: str, scene_info: Dict[str, object]) -> s
         items: List[str] = []
         src = arrays.get(name) or []
         # Ensure list of strings
+        if not isinstance(src, (list, tuple)):
+            src = [src] if src else []
         src = [str(x) for x in src if str(x)]
         if not src:
             return ""
@@ -205,6 +216,7 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     s = _apply_array_index_tokens(s, scene_info)
 
     # Replace tokens with values or empty strings
+    year = _extract_year(scene_info.get("date") or "")
     tokens = {
         # Core
         "$id": (scene_info.get("id") or "").strip(),
@@ -214,6 +226,7 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
         "$director": (scene_info.get("director") or "").strip(),
         "$urls": (scene_info.get("urls") or "").strip(),
         "$date": (scene_info.get("date") or "").strip(),
+        "$year": year,
         "$rating100": (scene_info.get("rating100") or "").strip(),
         "$organized": (scene_info.get("organized") or "").strip(),
         "$o_counter": (scene_info.get("o_counter") or "").strip(),
