@@ -98,12 +98,25 @@ def sanitize_filename(name: str) -> str:
 
 def _extract_year(date_str: str) -> str:
     """
-    Extract a 4-digit year from a date string (expects YYYY or YYYY-MM or YYYY-MM-DD).
-    Returns empty string if no year is found.
+    Extract a 4-digit year from a date string.
+    Supports: YYYY, YYYY-MM[-DD][time], YYYY/MM/DD, YYYY.MM.DD, DD-MM-YYYY, MM/DD/YYYY, etc.
+    Returns empty string for placeholder dates like xxxx-xx-xx or year 0000.
     """
     s = str(date_str or "").strip()
-    m = re.match(r"^(\d{4})", s)
-    return m.group(1) if m else ""
+    if not s:
+        return ""
+    # Ignore placeholder/unknown dates (e.g., "xxxx-xx-xx")
+    if re.search(r"(?i)\bx{4}\b", s) or "xx-xx-xx" in s.lower():
+        return ""
+    # Prefer year at the start (ISO-like)
+    m = re.match(r"^\s*(\d{4})(?!\d)", s)
+    if m and m.group(1) != "0000":
+        return m.group(1)
+    # Otherwise grab any standalone 4-digit year in the string (e.g., DD-MM-YYYY or MM/DD/YYYY)
+    m = re.search(r"(?<!\d)(\d{4})(?!\d)", s)
+    if m and m.group(1) != "0000":
+        return m.group(1)
+    return ""
 
 def _sanitize_path_component(seg: str) -> str:
     """
