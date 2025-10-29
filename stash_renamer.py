@@ -90,7 +90,8 @@ def sanitize_filename(name: str) -> str:
     
     # Collapse multiple spaces to single space
     name = re.sub(r'\s{2,}', ' ', name)
-    
+    name = re.sub(r'(?<!\.)\.{3}(?!\.)', '.', name)
+
     # Remove leading/trailing dots and spaces (Windows doesn't allow these)
     name = name.strip('. ')
     
