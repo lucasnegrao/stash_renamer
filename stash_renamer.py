@@ -86,7 +86,7 @@ def sanitize_filename(name: str) -> str:
     # Remove problematic characters across all platforms
     # Windows forbidden: < > : " / \ | ? *
     # Additional: ' ` # , (can cause issues in some contexts)
-    name = re.sub(r'[<>:"/\\|?*`#,]+', '', name)
+    name = re.sub(r'[<>:"/\\|?*\'`#,]+', '', name)
     
     # Collapse multiple spaces to single space
     name = re.sub(r'\s{2,}', ' ', name)
