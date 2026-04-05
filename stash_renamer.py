@@ -13,7 +13,6 @@ USING_LOG = True
 DRY_RUN = False
 DEBUG_MODE = True
 SKIP_GROUPED = False
-MOVE_TO_STUDIO_FOLDER = False  # ...existing code, no longer used by path builder...
 
 IS_WINDOWS = os.name == "nt"
 
@@ -24,7 +23,7 @@ CONFIG = None  # type: Optional[SimpleNamespace]
 PERFORMER_GENDERS = None  # type: Optional[set]
 FILTERS = {}              # type: Dict[str, object]
 
-# New globals for path building
+# Globals for path building
 PATH_TEMPLATE: Optional[str] = None
 PATH_IS_ABSOLUTE: bool = False
 
@@ -86,8 +85,12 @@ def sanitize_filename(name: str) -> str:
     # Remove problematic characters across all platforms
     # Windows forbidden: < > : " / \ | ? *
     # Additional: ' ` # , (can cause issues in some contexts)
-    name = re.sub(r'[<>:"/\\|?*\'`#,]+', '', name)
-    
+    name = re.sub(r'[<>:/\\|?*`,]+', '', name)
+    name = re.sub(r'&', 'and', name)
+    name = re.sub(r'(?<=\w)\'(?=\w)|(?<=\w)\'(?=\s|$)', '', name)
+    #name = re.sub(r'\'', '', name)
+
+
     # Collapse multiple spaces to single space
     name = re.sub(r'\s{2,}', ' ', name)
     name = re.sub(r'(?<!\.)\.{3}(?!\.)', '.', name)
@@ -187,12 +190,13 @@ def _apply_array_index_tokens(template: str, scene_info: Dict[str, object]) -> s
       $urls[0-2]        -> first 3 urls
     Arrays are read from scene_info keys: groups_list, performers_list, tags_list, urls_list.
     """
-    pattern = re.compile(r"\$(groups|performers|tags|urls)\[(\d+)(?:-(\d+))?\]")
+    pattern = re.compile(r"\$(groups|performers|tags|urls|stash_ids)\[(\d+)(?:-(\d+))?\]")
     arrays = {
         "groups": scene_info.get("groups_list") or [],
         "performers": scene_info.get("performers_list") or [],
         "tags": scene_info.get("tags_list") or [],
         "urls": scene_info.get("urls_list") or [],
+	"stash_ids": scene_info.get("stash_ids_list") or []
     }
 
     def repl(m: re.Match) -> str:
@@ -234,7 +238,7 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     tokens = {
         # Core
         "$id": (scene_info.get("id") or "").strip(),
-        "$title": (scene_info.get("title") or "").strip(),
+        "$title": (scene_info.get("title") or "").strip().replace(' - ',' ').replace('(',' ').replace(')',' '),
         "$code": (scene_info.get("code") or "").strip(),
         "$details": (scene_info.get("details") or "").strip(),
         "$director": (scene_info.get("director") or "").strip(),
@@ -255,15 +259,14 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
         # Collections (string-joined)
         "$tags": (scene_info.get("tags") or "").strip(),
         "$groups": (scene_info.get("groups") or "").strip(),
+	"$stash_ids": (scene_info.get("stash_ids") or "").strip(),
         "$scene_markers_count": (scene_info.get("scene_markers_count") or "").strip(),
         "$performers": (scene_info.get("performers") or "").strip(),
-        # Back-compat
-        "$performer": (scene_info.get("performer") or "").strip(),
         "$studio": (scene_info.get("studio") or "").strip(),
-        "$height": (scene_info.get("height") or "").strip(),
     }
+
     for token, value in tokens.items():
-        s = s.replace(token, value if value else "")
+        s = s.replace(token, value if value else "None")
 
     # Remove the global hyphen normalization to avoid spacing inside dates
     # s = re.sub(r"\s*-\s*", " - ", s)
@@ -463,6 +466,7 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
       tags { name }
       groups { group { id name } }
       scene_markers { id }
+      stash_ids { stash_id }
     }
   }
 }
@@ -475,10 +479,12 @@ query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
     return data["findScenes"]["scenes"]
 
 
-def build_scene_filter(base_filter: Optional[dict], tag_ids: Optional[List[str]]) -> dict:
+def build_scene_filter(base_filter: Optional[dict], tag_ids: Optional[List[str]], stash_endpoint: Optional[str]) -> dict:
     scene_filter = base_filter.copy() if base_filter else {}
     if tag_ids:
         scene_filter["tags"] = {"value": tag_ids, "modifier": "INCLUDES"}
+    if stash_endpoint:
+        scene_filter["stash_id_endpoint"] = {"endpoint": stash_endpoint, "modifier": "EQUALS"}
     return scene_filter
 
 
@@ -585,7 +591,7 @@ def scene_passes_filters(scene: dict) -> bool:
     return True
 
 
-def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], scene_ids: Optional[List[str]] = None, collect_operations: bool = False):
+def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], stash_id_endpoint: Optional[str] = None, scene_ids: Optional[List[str]] = None, collect_operations: bool = False):
     """
     Run the rename operation.
     
@@ -612,7 +618,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             logPrint("[Warn] No tag IDs resolved; skipping.")
             return operations if collect_operations else None
 
-    scene_filter = build_scene_filter(base_filter, tag_ids)
+    scene_filter = build_scene_filter(base_filter, tag_ids, stash_id_endpoint)
 
     scenes = iterate_scenes(scene_filter, path_like, exclude_path_like)
     if not scenes:
@@ -669,8 +675,9 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         group_names_join = " ".join(group_names_list)
         urls_list = scene.get("urls") or []
         urls_join = " ".join(urls_list)
+        stash_ids_list = [(t.get("stash_id") or "").strip() for t in (scene.get("stash_ids") or []) if (t.get("stash_id") or "").strip()]
+        stash_ids_join = " ".join(stash_ids_list)
         scene_markers_count = str(len(scene.get("scene_markers") or []))
-
         scene_title = scene.get("title") or ""
         scene_date = scene.get("date") or ""
         studio_name = (scene.get("studio") or {}).get("name") or ""
@@ -700,11 +707,13 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
             "groups": group_names_join,
             "scene_markers_count": scene_markers_count,
             "performers": performer_name,
+	    "stash_ids": stash_ids_join,
             # Lists for array-index tokens
             "tags_list": tag_names_list,
             "groups_list": group_names_list,
             "performers_list": performer_names_list,
             "urls_list": urls_list,
+	    "stash_ids_list": stash_ids_list,
             # Existing
             "studio": studio_name,
             "height": "",  # Not fetched here
@@ -967,6 +976,10 @@ def run(options: dict, collect_operations: bool = False):
     if "filter_tags" in options:
         v = options.get("filter_tags") or []
         FILTERS["tag_names"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
+    #if "filter_endpoint_id" in options:
+    #    v = options.get("filter_stash_id_endpoint") or []
+    #    FILTERS["stash_endpoint_id"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
+
 
     if DRY_RUN:
         try:
@@ -1015,6 +1028,7 @@ def run(options: dict, collect_operations: bool = False):
                 tag_names=[tag_name],
                 path_like=options.get("path_like"),
                 exclude_path_like=options.get("exclude_path_like"),
+                stash_id_endpoint=options.get("stash_id_endpoint") or None,
                 scene_ids=scene_ids,
                 collect_operations=collect_operations,
             )
@@ -1030,6 +1044,7 @@ def run(options: dict, collect_operations: bool = False):
                 tag_names=None,
                 path_like=options.get("path_like"),
                 exclude_path_like=options.get("exclude_path_like"),
+                stash_id_endpoint=options.get("stash_id_endpoint") or None,
                 scene_ids=scene_ids,
                 collect_operations=collect_operations,
             )

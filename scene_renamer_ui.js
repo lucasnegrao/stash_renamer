@@ -181,7 +181,7 @@
     const [filterTags, setFilterTags] = React.useState("");
     // Optional tag-based selection (comma-separated)
     const [tags, setTags] = React.useState("");
-
+    const [stashIDEndpoint, setStashIDEndpoint] = React.useState("");
     // Available catalogs and picker states
     const [availableTags, setAvailableTags] = React.useState([]);
     const [availableGroups, setAvailableGroups] = React.useState([]);
@@ -204,7 +204,6 @@
     const [groupSearch, setGroupSearch] = React.useState("");
     // New: studio search
     const [studioSearch, setStudioSearch] = React.useState("");
-
     // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
 
@@ -306,7 +305,8 @@
                 pathIsAbsolute: pathIsAbsolute.toString(),
                 // New args
                 tags: tags, // comma-separated
-                performerGenders: performerGenders.join(","),
+                stash_id_endpoint: stashIDEndpoint,
+		performerGenders: performerGenders.join(","),
                 filterPerformerGenders: filterPerformerGenders.join(","),
                 filterOrganized: organized === "any" ? "" : organized,
                 filterInteractive: interactive === "any" ? "" : interactive,
@@ -745,6 +745,32 @@
             "small",
             { className: "form-text text-muted" },
             "Skip files with paths containing this substring"
+          )
+        )
+      ),
+      // Filter by stash_id_endpoint
+      React.createElement(
+        "div",
+        { className: "form-group row" },
+        React.createElement(
+          "label",
+          { className: "col-sm-2 col-form-label" },
+          "Stash id endpoint:"
+        ),
+        React.createElement(
+          "div",
+          { className: "col-sm-10" },
+          React.createElement("input", {
+            type: "text",
+            className: "form-control",
+            value: stashIDEndpoint,
+            onChange: (e) => setStashIDEndpoint(e.target.value),
+            placeholder: "e.g., https://stashdb.org/graphql",
+          }),
+          React.createElement(
+            "small",
+            { className: "form-text text-muted" },
+            "Only include files with this endpoint"
           )
         )
       ),

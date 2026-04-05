@@ -185,8 +185,8 @@ def main():
         task_name = plugin.input_data.get("task_name", "rename")
         args = plugin.get_args()
         config = plugin.get_plugin_config()
-        
-        handle_task(plugin, task_name, args, config)
+        plugin.log("task mode not working")
+        #handle_task(plugin, task_name, args, config)
         
     elif mode == "ui":
         # Serving UI
