@@ -163,8 +163,11 @@
     const [organized, setOrganized] = React.useState("any");
     const [grouped, setGrouped] = React.useState("any");
     const [filterStudio, setFilterStudio] = React.useState("");
+    const [filterStudioNegate, setFilterStudioNegate] = React.useState(false);
     const [filterGroups, setFilterGroups] = React.useState("");
+    const [filterGroupsNegate, setFilterGroupsNegate] = React.useState(false);
     const [filterTags, setFilterTags] = React.useState("");
+    const [filterTagsNegate, setFilterTagsNegate] = React.useState(false);
     const [stashIDEndpoint, setStashIDEndpoint] = React.useState("");
     // Available catalogs and picker states
     const [availableTags, setAvailableTags] = React.useState([]);
@@ -334,21 +337,24 @@
       }
       const tagsRegex = buildNameRegex(filterTags);
       if (tagsRegex) {
-        appendCondition({
+        const cond = {
           tags_filter: { name: { value: tagsRegex, modifier: "MATCHES_REGEX" } },
-        });
+        };
+        appendCondition(filterTagsNegate ? { NOT: cond } : cond);
       }
       const groupsRegex = buildNameRegex(filterGroups);
       if (groupsRegex) {
-        appendCondition({
+        const cond = {
           groups_filter: { name: { value: groupsRegex, modifier: "MATCHES_REGEX" } },
-        });
+        };
+        appendCondition(filterGroupsNegate ? { NOT: cond } : cond);
       }
       const studiosRegex = buildNameRegex(filterStudio);
       if (studiosRegex) {
-        appendCondition({
+        const cond = {
           studios_filter: { name: { value: studiosRegex, modifier: "MATCHES_REGEX" } },
-        });
+        };
+        appendCondition(filterStudioNegate ? { NOT: cond } : cond);
       }
       if (filterPerformerGenders.length) {
         appendCondition({
@@ -555,10 +561,25 @@
           setFilterStudio(
             toCsv(settings.filterStudio ?? settings.filter_studio, "")
           );
+          setFilterStudioNegate(
+            toBool(
+              settings.filterStudioNegate ?? settings.filter_studio_negate,
+              false
+            )
+          );
           setFilterGroups(
             toCsv(settings.filterGroups ?? settings.filter_groups, "")
           );
+          setFilterGroupsNegate(
+            toBool(
+              settings.filterGroupsNegate ?? settings.filter_groups_negate,
+              false
+            )
+          );
           setFilterTags(toCsv(settings.filterTags ?? settings.filter_tags, ""));
+          setFilterTagsNegate(
+            toBool(settings.filterTagsNegate ?? settings.filter_tags_negate, false)
+          );
         })
         .catch((e) => {
           console.warn("Settings load failed:", e);
@@ -588,9 +609,15 @@
             if (p.grouped !== undefined) setGrouped(String(p.grouped));
             if (p.filterStudio !== undefined)
               setFilterStudio(String(p.filterStudio));
+            if (p.filterStudioNegate !== undefined)
+              setFilterStudioNegate(Boolean(p.filterStudioNegate));
             if (p.filterGroups !== undefined)
               setFilterGroups(String(p.filterGroups));
+            if (p.filterGroupsNegate !== undefined)
+              setFilterGroupsNegate(Boolean(p.filterGroupsNegate));
             if (p.filterTags !== undefined) setFilterTags(String(p.filterTags));
+            if (p.filterTagsNegate !== undefined)
+              setFilterTagsNegate(Boolean(p.filterTagsNegate));
             if (p.stashIDEndpoint !== undefined)
               setStashIDEndpoint(String(p.stashIDEndpoint));
             if (p.pageSize !== undefined && Number(p.pageSize) > 0)
@@ -627,8 +654,11 @@
             organized,
             grouped,
             filterStudio,
+            filterStudioNegate,
             filterGroups,
+            filterGroupsNegate,
             filterTags,
+            filterTagsNegate,
             stashIDEndpoint,
             pageSize,
             filtersCollapsed,
@@ -647,8 +677,11 @@
       organized,
       grouped,
       filterStudio,
+      filterStudioNegate,
       filterGroups,
+      filterGroupsNegate,
       filterTags,
+      filterTagsNegate,
       stashIDEndpoint,
       pageSize,
       filtersCollapsed,
@@ -1047,6 +1080,22 @@
               placeholder: "Comma-separated exact studio names",
             }),
             React.createElement(
+              "div",
+              { className: "form-check ml-2 mb-0 d-flex align-items-center" },
+              React.createElement("input", {
+                type: "checkbox",
+                className: "form-check-input",
+                id: "filterStudioNegate",
+                checked: filterStudioNegate,
+                onChange: (e) => setFilterStudioNegate(e.target.checked),
+              }),
+              React.createElement(
+                "label",
+                { className: "form-check-label ml-1", htmlFor: "filterStudioNegate" },
+                "Negate"
+              )
+            ),
+            React.createElement(
               Button,
               {
                 className: "ml-2",
@@ -1167,6 +1216,22 @@
               placeholder: "Comma-separated exact group names",
             }),
             React.createElement(
+              "div",
+              { className: "form-check ml-2 mb-0 d-flex align-items-center" },
+              React.createElement("input", {
+                type: "checkbox",
+                className: "form-check-input",
+                id: "filterGroupsNegate",
+                checked: filterGroupsNegate,
+                onChange: (e) => setFilterGroupsNegate(e.target.checked),
+              }),
+              React.createElement(
+                "label",
+                { className: "form-check-label ml-1", htmlFor: "filterGroupsNegate" },
+                "Negate"
+              )
+            ),
+            React.createElement(
               Button,
               {
                 className: "ml-2",
@@ -1286,6 +1351,22 @@
               onChange: (e) => setFilterTags(e.target.value),
               placeholder: "Comma-separated exact tag names",
             }),
+            React.createElement(
+              "div",
+              { className: "form-check ml-2 mb-0 d-flex align-items-center" },
+              React.createElement("input", {
+                type: "checkbox",
+                className: "form-check-input",
+                id: "filterTagsNegate",
+                checked: filterTagsNegate,
+                onChange: (e) => setFilterTagsNegate(e.target.checked),
+              }),
+              React.createElement(
+                "label",
+                { className: "form-check-label ml-1", htmlFor: "filterTagsNegate" },
+                "Negate"
+              )
+            ),
             React.createElement(
               Button,
               {
