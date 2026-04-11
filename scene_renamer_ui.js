@@ -6,6 +6,7 @@
   const { Button } = PluginApi.libraries.Bootstrap;
   const { Link, NavLink } = PluginApi.libraries.ReactRouterDOM;
   const { faFileSignature } = PluginApi.libraries.FontAwesomeSolid;
+  const UI_BUILD = "2026-04-11-progress-v2";
   const USER_PREFS_KEY = "stash_renamer_ui_prefs_v1";
 
   // Generic GraphQL caller (no explicit auth needed from UI)
@@ -533,87 +534,73 @@
             studiosMap: loadedStudiosMap,
           }
         );
-        const response = await fetch("/graphql", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query: `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
-              runPluginOperation(plugin_id: $plugin_id, args: $args)
-            }`,
-            variables: {
-              plugin_id: "stash_renamer",
-              args: {
-                mode: mode,
-                filename_template: template,
-                path_template: pathTemplate,
-                dry_run: dryRun.toString(),
-                debugMode: debugMode.toString(),
-                scene_filter: sceneFilter,
-                ids: ids,
-                find_filter: findFilter,
-              },
+        const callRenameOperation = async (idsOverride, label) => {
+          const response = await fetch("/graphql", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-          }),
-        });
+            body: JSON.stringify({
+              query: `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
+                runPluginOperation(plugin_id: $plugin_id, args: $args)
+              }`,
+              variables: {
+                plugin_id: "stash_renamer",
+                args: {
+                  mode: mode,
+                  filename_template: template,
+                  path_template: pathTemplate,
+                  dry_run: dryRun.toString(),
+                  debugMode: debugMode.toString(),
+                  scene_filter: sceneFilter,
+                  ids: idsOverride,
+                  find_filter: findFilter,
+                },
+              },
+            }),
+          });
 
-        const result = await response.json();
-
-        if (result.errors && result.errors.length) {
-          const gqlErr = result.errors
-            .map((e) => e?.message || JSON.stringify(e))
-            .join(" | ");
-          setStatus(`Error: ${gqlErr}`);
-          return;
-        }
-
-        // The plugin outputs JSON which Stash returns here
-        if (result.data && result.data.runPluginOperation) {
-          try {
-            console.log(
-              "Plugin output string:",
-              result.data.runPluginOperation
-            );
-
-            // Parse the JSON output from the plugin
-            const pluginData = result.data.runPluginOperation;
-            console.log("Parsed plugin data:", pluginData);
-            const pluginError =
-              pluginData?.error ||
-              pluginData?.output?.error ||
-              pluginData?.message ||
-              null;
-            if (pluginError) {
-              setStatus(`Error: ${pluginError}`);
-              return;
-            }
-            const operationsPayload = Array.isArray(pluginData?.operations)
-              ? pluginData.operations
-              : Array.isArray(pluginData?.output?.operations)
-              ? pluginData.output.operations
-              : [];
-
-            if (operationsPayload.length) {
-              setOperations(operationsPayload);
-              setStatus(
-                `Completed! Found ${operationsPayload.length} operations.`
-              );
-              console.log("Operations set:", operationsPayload);
-            } else {
-              console.log("No operations array found in:", pluginData);
-              setStatus(
-                "Completed! No operations returned. Check Settings → Logs → Plugins for details."
-              );
-            }
-          } catch (parseError) {
-            console.error("Failed to parse plugin output:", parseError);
-            console.error("Raw output was:", result.data.runPluginOperation);
-            setStatus(`Error: ${parseError?.message || String(parseError)}`);
+          const result = await response.json();
+          if (result.errors && result.errors.length) {
+            const gqlErr = result.errors
+              .map((e) => e?.message || JSON.stringify(e))
+              .join(" | ");
+            throw new Error(`${label}: ${gqlErr}`);
           }
+          const pluginData = result?.data?.runPluginOperation;
+          if (!pluginData) {
+            throw new Error(`${label}: No response from plugin operation.`);
+          }
+          const pluginError =
+            pluginData?.error ||
+            pluginData?.output?.error ||
+            pluginData?.message ||
+            null;
+          if (pluginError) {
+            throw new Error(`${label}: ${pluginError}`);
+          }
+          return Array.isArray(pluginData?.operations)
+            ? pluginData.operations
+            : Array.isArray(pluginData?.output?.operations)
+            ? pluginData.output.operations
+            : [];
+        };
+
+        setStatus(
+          mode === "dry_run"
+            ? "Running dry run..."
+            : "Running rename... live progress is in Settings -> Logs -> Plugins."
+        );
+        const operationsPayload = await callRenameOperation(ids, "Run");
+        if (operationsPayload.length) {
+          setOperations(operationsPayload);
+          setStatus(
+            `Completed! Found ${operationsPayload.length} operations.`
+          );
         } else {
-          console.log("No runPluginOperation in result");
-          setStatus("Error: No response from plugin operation.");
+          setStatus(
+            "Completed! No operations returned. For live progress, open Settings -> Logs -> Plugins."
+          );
         }
       } catch (error) {
         setStatus("Error: " + error.message);
@@ -890,6 +877,7 @@
       "div",
       { className: "container-fluid" },
       React.createElement("h1", null, "Scene Renamer"),
+      React.createElement("small", { className: "text-muted d-block mb-2" }, `UI build: ${UI_BUILD}`),
       React.createElement("hr", null),
       React.createElement(SceneRenamerTopTabs, null),
 
@@ -2057,6 +2045,7 @@
       "div",
       { className: "container-fluid" },
       React.createElement("h1", null, "Scene Renamer"),
+      React.createElement("small", { className: "text-muted d-block mb-2" }, `UI build: ${UI_BUILD}`),
       React.createElement("hr", null),
       React.createElement(SceneRenamerTopTabs, null),
       React.createElement("h3", null, "Undo Renames"),
@@ -2273,6 +2262,7 @@
       "div",
       { className: "container-fluid" },
       React.createElement("h1", null, "Scene Renamer"),
+      React.createElement("small", { className: "text-muted d-block mb-2" }, `UI build: ${UI_BUILD}`),
       React.createElement("hr", null),
       React.createElement(SceneRenamerTopTabs, null),
       React.createElement("h3", null, "Template Help"),
@@ -2389,5 +2379,5 @@
     ];
   });
 
-  console.log("Scene Renamer UI loaded");
+  console.log(`Scene Renamer UI loaded (${UI_BUILD})`);
 })();

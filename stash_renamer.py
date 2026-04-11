@@ -406,8 +406,23 @@ def _fetch_scenes_from_filter(
     if page <= 0:
         page = 1
 
-    all_scenes: List[dict] = []
     find_scenes_query = _build_find_scenes_query(filename_template, path_template)
+
+    # Fast path: explicit ID selection is already bounded; fetch in one request.
+    if ids:
+        single_filter = ff.copy()
+        single_filter["page"] = 1
+        single_filter["per_page"] = max(per_page, len(ids))
+        variables = {
+            "filter": single_filter,
+            "scene_filter": scene_filter,
+            "ids": ids,
+        }
+        data = __callGraphQL(find_scenes_query, variables)
+        scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
+        return [s for s in scenes if isinstance(s, dict)]
+
+    all_scenes: List[dict] = []
     while True:
         page_filter = ff.copy()
         page_filter["per_page"] = per_page
@@ -447,11 +462,29 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         logPrint("[Warn] There are no scenes to process")
         return operations if collect_operations else None
 
-    logPrint(f"Scenes count: {len(scenes)}")
+    total_scenes = len(scenes)
+    logPrint(f"Scenes count: {total_scenes}")
+    processed = 0
+    success_count = 0
+    error_count = 0
+    skipped_count = 0
+
+    def _log_progress() -> None:
+        if total_scenes <= 0:
+            return
+        if processed == 1 or processed == total_scenes or processed % 25 == 0:
+            pct = int((processed / total_scenes) * 100)
+            logPrint(
+                f"[PROGRESS] {processed}/{total_scenes} ({pct}%) "
+                f"success={success_count} skipped={skipped_count} errors={error_count}"
+            )
 
     for scene in scenes:
+        processed += 1
         current_path = scene.get("path")
         if not current_path:
+            skipped_count += 1
+            _log_progress()
             continue
 
         current_directory = os.path.dirname(current_path)
@@ -492,6 +525,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         new_filename_core = sanitize_filename(new_filename_core)
         if not new_filename_core.strip():
             logPrint(f"[Error] New filename resolved empty for scene {scene['id']}, skipping.")
+            skipped_count += 1
+            _log_progress()
             continue
         new_filename = new_filename_core + file_extension
 
@@ -533,6 +568,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
             reduced_core = sanitize_filename(reduced_core)
             if not reduced_core.strip():
                 logPrint(f"[Error] Reduced filename empty, skipping scene {scene['id']}.")
+                skipped_count += 1
+                _log_progress()
                 continue
             new_filename = reduced_core + file_extension
             new_path = os.path.join(current_directory, new_filename)
@@ -540,6 +577,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                 logPrint(f"[Info] Reduced filename to: {new_filename}")
             else:
                 logPrint(f"[Error] Can't manage to reduce the path, ID: {scene['id']}")
+                skipped_count += 1
+                _log_progress()
                 continue
 
         # Filesystem duplicate check
@@ -547,6 +586,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
             logPrint(f"[Error] Target already exists: {new_path}")
             with open("renamer_duplicate.txt", "a", encoding="utf-8") as fh:
                 print(f"[{scene['id']}] - {new_filename}", file=fh)
+            error_count += 1
+            _log_progress()
             continue
 
         if DEBUG_MODE:
@@ -556,6 +597,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         if new_path == current_path:
             if DEBUG_MODE:
                 logPrint("[DEBUG] File already good.\n")
+            skipped_count += 1
+            _log_progress()
             continue
 
         if not DRY_RUN:
@@ -579,6 +622,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                         "old_path": current_path,
                         "new_path": new_path
                     })
+                error_count += 1
+                _log_progress()
                 continue
             
             # Use GraphQL moveFiles mutation instead of os.rename
@@ -612,6 +657,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                         "old_path": current_path,
                         "new_path": new_path
                     })
+                error_count += 1
+                _log_progress()
                 continue
 
             # Success - the GraphQL mutation handles the actual file move
@@ -638,6 +685,8 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                     "old_path": current_path,
                     "new_path": new_path
                 })
+            success_count += 1
+            _log_progress()
         else:
             # Show dry run with clearer indication if file is moving to a different directory
             if os.path.dirname(current_path) != os.path.dirname(new_path):
@@ -656,7 +705,12 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                     "old_path": current_path,
                     "new_path": new_path
                 })
-    
+            success_count += 1
+            _log_progress()
+    logPrint(
+        f"[PROGRESS] Completed {processed}/{total_scenes} "
+        f"success={success_count} skipped={skipped_count} errors={error_count}"
+    )
     return operations if collect_operations else None
 
 
