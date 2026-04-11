@@ -733,6 +733,12 @@ def run(options: dict, collect_operations: bool = False):
             return [undo_result]
         return None
 
+    if options.get("list_operations"):
+        if FILE_MOVER is None:
+            raise RuntimeError("FILE_MOVER not initialized")
+        operations = FILE_MOVER.list_rename_operations()
+        return operations if collect_operations else None
+
     filename_template = options.get("filename_template")
     if not filename_template or not str(filename_template).strip():
         raise ValueError("filename_template is required")

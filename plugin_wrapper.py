@@ -311,6 +311,11 @@ def run(input_data, output):
         if isinstance(ids, str):
             ids = [s.strip() for s in ids.split(",") if s.strip()]
         undo_operation_id = combined_args.get("undo_operation_id") or combined_args.get("undoOperationId")
+        list_operations = (
+            str(mode).strip().lower() == "list_operations"
+            or is_true(combined_args.get("list_operations"))
+            or is_true(combined_args.get("listOperations"))
+        )
         operations_db_path = combined_args.get("operations_db_path") or combined_args.get("operationsDbPath")
 
         options = {
@@ -327,6 +332,8 @@ def run(input_data, output):
             options["operations_db_path"] = operations_db_path
         if undo_operation_id:
             options["undo_operation_id"] = undo_operation_id
+        elif list_operations:
+            options["list_operations"] = True
         else:
             if scene_filter is not None or find_filter is not None or ids is not None:
                 if scene_filter is not None:

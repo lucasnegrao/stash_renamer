@@ -95,6 +95,37 @@ class OperationLogStore:
                 return None
             return dict(row)
 
+    def list_rename_operations(self) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    r.id,
+                    r.operation_type,
+                    r.related_operation_id,
+                    r.created_at,
+                    r.scene_id,
+                    r.old_path,
+                    r.new_path,
+                    r.old_name,
+                    r.new_name,
+                    r.success,
+                    r.error,
+                    EXISTS (
+                        SELECT 1
+                        FROM file_operations u
+                        WHERE
+                            u.operation_type = 'undo'
+                            AND u.related_operation_id = r.id
+                            AND u.success = 1
+                    ) AS undone
+                FROM file_operations r
+                WHERE r.operation_type = 'rename'
+                ORDER BY r.created_at DESC, r.id DESC
+                """
+            ).fetchall()
+            return [dict(r) for r in rows]
+
 
 class FileMover:
     def __init__(self, gql_call: Callable[[str, Optional[dict]], dict], db_path: str, log_print: Callable[[str], None]):
@@ -183,3 +214,6 @@ class FileMover:
             "old_name": os.path.basename(current_path or new_path),
             "new_name": os.path.basename(old_path),
         }
+
+    def list_rename_operations(self) -> List[Dict[str, Any]]:
+        return self._store.list_rename_operations()

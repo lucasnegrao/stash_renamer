@@ -167,6 +167,54 @@
     };
   }
 
+  const SceneRenamerTopTabs = () =>
+    React.createElement(
+      "ul",
+      { className: "nav nav-tabs mb-3" },
+      React.createElement(
+        "li",
+        { className: "nav-item" },
+        React.createElement(
+          NavLink,
+          {
+            to: "/scene-renamer",
+            exact: true,
+            className: "nav-link",
+            activeClassName: "active",
+          },
+          "Rename"
+        )
+      ),
+      React.createElement(
+        "li",
+        { className: "nav-item" },
+        React.createElement(
+          NavLink,
+          {
+            to: "/scene-renamer/undo",
+            exact: true,
+            className: "nav-link",
+            activeClassName: "active",
+          },
+          "Undo"
+        )
+      ),
+      React.createElement(
+        "li",
+        { className: "nav-item" },
+        React.createElement(
+          NavLink,
+          {
+            to: "/scene-renamer/help",
+            exact: true,
+            className: "nav-link",
+            activeClassName: "active",
+          },
+          "Template Help"
+        )
+      )
+    );
+
   // Scene Renamer UI Page
   const SceneRenamerPage = () => {
     const [template, setTemplate] = React.useState("$scene.studio.name - $scene.date - $scene.title");
@@ -843,6 +891,7 @@
       { className: "container-fluid" },
       React.createElement("h1", null, "Scene Renamer"),
       React.createElement("hr", null),
+      React.createElement(SceneRenamerTopTabs, null),
 
       // Template input
       React.createElement(
