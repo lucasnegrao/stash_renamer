@@ -185,11 +185,11 @@ def makeFilename(query: str, tag_context: Dict[str, object]) -> str:
                 exprs = TAGGER.extract_expressions(inner_raw)
                 if not exprs:
                     return inner_processed if inner_processed.strip() else ""
-                has_value = any(
+                all_have_value = all(
                     not _is_empty_value(TAGGER.resolve_expression(expr, tag_context))
                     for expr in exprs
                 )
-                if not has_value:
+                if not all_have_value:
                     return ""
                 return TAGGER.render(inner_processed, tag_context)
 
@@ -330,6 +330,9 @@ def _build_field_tree_from_templates(filename_template: str, path_template: Opti
             root, segments = TAGGER.parse_expression(expr)
             attr_path = [str(v) for t, v in segments if t == "attr"]
             if root == "scene":
+                if attr_path and attr_path[0] == "year":
+                    add_path(tree, ["date"])
+                    continue
                 if attr_path and not TAGGER.has_root_field("scene", attr_path[0]):
                     continue
                 add_path(tree, attr_path)

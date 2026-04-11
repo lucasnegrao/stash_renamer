@@ -62,6 +62,18 @@ class GraphQLTagger:
         root, segments = self._parse_expr(expr)
         if not root:
             return ""
+
+        # Special virtual tag: $scene.year -> first 4 digits from $scene.date
+        if root == "scene" and len(segments) == 1 and segments[0][0] == "attr" and segments[0][1] == "year":
+            scene_obj = context.get("scene")
+            if isinstance(scene_obj, dict):
+                date_val = scene_obj.get("date")
+                if date_val is None:
+                    return ""
+                m = re.match(r"\s*(\d{4})", str(date_val))
+                return m.group(1) if m else ""
+            return ""
+
         value = context.get(root)
         if value is None:
             return ""
