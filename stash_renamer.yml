@@ -36,7 +36,7 @@ settings:
     description: Enable debug output for troubleshooting
 exec:
   - python3
-  - "{pluginDir}/plugin_wrapper.py"
+  - "{pluginDir}/stash_renamer_plugin.py"
 interface: raw
 tasks:
   - name: Rename Scenes (Dry Run)
@@ -51,4 +51,3 @@ tasks:
       mode: rename
       dry_run: "false"
       debugMode: "false"
-

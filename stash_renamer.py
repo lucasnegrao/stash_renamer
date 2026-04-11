@@ -24,10 +24,23 @@ FILE_MOVER: Optional[FileMover] = None
 USING_STASH_LOG = False
 stash_log = None
 try:
-    import log as stash_log  # type: ignore
+    import stash_log as stash_log  # type: ignore
     USING_STASH_LOG = True
 except ImportError:
-    pass
+    try:
+        import log as stash_log  # type: ignore
+        USING_STASH_LOG = True
+    except ImportError:
+        pass
+
+
+def emitProgress(progress: float) -> None:
+    if not (USING_STASH_LOG and stash_log):
+        return
+    try:
+        stash_log.LogProgress(progress)
+    except Exception:
+        pass
 
 
 def logPrint(msg: str):
@@ -460,6 +473,7 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
     scenes = _normalize_scenes(scenes)
     if not scenes:
         logPrint("[Warn] There are no scenes to process")
+        emitProgress(1.0)
         return operations if collect_operations else None
 
     total_scenes = len(scenes)
@@ -472,6 +486,7 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
     def _log_progress() -> None:
         if total_scenes <= 0:
             return
+        emitProgress(processed / total_scenes)
         if processed == 1 or processed == total_scenes or processed % 25 == 0:
             pct = int((processed / total_scenes) * 100)
             logPrint(
@@ -711,6 +726,7 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         f"[PROGRESS] Completed {processed}/{total_scenes} "
         f"success={success_count} skipped={skipped_count} errors={error_count}"
     )
+    emitProgress(1.0)
     return operations if collect_operations else None
 
 
@@ -758,6 +774,7 @@ def run(options: dict, collect_operations: bool = False):
         USING_LOG = options.get("using_log", USING_LOG)
         DRY_RUN = options.get("dry_run", DRY_RUN)
         DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
+        emitProgress(0.0)
 
         # Build the introspection-driven tagger.
         TAGGER = GraphQLTagger(

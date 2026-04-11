@@ -56,6 +56,81 @@
     return String(jobId);
   }
 
+  function subscribeJobs(onUpdate, onError) {
+    const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsProto}://${window.location.host}/graphql`;
+    const ws = new WebSocket(wsUrl, "graphql-transport-ws");
+    const subId = `jobs-sub-${Date.now()}`;
+    let closed = false;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "connection_init", payload: {} }));
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === "connection_ack") {
+          ws.send(
+            JSON.stringify({
+              id: subId,
+              type: "subscribe",
+              payload: {
+                query: `subscription JobsSubscribe {
+                  jobsSubscribe {
+                    type
+                    job {
+                      id
+                      status
+                      description
+                      progress
+                      error
+                      addTime
+                      startTime
+                      endTime
+                      subTasks
+                    }
+                  }
+                }`,
+                variables: {},
+              },
+            })
+          );
+          return;
+        }
+        if (msg.type === "next" && msg.payload?.data?.jobsSubscribe) {
+          onUpdate(msg.payload.data.jobsSubscribe);
+          return;
+        }
+        if (msg.type === "error") {
+          onError(new Error(`jobsSubscribe error: ${JSON.stringify(msg.payload)}`));
+        }
+      } catch (e) {
+        onError(e);
+      }
+    };
+
+    ws.onerror = () => {
+      onError(new Error("jobsSubscribe websocket error"));
+    };
+
+    ws.onclose = () => {
+      if (!closed) {
+        onError(new Error("jobsSubscribe websocket closed"));
+      }
+    };
+
+    return () => {
+      closed = true;
+      try {
+        ws.send(JSON.stringify({ id: subId, type: "complete" }));
+      } catch (_) {}
+      try {
+        ws.close();
+      } catch (_) {}
+    };
+  }
+
   // Fetch plugin settings from Stash configuration
   async function fetchPluginSettings(pluginId = "stash_renamer") {
     const query = `
@@ -262,6 +337,10 @@
     const [status, setStatus] = React.useState("");
     const [running, setRunning] = React.useState(false);
     const [operations, setOperations] = React.useState([]);
+    const [activeJobId, setActiveJobId] = React.useState("");
+    const [activeJob, setActiveJob] = React.useState(null);
+    const [jobSubState, setJobSubState] = React.useState("connecting");
+    const [jobEvents, setJobEvents] = React.useState([]);
     const [sortField, setSortField] = React.useState(null);
     const [sortDirection, setSortDirection] = React.useState("asc");
 
@@ -320,6 +399,61 @@
       Array.from(setVal)
         .sort((a, b) => a.localeCompare(b))
         .join(",");
+
+    const isJobTerminal = (job) => {
+      if (!job) return false;
+      const s = String(job.status || "").toUpperCase();
+      return (
+        s === "FINISHED" ||
+        s === "FAILED" ||
+        s === "CANCELLED" ||
+        s === "CANCELED" ||
+        Boolean(job.endTime)
+      );
+    };
+
+    const loadRecentRenameOperations = async () => {
+      const response = await fetch("/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
+            runPluginOperation(plugin_id: $plugin_id, args: $args)
+          }`,
+          variables: {
+            plugin_id: "stash_renamer",
+            args: {
+              mode: "list_operations",
+              list_operations: "true",
+              debugMode: "false",
+            },
+          },
+        }),
+      });
+      const result = await response.json();
+      if (result.errors && result.errors.length) {
+        const msg = result.errors
+          .map((e) => e?.message || JSON.stringify(e))
+          .join(" | ");
+        throw new Error(msg);
+      }
+      const pluginData = result?.data?.runPluginOperation || {};
+      const rows = Array.isArray(pluginData?.operations)
+        ? pluginData.operations
+        : Array.isArray(pluginData?.output?.operations)
+        ? pluginData.output.operations
+        : [];
+      const mapped = rows.map((r) => ({
+        scene_id: r.scene_id,
+        status: r.undone ? "undone" : r.success ? "success" : "error",
+        old_path: r.old_path,
+        new_path: r.new_path,
+        error: r.error || "",
+        old_filename: r.old_name || "",
+        new_filename: r.new_name || "",
+      }));
+      setOperations(mapped);
+    };
 
     // Sort function
     const handleSort = (field) => {
@@ -387,6 +521,65 @@
         setCurrentPage(totalPages);
       }
     }, [currentPage, totalPages]);
+
+    React.useEffect(() => {
+      let mounted = true;
+      const unsubscribe = subscribeJobs(
+        async (evt) => {
+          if (!mounted) return;
+          setJobSubState("connected");
+          setJobEvents((prev) => {
+            const next = [
+              {
+                time: new Date().toISOString(),
+                type: evt?.type || "",
+                job: evt?.job || null,
+              },
+              ...prev,
+            ];
+            return next.slice(0, 100);
+          });
+          const job = evt?.job || null;
+          if (!job || !activeJobId) return;
+          if (String(job.id) !== String(activeJobId)) return;
+          setActiveJob(job);
+          const pct =
+            typeof job.progress === "number"
+              ? Math.round(Math.max(0, Math.min(1, job.progress)) * 100)
+              : null;
+          if (isJobTerminal(job)) {
+            if (String(job.status || "").toUpperCase() === "FAILED" || job.error) {
+              setStatus(`Task ${job.id} failed: ${job.error || job.status || "unknown error"}`);
+            } else {
+              setStatus(`Task ${job.id} finished. Loading operations...`);
+            }
+            try {
+              await loadRecentRenameOperations();
+              if (!(String(job.status || "").toUpperCase() === "FAILED" || job.error)) {
+                setStatus(`Task ${job.id} finished. Recent operations loaded.`);
+              }
+            } catch (e) {
+              setStatus(`Task ${job.id} finished, but loading operations failed: ${e?.message || String(e)}`);
+            }
+          } else {
+            setStatus(
+              pct == null
+                ? `Task ${job.id}: ${job.status || "running"}...`
+                : `Task ${job.id}: ${job.status || "running"} (${pct}%)`
+            );
+          }
+        },
+        (err) => {
+          if (!mounted) return;
+          console.warn("jobsSubscribe unavailable:", err);
+          setJobSubState("disconnected");
+        }
+      );
+      return () => {
+        mounted = false;
+        if (unsubscribe) unsubscribe();
+      };
+    }, [activeJobId]);
 
     const updatePathFilter = (idx, patch) => {
       setPathFilters((prev) =>
@@ -654,8 +847,18 @@
                 : "Scene Renamer: filtered rename",
             argsMap,
           });
+          setActiveJobId(String(jobId));
+          setActiveJob({
+            id: String(jobId),
+            status: "QUEUED",
+            progress: 0,
+            description:
+              selectedCount > 0
+                ? `Scene Renamer: ${selectedCount} selected scenes`
+                : "Scene Renamer: filtered rename",
+          });
           setStatus(
-            `Rename queued as task job ${jobId}. Track progress in Tasks/Jobs and plugin logs.`
+            `Rename queued as task job ${jobId}. Waiting for task updates...`
           );
         }
       } catch (error) {
@@ -1695,6 +1898,81 @@
           { className: "alert alert-info mt-3" },
           status
         ),
+
+      React.createElement(
+        "div",
+        { className: "card mt-3" },
+        React.createElement(
+          "div",
+          { className: "card-header py-2" },
+          "Task Monitor"
+        ),
+        React.createElement(
+          "div",
+          { className: "card-body py-2" },
+          React.createElement(
+            "div",
+            { className: "small" },
+            `Subscription: ${jobSubState}`
+          ),
+          activeJob &&
+            React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(
+                "div",
+                { className: "small" },
+                `Job: ${activeJob.id} | Status: ${activeJob.status || "unknown"}`
+              ),
+              typeof activeJob.progress === "number" &&
+                React.createElement(
+                  "div",
+                  { className: "progress mt-2", style: { height: "8px" } },
+                  React.createElement("div", {
+                    className: "progress-bar",
+                    role: "progressbar",
+                    style: {
+                      width: `${Math.round(
+                        Math.max(0, Math.min(1, activeJob.progress)) * 100
+                      )}%`,
+                    },
+                  })
+                ),
+              activeJob.error &&
+                React.createElement(
+                  "div",
+                  { className: "text-danger small mt-2" },
+                  String(activeJob.error)
+                )
+            ),
+          jobEvents.length > 0 &&
+            React.createElement(
+              "details",
+              { className: "mt-2" },
+              React.createElement("summary", { className: "small" }, "Recent Job Events"),
+              React.createElement(
+                "div",
+                {
+                  className: "small mt-2",
+                  style: { maxHeight: "140px", overflow: "auto" },
+                },
+                jobEvents.slice(0, 20).map((e, i) =>
+                  React.createElement(
+                    "div",
+                    { key: `${e.time}-${i}` },
+                    `${e.time} | ${e.type || ""} | ${e.job?.id || ""} | ${
+                      e.job?.status || ""
+                    } | ${
+                      typeof e.job?.progress === "number"
+                        ? `${Math.round(Math.max(0, Math.min(1, e.job.progress)) * 100)}%`
+                        : ""
+                    }`
+                  )
+                )
+              )
+            )
+        )
+      ),
 
       // Operations list
       operations.length > 0 &&
