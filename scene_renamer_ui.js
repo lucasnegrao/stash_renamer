@@ -294,13 +294,9 @@
         sceneFilter.organized = organized === "true";
       }
       if (grouped === "true") {
-        sceneFilter.groups_filter = {
-          name: { value: "", modifier: "NOT_NULL" },
-        };
+        sceneFilter.groups = { modifier: "NOT_NULL" };
       } else if (grouped === "false") {
-        sceneFilter.groups_filter = {
-          name: { value: "", modifier: "IS_NULL" },
-        };
+        sceneFilter.groups = { modifier: "IS_NULL" };
       }
       if (stashIDEndpoint && stashIDEndpoint.trim()) {
         sceneFilter.stash_id_endpoint = {
