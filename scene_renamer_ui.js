@@ -146,8 +146,9 @@
     const [dryRun, setDryRun] = React.useState(true);
     // Path builder state
     const [pathTemplate, setPathTemplate] = React.useState("");
-    const [pathLike, setPathLike] = React.useState("");
-    const [excludePathLike, setExcludePathLike] = React.useState("");
+    const [pathFilters, setPathFilters] = React.useState([
+      { value: "", negate: false },
+    ]);
     const [debugMode, setDebugMode] = React.useState(false);
     const [status, setStatus] = React.useState("");
     const [running, setRunning] = React.useState(false);
@@ -189,6 +190,8 @@
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(25);
+    const [filtersCollapsed, setFiltersCollapsed] = React.useState(false);
+    const [prefsHydrated, setPrefsHydrated] = React.useState(false);
 
     // Helpers for CSV <-> Set
     const csvToSet = (csv) =>
@@ -270,6 +273,16 @@
       }
     }, [currentPage, totalPages]);
 
+    const updatePathFilter = (idx, patch) => {
+      setPathFilters((prev) =>
+        prev.map((row, i) => (i === idx ? { ...row, ...patch } : row))
+      );
+    };
+    const addPathFilter = () =>
+      setPathFilters((prev) => [...prev, { value: "", negate: false }]);
+    const removePathFilter = (idx) =>
+      setPathFilters((prev) => prev.filter((_, i) => i !== idx));
+
     const buildNameRegex = (csv) => {
       const names = (csv || "")
         .split(",")
@@ -281,59 +294,74 @@
     };
 
     const buildSceneSelectionInput = (mode) => {
-      const sceneFilter = {};
-      if (pathLike && pathLike.trim()) {
-        sceneFilter.path = { value: pathLike.trim(), modifier: "INCLUDES" };
-      }
-      if (excludePathLike && excludePathLike.trim()) {
-        sceneFilter.NOT = {
-          path: { value: excludePathLike.trim(), modifier: "INCLUDES" },
-        };
-      }
+      let sceneFilter = null;
+      const appendCondition = (cond) => {
+        if (!cond) return;
+        if (!sceneFilter) {
+          sceneFilter = cond;
+        } else {
+          sceneFilter = { AND: sceneFilter, ...cond };
+        }
+      };
+      pathFilters
+        .map((p) => ({
+          value: String(p?.value || "").trim(),
+          negate: Boolean(p?.negate),
+        }))
+        .filter((p) => p.value)
+        .forEach((p) => {
+          appendCondition(
+            p.negate
+              ? { NOT: { path: { value: p.value, modifier: "INCLUDES" } } }
+              : { path: { value: p.value, modifier: "INCLUDES" } }
+          );
+        });
       if (organized !== "any") {
-        sceneFilter.organized = organized === "true";
+        appendCondition({ organized: organized === "true" });
       }
       if (grouped === "true") {
-        sceneFilter.groups = { modifier: "NOT_NULL" };
+        appendCondition({ groups: { modifier: "NOT_NULL" } });
       } else if (grouped === "false") {
-        sceneFilter.groups = { modifier: "IS_NULL" };
+        appendCondition({ groups: { modifier: "IS_NULL" } });
       }
       if (stashIDEndpoint && stashIDEndpoint.trim()) {
-        sceneFilter.stash_id_endpoint = {
-          endpoint: stashIDEndpoint.trim(),
-          modifier: "EQUALS",
-        };
+        appendCondition({
+          stash_id_endpoint: {
+            endpoint: stashIDEndpoint.trim(),
+            modifier: "EQUALS",
+          },
+        });
       }
       const tagsRegex = buildNameRegex(filterTags);
       if (tagsRegex) {
-        sceneFilter.tags_filter = {
-          name: { value: tagsRegex, modifier: "MATCHES_REGEX" },
-        };
+        appendCondition({
+          tags_filter: { name: { value: tagsRegex, modifier: "MATCHES_REGEX" } },
+        });
       }
       const groupsRegex = buildNameRegex(filterGroups);
       if (groupsRegex) {
-        sceneFilter.groups_filter = {
-          name: { value: groupsRegex, modifier: "MATCHES_REGEX" },
-        };
+        appendCondition({
+          groups_filter: { name: { value: groupsRegex, modifier: "MATCHES_REGEX" } },
+        });
       }
       const studiosRegex = buildNameRegex(filterStudio);
       if (studiosRegex) {
-        sceneFilter.studios_filter = {
-          name: { value: studiosRegex, modifier: "MATCHES_REGEX" },
-        };
+        appendCondition({
+          studios_filter: { name: { value: studiosRegex, modifier: "MATCHES_REGEX" } },
+        });
       }
       if (filterPerformerGenders.length) {
-        sceneFilter.performers_filter = {
-          gender: {
-            value: filterPerformerGenders,
-            modifier: "INCLUDES",
+        appendCondition({
+          performers_filter: {
+            gender: {
+              value: filterPerformerGenders,
+              modifier: "INCLUDES",
+            },
           },
-        };
+        });
       }
 
-      const sceneFilterPayload = Object.keys(sceneFilter).length
-        ? sceneFilter
-        : null;
+      const sceneFilterPayload = sceneFilter;
       const ids =
         mode !== "dry_run" && selectedScenes.size > 0
           ? Array.from(selectedScenes)
@@ -349,6 +377,7 @@
       setRunning(true);
       setStatus("Running...");
       setOperations([]); // Clear previous results
+      setFiltersCollapsed(true);
 
       try {
         const { sceneFilter, ids, findFilter } = buildSceneSelectionInput(mode);
@@ -472,25 +501,20 @@
       fetchPluginSettings("stash_renamer")
         .then((settings) => {
           if (!mounted || !settings) return;
+          const hasLocal = Boolean(localStorage.getItem(USER_PREFS_KEY));
+          if (hasLocal) return;
 
           if (settings.filename_template || settings.template) {
             setTemplate(settings.filename_template ?? settings.template);
           }
 
-          if (
-            settings.pathLike !== undefined ||
-            settings.path_like !== undefined
-          ) {
-            setPathLike(settings.pathLike ?? settings.path_like ?? "");
-          }
-          if (
-            settings.excludePathLike !== undefined ||
-            settings.exclude_path_like !== undefined
-          ) {
-            setExcludePathLike(
-              settings.excludePathLike ?? settings.exclude_path_like ?? ""
-            );
-          }
+          const like = settings.pathLike ?? settings.path_like ?? "";
+          const excl =
+            settings.excludePathLike ?? settings.exclude_path_like ?? "";
+          const loadedPathFilters = [];
+          if (like) loadedPathFilters.push({ value: String(like), negate: false });
+          if (excl) loadedPathFilters.push({ value: String(excl), negate: true });
+          if (loadedPathFilters.length) setPathFilters(loadedPathFilters);
 
           setDryRun(toBool(settings.dryRun ?? settings.dry_run, dryRun));
           setDebugMode(
@@ -535,9 +559,15 @@
             if (p.dryRun !== undefined) setDryRun(Boolean(p.dryRun));
             if (p.pathTemplate !== undefined)
               setPathTemplate(String(p.pathTemplate));
-            if (p.pathLike !== undefined) setPathLike(String(p.pathLike));
-            if (p.excludePathLike !== undefined)
-              setExcludePathLike(String(p.excludePathLike));
+            if (Array.isArray(p.pathFilters)) {
+              const normalized = p.pathFilters
+                .map((x) => ({
+                  value: String(x?.value || ""),
+                  negate: Boolean(x?.negate),
+                }))
+                .filter((x) => x.value);
+              setPathFilters(normalized.length ? normalized : [{ value: "", negate: false }]);
+            }
             if (p.debugMode !== undefined) setDebugMode(Boolean(p.debugMode));
             if (p.organized !== undefined) setOrganized(String(p.organized));
             if (p.grouped !== undefined) setGrouped(String(p.grouped));
@@ -550,12 +580,16 @@
               setStashIDEndpoint(String(p.stashIDEndpoint));
             if (p.pageSize !== undefined && Number(p.pageSize) > 0)
               setPageSize(Number(p.pageSize));
+            if (p.filtersCollapsed !== undefined)
+              setFiltersCollapsed(Boolean(p.filtersCollapsed));
             if (Array.isArray(p.filterPerformerGenders))
               setFilterPerformerGenders(
                 p.filterPerformerGenders.map((x) => String(x))
               );
           } catch (e) {
             console.warn("Failed to load user-space prefs:", e);
+          } finally {
+            setPrefsHydrated(true);
           }
         });
 
@@ -565,6 +599,7 @@
     }, []);
 
     React.useEffect(() => {
+      if (!prefsHydrated) return;
       try {
         localStorage.setItem(
           USER_PREFS_KEY,
@@ -572,8 +607,7 @@
             template,
             dryRun,
             pathTemplate,
-            pathLike,
-            excludePathLike,
+            pathFilters,
             debugMode,
             organized,
             grouped,
@@ -582,6 +616,7 @@
             filterTags,
             stashIDEndpoint,
             pageSize,
+            filtersCollapsed,
             filterPerformerGenders,
           })
         );
@@ -592,8 +627,7 @@
       template,
       dryRun,
       pathTemplate,
-      pathLike,
-      excludePathLike,
+      pathFilters,
       debugMode,
       organized,
       grouped,
@@ -602,7 +636,9 @@
       filterTags,
       stashIDEndpoint,
       pageSize,
+      filtersCollapsed,
       filterPerformerGenders,
+      prefsHydrated,
     ]);
 
     // Lazy-load tags/groups on first open
@@ -761,91 +797,119 @@
         )
       ),
 
-      // Path filters
       React.createElement("hr", null),
-      React.createElement("h5", null, "Path Filters (Optional)"),
-      // Include
       React.createElement(
         "div",
-        { className: "form-group row" },
+        { className: "d-flex align-items-center justify-content-between" },
+        React.createElement("h5", { className: "mb-0" }, "Filters"),
         React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Include Path:"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement("input", {
-            type: "text",
-            className: "form-control",
-            value: pathLike,
-            onChange: (e) => setPathLike(e.target.value),
-            placeholder: "e.g., /mnt/media/scenes/",
-          }),
-          React.createElement(
-            "small",
-            { className: "form-text text-muted" },
-            "Only rename files with paths containing this substring"
-          )
+          Button,
+          {
+            variant: "secondary",
+            size: "sm",
+            onClick: () => setFiltersCollapsed((v) => !v),
+          },
+          filtersCollapsed ? "Expand" : "Collapse"
         )
       ),
-      // Exclude
-      React.createElement(
-        "div",
-        { className: "form-group row" },
+      !filtersCollapsed &&
         React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Exclude Path:"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement("input", {
-            type: "text",
-            className: "form-control",
-            value: excludePathLike,
-            onChange: (e) => setExcludePathLike(e.target.value),
-            placeholder: "e.g., /mnt/media/temp/",
-          }),
+          React.Fragment,
+          null,
           React.createElement(
-            "small",
-            { className: "form-text text-muted" },
-            "Skip files with paths containing this substring"
-          )
-        )
-      ),
-      // Filter by stash_id_endpoint
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Stash id endpoint:"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement("input", {
-            type: "text",
-            className: "form-control",
-            value: stashIDEndpoint,
-            onChange: (e) => setStashIDEndpoint(e.target.value),
-            placeholder: "e.g., https://stashdb.org/graphql",
-          }),
+            "div",
+            { className: "form-group row mt-3" },
+            React.createElement(
+              "label",
+              { className: "col-sm-2 col-form-label" },
+              "Path Filters:"
+            ),
+            React.createElement(
+              "div",
+              { className: "col-sm-10" },
+              pathFilters.map((pf, idx) =>
+                React.createElement(
+                  "div",
+                  { key: idx, className: "d-flex align-items-center mb-2" },
+                  React.createElement("input", {
+                    type: "text",
+                    className: "form-control",
+                    value: pf.value,
+                    onChange: (e) =>
+                      updatePathFilter(idx, { value: e.target.value }),
+                    placeholder: "Path contains... e.g. /mnt/media/",
+                  }),
+                  React.createElement(
+                    "div",
+                    { className: "form-check ml-2 mb-0" },
+                    React.createElement("input", {
+                      type: "checkbox",
+                      className: "form-check-input",
+                      id: `path-negate-${idx}`,
+                      checked: Boolean(pf.negate),
+                      onChange: (e) =>
+                        updatePathFilter(idx, { negate: e.target.checked }),
+                    }),
+                    React.createElement(
+                      "label",
+                      {
+                        className: "form-check-label",
+                        htmlFor: `path-negate-${idx}`,
+                      },
+                      "Negate"
+                    )
+                  ),
+                  React.createElement(
+                    Button,
+                    {
+                      className: "ml-2",
+                      variant: "outline-secondary",
+                      size: "sm",
+                      disabled: pathFilters.length <= 1,
+                      onClick: () => removePathFilter(idx),
+                    },
+                    "Remove"
+                  )
+                )
+              ),
+              React.createElement(
+                Button,
+                { variant: "secondary", size: "sm", onClick: addPathFilter },
+                "Add Path Filter"
+              ),
+              React.createElement(
+                "small",
+                { className: "form-text text-muted" },
+                "Negate means exclude matching paths."
+              )
+            )
+          ),
+          // Filter by stash_id_endpoint
           React.createElement(
-            "small",
-            { className: "form-text text-muted" },
-            "Only include files with this endpoint"
-          )
-        )
-      ),
-
-      // Selection and Filters
-      React.createElement("hr", null),
-      React.createElement("h5", null, "Selection and Filters"),
+            "div",
+            { className: "form-group row" },
+            React.createElement(
+              "label",
+              { className: "col-sm-2 col-form-label" },
+              "Stash id endpoint:"
+            ),
+            React.createElement(
+              "div",
+              { className: "col-sm-10" },
+              React.createElement("input", {
+                type: "text",
+                className: "form-control",
+                value: stashIDEndpoint,
+                onChange: (e) => setStashIDEndpoint(e.target.value),
+                placeholder: "e.g., https://stashdb.org/graphql",
+              }),
+              React.createElement(
+                "small",
+                { className: "form-text text-muted" },
+                "Only include files with this endpoint"
+              )
+            )
+          ),
       // Performer genders filter
       React.createElement(
         "div",
@@ -1304,6 +1368,7 @@
             )
         )
       ),
+        ),
 
       // Run button
       React.createElement(
@@ -1468,16 +1533,6 @@
                   React.createElement(
                     "th",
                     {
-                      onClick: () => handleSort("scene_id"),
-                      style: { cursor: "pointer", userSelect: "none" },
-                    },
-                    "Scene ID ",
-                    sortField === "scene_id" &&
-                      (sortDirection === "asc" ? "▲" : "▼")
-                  ),
-                  React.createElement(
-                    "th",
-                    {
                       onClick: () => handleSort("old_path"),
                       style: { cursor: "pointer", userSelect: "none" },
                     },
@@ -1495,16 +1550,6 @@
                     sortField === "new_path" &&
                       (sortDirection === "asc" ? "▲" : "▼")
                   ),
-                  React.createElement(
-                    "th",
-                    {
-                      onClick: () => handleSort("error"),
-                      style: { cursor: "pointer", userSelect: "none" },
-                    },
-                    "Error ",
-                    sortField === "error" &&
-                      (sortDirection === "asc" ? "▲" : "▼")
-                  )
                 )
               ),
               React.createElement(
@@ -1536,11 +1581,14 @@
                               : op.status === "error"
                               ? "badge badge-danger"
                               : "badge badge-secondary",
+                          title:
+                            op.status === "error"
+                              ? op.error || "Error"
+                              : undefined,
                         },
                         op.status
                       )
                     ),
-                    React.createElement("td", null, op.scene_id),
                     React.createElement(
                       "td",
                       {
@@ -1559,11 +1607,6 @@
                       },
                       op.new_path || ""
                     ),
-                    React.createElement(
-                      "td",
-                      { className: "text-danger" },
-                      op.error || ""
-                    )
                   )
                 )
               )
