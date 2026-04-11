@@ -191,7 +191,7 @@
         React.createElement(
           NavLink,
           {
-            to: "/scene-renamer/undo",
+            to: "/scene-renamer-undo",
             exact: true,
             className: "nav-link",
             activeClassName: "active",
@@ -205,7 +205,7 @@
         React.createElement(
           NavLink,
           {
-            to: "/scene-renamer/help",
+            to: "/scene-renamer-help",
             exact: true,
             className: "nav-link",
             activeClassName: "active",
