@@ -44,18 +44,11 @@ tasks:
     defaultArgs:
       mode: dry_run
       dry_run: "true"
+      debugMode: "false"
   - name: Rename Scenes  
     description: Rename scene files based on configured template
     defaultArgs:
       mode: rename
       dry_run: "false"
-  - name: Rename Tagged Scenes
-    description: Rename scenes with specific tags
-    defaultArgs:
-      mode: tag_rename
-      dry_run: "false"
-hooks:
-  - name: Scene Renamer UI
-    description: Interactive UI for configuring and running scene renaming
-    triggeredBy:
-      - Scene.Update.Post
+      debugMode: "false"
+

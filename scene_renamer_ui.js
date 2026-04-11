@@ -23,6 +23,39 @@
     return json.data;
   }
 
+  async function runPluginTask({ pluginId, taskName, description, argsMap }) {
+    const resp = await fetch("/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `mutation RunPluginTask($plugin_id: ID!, $task_name: String, $description: String, $args_map: Map) {
+          runPluginTask(
+            plugin_id: $plugin_id,
+            task_name: $task_name,
+            description: $description,
+            args_map: $args_map
+          )
+        }`,
+        variables: {
+          plugin_id: pluginId,
+          task_name: taskName || null,
+          description: description || null,
+          args_map: argsMap || {},
+        },
+      }),
+    });
+    const result = await resp.json();
+    if (result.errors && result.errors.length) {
+      const err = result.errors
+        .map((e) => e?.message || JSON.stringify(e))
+        .join(" | ");
+      throw new Error(err);
+    }
+    const jobId = result?.data?.runPluginTask;
+    if (!jobId) throw new Error("runPluginTask returned no job ID");
+    return String(jobId);
+  }
+
   // Fetch plugin settings from Stash configuration
   async function fetchPluginSettings(pluginId = "stash_renamer") {
     const query = `
@@ -586,20 +619,43 @@
             : [];
         };
 
-        setStatus(
-          mode === "dry_run"
-            ? "Running dry run..."
-            : "Running rename... live progress is in Settings -> Logs -> Plugins."
-        );
-        const operationsPayload = await callRenameOperation(ids, "Run");
-        if (operationsPayload.length) {
-          setOperations(operationsPayload);
-          setStatus(
-            `Completed! Found ${operationsPayload.length} operations.`
-          );
+        if (mode === "dry_run") {
+          setStatus("Running dry run...");
+          const operationsPayload = await callRenameOperation(ids, "Run");
+          if (operationsPayload.length) {
+            setOperations(operationsPayload);
+            setStatus(
+              `Completed! Found ${operationsPayload.length} operations.`
+            );
+          } else {
+            setStatus(
+              "Completed! No operations returned. For live progress, open Settings -> Logs -> Plugins."
+            );
+          }
         } else {
+          const argsMap = {
+            mode: "rename",
+            filename_template: template,
+            path_template: pathTemplate,
+            dry_run: "false",
+            debugMode: debugMode.toString(),
+            scene_filter: sceneFilter,
+            ids: ids,
+            find_filter: findFilter,
+          };
+          const selectedCount = Array.isArray(ids) ? ids.length : 0;
+          setStatus("Queueing rename task...");
+          const jobId = await runPluginTask({
+            pluginId: "stash_renamer",
+            taskName: "Rename Scenes",
+            description:
+              selectedCount > 0
+                ? `Scene Renamer: ${selectedCount} selected scenes`
+                : "Scene Renamer: filtered rename",
+            argsMap,
+          });
           setStatus(
-            "Completed! No operations returned. For live progress, open Settings -> Logs -> Plugins."
+            `Rename queued as task job ${jobId}. Track progress in Tasks/Jobs and plugin logs.`
           );
         }
       } catch (error) {
