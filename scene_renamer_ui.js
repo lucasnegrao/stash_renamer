@@ -59,18 +59,24 @@
       query findTags($filter: FindFilterType!) {
         findTags(filter: $filter) {
           count
-          tags { name }
+          tags { id name }
         }
       }
     `;
     const perPage = 100;
     let page = 1;
     let out = [];
+    const nameToId = {};
     for (;;) {
       const data = await gql(query, { filter: { per_page: perPage, page } });
       const res = (data && data.findTags) || {};
-      const list = (res.tags || []).map((t) => t.name).filter(Boolean);
-      out = out.concat(list);
+      const list = (res.tags || [])
+        .map((t) => ({ id: t.id, name: t.name }))
+        .filter((t) => t.id && t.name);
+      list.forEach((t) => {
+        out.push(t.name);
+        nameToId[t.name] = t.id;
+      });
       const count = typeof res.count === "number" ? res.count : null;
       if (count != null) {
         if (page * perPage >= count) break;
@@ -80,7 +86,10 @@
       page += 1;
     }
     // unique + sort
-    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+    return {
+      names: Array.from(new Set(out)).sort((a, b) => a.localeCompare(b)),
+      nameToId,
+    };
   }
 
   async function fetchAllGroups() {
@@ -88,18 +97,24 @@
       query findGroups($filter: FindFilterType!) {
         findGroups(filter: $filter) {
           count
-          groups { name }
+          groups { id name }
         }
       }
     `;
     const perPage = 100;
     let page = 1;
     let out = [];
+    const nameToId = {};
     for (;;) {
       const data = await gql(query, { filter: { per_page: perPage, page } });
       const res = (data && data.findGroups) || {};
-      const list = (res.groups || []).map((g) => g.name).filter(Boolean);
-      out = out.concat(list);
+      const list = (res.groups || [])
+        .map((g) => ({ id: g.id, name: g.name }))
+        .filter((g) => g.id && g.name);
+      list.forEach((g) => {
+        out.push(g.name);
+        nameToId[g.name] = g.id;
+      });
       const count = typeof res.count === "number" ? res.count : null;
       if (count != null) {
         if (page * perPage >= count) break;
@@ -108,7 +123,10 @@
       }
       page += 1;
     }
-    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+    return {
+      names: Array.from(new Set(out)).sort((a, b) => a.localeCompare(b)),
+      nameToId,
+    };
   }
 
   // New: fetch all studios
@@ -117,18 +135,24 @@
       query findStudios($filter: FindFilterType!) {
         findStudios(filter: $filter) {
           count
-          studios { name }
+          studios { id name }
         }
       }
     `;
     const perPage = 100;
     let page = 1;
     let out = [];
+    const nameToId = {};
     for (;;) {
       const data = await gql(query, { filter: { per_page: perPage, page } });
       const res = (data && data.findStudios) || {};
-      const list = (res.studios || []).map((s) => s.name).filter(Boolean);
-      out = out.concat(list);
+      const list = (res.studios || [])
+        .map((s) => ({ id: s.id, name: s.name }))
+        .filter((s) => s.id && s.name);
+      list.forEach((s) => {
+        out.push(s.name);
+        nameToId[s.name] = s.id;
+      });
       const count = typeof res.count === "number" ? res.count : null;
       if (count != null) {
         if (page * perPage >= count) break;
@@ -137,7 +161,10 @@
       }
       page += 1;
     }
-    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+    return {
+      names: Array.from(new Set(out)).sort((a, b) => a.localeCompare(b)),
+      nameToId,
+    };
   }
 
   // Scene Renamer UI Page
@@ -171,9 +198,12 @@
     const [stashIDEndpoint, setStashIDEndpoint] = React.useState("");
     // Available catalogs and picker states
     const [availableTags, setAvailableTags] = React.useState([]);
+    const [tagNameToId, setTagNameToId] = React.useState({});
     const [availableGroups, setAvailableGroups] = React.useState([]);
+    const [groupNameToId, setGroupNameToId] = React.useState({});
     // New: studios catalog
     const [availableStudios, setAvailableStudios] = React.useState([]);
+    const [studioNameToId, setStudioNameToId] = React.useState({});
     const [loadingTags, setLoadingTags] = React.useState(false);
     const [loadingGroups, setLoadingGroups] = React.useState(false);
     // New: loading studios
@@ -296,8 +326,20 @@
       return `^(${names.join("|")})$`;
     };
 
-    const buildSceneSelectionInput = (mode) => {
+    const parseCsvNames = (csv) =>
+      (csv || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    const resolveIdsFromCsv = (csv, nameToId) =>
+      parseCsvNames(csv).map((name) => nameToId[name]).filter(Boolean);
+
+    const buildSceneSelectionInput = (mode, idMaps = {}) => {
       let sceneFilter = null;
+      const tagsMap = idMaps.tagsMap || tagNameToId;
+      const groupsMap = idMaps.groupsMap || groupNameToId;
+      const studiosMap = idMaps.studiosMap || studioNameToId;
       const appendCondition = (cond) => {
         if (!cond) return;
         if (!sceneFilter) {
@@ -337,34 +379,64 @@
         });
       }
       const tagsRegex = buildNameRegex(filterTags);
-      if (tagsRegex) {
+      const tagIds = resolveIdsFromCsv(filterTags, tagsMap);
+      if (tagIds.length) {
+        appendCondition({
+          tags: {
+            value: tagIds,
+            modifier: filterTagsNegate ? "EXCLUDES" : "INCLUDES",
+          },
+        });
+      } else if (tagsRegex) {
         appendCondition({
           tags_filter: {
             name: {
               value: tagsRegex,
-              modifier: filterTagsNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+              modifier: filterTagsNegate
+                ? "NOT_MATCHES_REGEX"
+                : "MATCHES_REGEX",
             },
           },
         });
       }
       const groupsRegex = buildNameRegex(filterGroups);
-      if (groupsRegex) {
+      const groupIds = resolveIdsFromCsv(filterGroups, groupsMap);
+      if (groupIds.length) {
+        appendCondition({
+          groups: {
+            value: groupIds,
+            modifier: filterGroupsNegate ? "EXCLUDES" : "INCLUDES",
+          },
+        });
+      } else if (groupsRegex) {
         appendCondition({
           groups_filter: {
             name: {
               value: groupsRegex,
-              modifier: filterGroupsNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+              modifier: filterGroupsNegate
+                ? "NOT_MATCHES_REGEX"
+                : "MATCHES_REGEX",
             },
           },
         });
       }
       const studiosRegex = buildNameRegex(filterStudio);
-      if (studiosRegex) {
+      const studioIds = resolveIdsFromCsv(filterStudio, studiosMap);
+      if (studioIds.length) {
+        appendCondition({
+          studios: {
+            value: studioIds,
+            modifier: filterStudioNegate ? "EXCLUDES" : "INCLUDES",
+          },
+        });
+      } else if (studiosRegex) {
         appendCondition({
           studios_filter: {
             name: {
               value: studiosRegex,
-              modifier: filterStudioNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+              modifier: filterStudioNegate
+                ? "NOT_MATCHES_REGEX"
+                : "MATCHES_REGEX",
             },
           },
         });
@@ -399,7 +471,20 @@
       setFiltersCollapsed(true);
 
       try {
-        const { sceneFilter, ids, findFilter } = buildSceneSelectionInput(mode);
+        const [loadedTagsMap, loadedGroupsMap, loadedStudiosMap] =
+          await Promise.all([
+            filterTags.trim() ? ensureTagsLoaded() : tagNameToId,
+            filterGroups.trim() ? ensureGroupsLoaded() : groupNameToId,
+            filterStudio.trim() ? ensureStudiosLoaded() : studioNameToId,
+          ]);
+        const { sceneFilter, ids, findFilter } = buildSceneSelectionInput(
+          mode,
+          {
+            tagsMap: loadedTagsMap,
+            groupsMap: loadedGroupsMap,
+            studiosMap: loadedStudiosMap,
+          }
+        );
         const response = await fetch("/graphql", {
           method: "POST",
           headers: {
@@ -704,38 +789,50 @@
 
     // Lazy-load tags/groups on first open
     const ensureTagsLoaded = async () => {
-      if (availableTags.length || loadingTags) return;
+      if (Object.keys(tagNameToId).length) return tagNameToId;
+      if (loadingTags) return {};
       try {
         setLoadingTags(true);
         const all = await fetchAllTags();
-        setAvailableTags(all);
+        setAvailableTags(all.names || []);
+        setTagNameToId(all.nameToId || {});
+        return all.nameToId || {};
       } catch (e) {
         console.warn("Failed to load tags:", e);
+        return {};
       } finally {
         setLoadingTags(false);
       }
     };
     const ensureGroupsLoaded = async () => {
-      if (availableGroups.length || loadingGroups) return;
+      if (Object.keys(groupNameToId).length) return groupNameToId;
+      if (loadingGroups) return {};
       try {
         setLoadingGroups(true);
         const all = await fetchAllGroups();
-        setAvailableGroups(all);
+        setAvailableGroups(all.names || []);
+        setGroupNameToId(all.nameToId || {});
+        return all.nameToId || {};
       } catch (e) {
         console.warn("Failed to load groups:", e);
+        return {};
       } finally {
         setLoadingGroups(false);
       }
     };
     // New: lazy-load studios on first open
     const ensureStudiosLoaded = async () => {
-      if (availableStudios.length || loadingStudios) return;
+      if (Object.keys(studioNameToId).length) return studioNameToId;
+      if (loadingStudios) return {};
       try {
         setLoadingStudios(true);
         const all = await fetchAllStudios();
-        setAvailableStudios(all);
+        setAvailableStudios(all.names || []);
+        setStudioNameToId(all.nameToId || {});
+        return all.nameToId || {};
       } catch (e) {
         console.warn("Failed to load studios:", e);
+        return {};
       } finally {
         setLoadingStudios(false);
       }
