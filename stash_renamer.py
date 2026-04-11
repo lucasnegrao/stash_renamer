@@ -699,102 +699,109 @@ def run(options: dict, collect_operations: bool = False):
         log_print=logPrint,
     )
 
-    # Update flags from options
-    USING_LOG = options.get("using_log", USING_LOG)
-    DRY_RUN = options.get("dry_run", DRY_RUN)
-    DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
-
-    # Build the introspection-driven tagger.
-    TAGGER = GraphQLTagger(
-        gql_call=__callGraphQL,
-        root_types={"scene": "Scene", "group": "Group", "performer": "Performer"},
-    )
     try:
-        TAGGER.introspect()
-        if DEBUG_MODE:
-            logPrint(f"[DEBUG] Tagger ready with roots: {', '.join(TAGGER.available_roots())}")
-    except Exception as e:
-        logPrint(f"[Warn] GraphQL introspection failed, template tags may be incomplete: {e}")
+        # Update flags from options
+        USING_LOG = options.get("using_log", USING_LOG)
+        DRY_RUN = options.get("dry_run", DRY_RUN)
+        DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
 
-
-    if DRY_RUN:
+        # Build the introspection-driven tagger.
+        TAGGER = GraphQLTagger(
+            gql_call=__callGraphQL,
+            root_types={"scene": "Scene", "group": "Group", "performer": "Performer"},
+        )
         try:
-            os.remove("renamer_dryrun.txt")
-        except FileNotFoundError:
-            pass
-        logPrint("[DRY_RUN] DRY-RUN Enabled")
+            TAGGER.introspect()
+            if DEBUG_MODE:
+                logPrint(f"[DEBUG] Tagger ready with roots: {', '.join(TAGGER.available_roots())}")
+        except Exception as e:
+            logPrint(f"[Warn] GraphQL introspection failed, template tags may be incomplete: {e}")
 
-    undo_operation_id = options.get("undo_operation_id")
-    if undo_operation_id:
-        if FILE_MOVER is None:
-            raise RuntimeError("FILE_MOVER not initialized")
-        undo_result = FILE_MOVER.undo_rename(str(undo_operation_id))
-        if collect_operations:
-            return [undo_result]
-        return None
 
-    if options.get("list_operations"):
-        if FILE_MOVER is None:
-            raise RuntimeError("FILE_MOVER not initialized")
-        operations = FILE_MOVER.list_rename_operations()
-        return operations if collect_operations else None
+        if DRY_RUN:
+            try:
+                os.remove("renamer_dryrun.txt")
+            except FileNotFoundError:
+                pass
+            logPrint("[DRY_RUN] DRY-RUN Enabled")
 
-    filename_template = options.get("filename_template")
-    if not filename_template or not str(filename_template).strip():
-        raise ValueError("filename_template is required")
-    path_template = options.get("path_template") or None
+        undo_operation_id = options.get("undo_operation_id")
+        if undo_operation_id:
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            undo_result = FILE_MOVER.undo_rename(str(undo_operation_id))
+            if collect_operations:
+                return [undo_result]
+            return None
 
-    scenes_opt = options.get("scenes")
-    scenes_query = options.get("scenes_query")
-    scene_filter = options.get("scene_filter")
-    ids_opt = options.get("ids")
-    find_filter = options.get("find_filter")
-    has_filter_mode = scene_filter is not None or ids_opt is not None or find_filter is not None
+        if options.get("list_operations"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            operations = FILE_MOVER.list_rename_operations()
+            return operations if collect_operations else None
 
-    if scenes_opt is not None and (scenes_query or has_filter_mode):
-        raise ValueError("Provide only one scene source: 'scenes', query mode, or filter mode")
-    if scenes_query and has_filter_mode:
-        raise ValueError("Provide either query mode or filter mode, not both")
-    if scenes_opt is None and not scenes_query and not has_filter_mode:
-        raise ValueError("Provide scenes, query mode, or filter mode")
+        filename_template = options.get("filename_template")
+        if not filename_template or not str(filename_template).strip():
+            raise ValueError("filename_template is required")
+        path_template = options.get("path_template") or None
 
-    if scenes_opt is not None:
-        if not isinstance(scenes_opt, list):
-            raise ValueError("'scenes' must be a list of scene objects")
-        scenes = [s for s in scenes_opt if isinstance(s, dict)]
-    elif scenes_query:
-        variables = options.get("scenes_query_variables")
-        if variables is not None and not isinstance(variables, dict):
-            raise ValueError("'scenes_query_variables' must be an object/dict")
-        query_data = __callGraphQL(str(scenes_query), variables)
-        scenes = _extract_scenes_from_data(query_data, options.get("scenes_query_path"))
-        if DEBUG_MODE:
-            logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from custom GraphQL query")
-    else:
-        ids: Optional[List[str]] = None
-        if ids_opt is not None:
-            if not isinstance(ids_opt, list):
-                raise ValueError("'ids' must be a list")
-            ids = [str(x) for x in ids_opt if str(x).strip()]
-        if scene_filter is not None and not isinstance(scene_filter, dict):
-            raise ValueError("'scene_filter' must be an object/dict")
-        if find_filter is not None and not isinstance(find_filter, dict):
-            raise ValueError("'find_filter' must be an object/dict")
-        scenes = _fetch_scenes_from_filter(
-            scene_filter,
-            ids,
-            find_filter,
+        scenes_opt = options.get("scenes")
+        scenes_query = options.get("scenes_query")
+        scene_filter = options.get("scene_filter")
+        ids_opt = options.get("ids")
+        find_filter = options.get("find_filter")
+        has_filter_mode = scene_filter is not None or ids_opt is not None or find_filter is not None
+
+        if scenes_opt is not None and (scenes_query or has_filter_mode):
+            raise ValueError("Provide only one scene source: 'scenes', query mode, or filter mode")
+        if scenes_query and has_filter_mode:
+            raise ValueError("Provide either query mode or filter mode, not both")
+        if scenes_opt is None and not scenes_query and not has_filter_mode:
+            raise ValueError("Provide scenes, query mode, or filter mode")
+
+        if scenes_opt is not None:
+            if not isinstance(scenes_opt, list):
+                raise ValueError("'scenes' must be a list of scene objects")
+            scenes = [s for s in scenes_opt if isinstance(s, dict)]
+        elif scenes_query:
+            variables = options.get("scenes_query_variables")
+            if variables is not None and not isinstance(variables, dict):
+                raise ValueError("'scenes_query_variables' must be an object/dict")
+            query_data = __callGraphQL(str(scenes_query), variables)
+            scenes = _extract_scenes_from_data(query_data, options.get("scenes_query_path"))
+            if DEBUG_MODE:
+                logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from custom GraphQL query")
+        else:
+            ids: Optional[List[str]] = None
+            if ids_opt is not None:
+                if not isinstance(ids_opt, list):
+                    raise ValueError("'ids' must be a list")
+                ids = [str(x) for x in ids_opt if str(x).strip()]
+            if scene_filter is not None and not isinstance(scene_filter, dict):
+                raise ValueError("'scene_filter' must be an object/dict")
+            if find_filter is not None and not isinstance(find_filter, dict):
+                raise ValueError("'find_filter' must be an object/dict")
+            scenes = _fetch_scenes_from_filter(
+                scene_filter,
+                ids,
+                find_filter,
+                filename_template=str(filename_template),
+                path_template=path_template,
+            )
+            if DEBUG_MODE:
+                logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from backend filter mode")
+
+        ops = edit_run(
             filename_template=str(filename_template),
             path_template=path_template,
+            scenes=scenes,
+            collect_operations=collect_operations,
         )
-        if DEBUG_MODE:
-            logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from backend filter mode")
-
-    ops = edit_run(
-        filename_template=str(filename_template),
-        path_template=path_template,
-        scenes=scenes,
-        collect_operations=collect_operations,
-    )
-    all_operations: List[dict] = ops or []
-    return all_operations if collect_operations else None
+        all_operations: List[dict] = ops or []
+        return all_operations if collect_operations else None
+    finally:
+        if FILE_MOVER is not None:
+            try:
+                FILE_MOVER.flush()
+            finally:
+                FILE_MOVER.close()

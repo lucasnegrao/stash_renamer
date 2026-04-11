@@ -10,36 +10,48 @@ from graphql_queries import FIND_SCENE_FILES_BY_ID_QUERY, MOVE_FILES_MUTATION
 class OperationLogStore:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._conn: Optional[sqlite3.Connection] = None
+        self._writes_since_commit = 0
+        self._commit_every = 50
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._conn is None:
+            self._conn = self._connect()
+        return self._conn
+
     def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS file_operations (
-                    id TEXT PRIMARY KEY,
-                    operation_type TEXT NOT NULL,
-                    related_operation_id TEXT,
-                    created_at TEXT NOT NULL,
-                    scene_id TEXT NOT NULL,
-                    old_path TEXT NOT NULL,
-                    new_path TEXT NOT NULL,
-                    old_name TEXT NOT NULL,
-                    new_name TEXT NOT NULL,
-                    success INTEGER NOT NULL DEFAULT 1,
-                    error TEXT
-                )
-                """
+        conn = self._get_conn()
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS file_operations (
+                id TEXT PRIMARY KEY,
+                operation_type TEXT NOT NULL,
+                related_operation_id TEXT,
+                created_at TEXT NOT NULL,
+                scene_id TEXT NOT NULL,
+                old_path TEXT NOT NULL,
+                new_path TEXT NOT NULL,
+                old_name TEXT NOT NULL,
+                new_name TEXT NOT NULL,
+                success INTEGER NOT NULL DEFAULT 1,
+                error TEXT
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_file_operations_related ON file_operations(related_operation_id)"
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_file_operations_scene ON file_operations(scene_id)")
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_file_operations_related ON file_operations(related_operation_id)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_file_operations_scene ON file_operations(scene_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_file_operations_type_created ON file_operations(operation_type, created_at)")
+        conn.commit()
 
     def log_operation(
         self,
@@ -55,76 +67,100 @@ class OperationLogStore:
         ts = datetime.now(timezone.utc).isoformat()
         old_name = os.path.basename(old_path or "")
         new_name = os.path.basename(new_path or "")
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO file_operations (
-                    id, operation_type, related_operation_id, created_at,
-                    scene_id, old_path, new_path, old_name, new_name,
-                    success, error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    op_id,
-                    operation_type,
-                    related_operation_id,
-                    ts,
-                    str(scene_id or ""),
-                    str(old_path or ""),
-                    str(new_path or ""),
-                    old_name,
-                    new_name,
-                    1 if success else 0,
-                    error,
-                ),
-            )
+        conn = self._get_conn()
+        conn.execute(
+            """
+            INSERT INTO file_operations (
+                id, operation_type, related_operation_id, created_at,
+                scene_id, old_path, new_path, old_name, new_name,
+                success, error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                op_id,
+                operation_type,
+                related_operation_id,
+                ts,
+                str(scene_id or ""),
+                str(old_path or ""),
+                str(new_path or ""),
+                old_name,
+                new_name,
+                1 if success else 0,
+                error,
+            ),
+        )
+        self._writes_since_commit += 1
+        if self._writes_since_commit >= self._commit_every:
+            conn.commit()
+            self._writes_since_commit = 0
         return op_id
 
     def get_operation(self, op_id: str) -> Optional[Dict[str, Any]]:
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT id, operation_type, related_operation_id, created_at,
-                       scene_id, old_path, new_path, old_name, new_name, success, error
-                FROM file_operations
-                WHERE id = ?
-                """,
-                (op_id,),
-            ).fetchone()
-            if not row:
-                return None
-            return dict(row)
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        row = conn.execute(
+            """
+            SELECT id, operation_type, related_operation_id, created_at,
+                   scene_id, old_path, new_path, old_name, new_name, success, error
+            FROM file_operations
+            WHERE id = ?
+            """,
+            (op_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return dict(row)
 
     def list_rename_operations(self) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT
-                    r.id,
-                    r.operation_type,
-                    r.related_operation_id,
-                    r.created_at,
-                    r.scene_id,
-                    r.old_path,
-                    r.new_path,
-                    r.old_name,
-                    r.new_name,
-                    r.success,
-                    r.error,
-                    EXISTS (
-                        SELECT 1
-                        FROM file_operations u
-                        WHERE
-                            u.operation_type = 'undo'
-                            AND u.related_operation_id = r.id
-                            AND u.success = 1
-                    ) AS undone
-                FROM file_operations r
-                WHERE r.operation_type = 'rename'
-                ORDER BY r.created_at DESC, r.id DESC
-                """
-            ).fetchall()
-            return [dict(r) for r in rows]
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        rows = conn.execute(
+            """
+            SELECT
+                r.id,
+                r.operation_type,
+                r.related_operation_id,
+                r.created_at,
+                r.scene_id,
+                r.old_path,
+                r.new_path,
+                r.old_name,
+                r.new_name,
+                r.success,
+                r.error,
+                EXISTS (
+                    SELECT 1
+                    FROM file_operations u
+                    WHERE
+                        u.operation_type = 'undo'
+                        AND u.related_operation_id = r.id
+                        AND u.success = 1
+                ) AS undone
+            FROM file_operations r
+            WHERE r.operation_type = 'rename'
+            ORDER BY r.created_at DESC, r.id DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def flush(self) -> None:
+        if self._conn is None:
+            return
+        self._conn.commit()
+        self._writes_since_commit = 0
+
+    def close(self) -> None:
+        if self._conn is None:
+            return
+        try:
+            self._conn.commit()
+        finally:
+            self._conn.close()
+            self._conn = None
+            self._writes_since_commit = 0
 
 
 class FileMover:
@@ -217,3 +253,9 @@ class FileMover:
 
     def list_rename_operations(self) -> List[Dict[str, Any]]:
         return self._store.list_rename_operations()
+
+    def flush(self) -> None:
+        self._store.flush()
+
+    def close(self) -> None:
+        self._store.close()
