@@ -313,11 +313,12 @@
         }))
         .filter((p) => p.value)
         .forEach((p) => {
-          appendCondition(
-            p.negate
-              ? { NOT: { path: { value: p.value, modifier: "INCLUDES" } } }
-              : { path: { value: p.value, modifier: "INCLUDES" } }
-          );
+          appendCondition({
+            path: {
+              value: p.value,
+              modifier: p.negate ? "EXCLUDES" : "INCLUDES",
+            },
+          });
         });
       if (organized !== "any") {
         appendCondition({ organized: organized === "true" });
@@ -337,24 +338,36 @@
       }
       const tagsRegex = buildNameRegex(filterTags);
       if (tagsRegex) {
-        const cond = {
-          tags_filter: { name: { value: tagsRegex, modifier: "MATCHES_REGEX" } },
-        };
-        appendCondition(filterTagsNegate ? { NOT: cond } : cond);
+        appendCondition({
+          tags_filter: {
+            name: {
+              value: tagsRegex,
+              modifier: filterTagsNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+            },
+          },
+        });
       }
       const groupsRegex = buildNameRegex(filterGroups);
       if (groupsRegex) {
-        const cond = {
-          groups_filter: { name: { value: groupsRegex, modifier: "MATCHES_REGEX" } },
-        };
-        appendCondition(filterGroupsNegate ? { NOT: cond } : cond);
+        appendCondition({
+          groups_filter: {
+            name: {
+              value: groupsRegex,
+              modifier: filterGroupsNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+            },
+          },
+        });
       }
       const studiosRegex = buildNameRegex(filterStudio);
       if (studiosRegex) {
-        const cond = {
-          studios_filter: { name: { value: studiosRegex, modifier: "MATCHES_REGEX" } },
-        };
-        appendCondition(filterStudioNegate ? { NOT: cond } : cond);
+        appendCondition({
+          studios_filter: {
+            name: {
+              value: studiosRegex,
+              modifier: filterStudioNegate ? "NOT_MATCHES_REGEX" : "MATCHES_REGEX",
+            },
+          },
+        });
       }
       if (filterPerformerGenders.length) {
         appendCondition({
