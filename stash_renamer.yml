@@ -4,7 +4,7 @@ version: 1.0.0
 url: https://github.com/lucasnegrao/stash_renamer
 ui:
   javascript:
-    - ui/dist/example.js
+    - "{pluginDir}/ui/dist/example.js"
 settings:
   template:
     displayName: Filename Template
