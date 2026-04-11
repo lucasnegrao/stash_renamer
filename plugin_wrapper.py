@@ -284,96 +284,55 @@ def run(input_data, output):
         dry_run = is_true(combined_args.get("dry_run")) or mode == "dry_run"
         if dry_run:
             log.LogInfo("Running in DRY RUN mode")
-        
-        # Template (default if not provided)
-        template = combined_args.get("template") or "$studio - $date - $title"
-        log.LogInfo(f"Template: {template}")
-        
-        # Path filters
-        path_like = combined_args.get("pathLike") or combined_args.get("path_like") or ""
-        if path_like:
-            log.LogInfo(f"Path filter (include): {path_like}")
-        
-        exclude_path_like = combined_args.get("excludePathLike") or combined_args.get("exclude_path_like") or ""
-        if exclude_path_like:
-            log.LogInfo(f"Path filter (exclude): {exclude_path_like}")
-        
-        # Tags (selection)
-        tags = combined_args.get("tags") or []
-        if isinstance(tags, str):
-            tags = [t.strip() for t in tags.split(",") if t.strip()]
-        if tags:
-            log.LogInfo(f"Tags: {', '.join(tags)}")
-        
-        # Selected scenes (comma-separated list of scene IDs)
-        selected_scenes = combined_args.get("selectedScenes", "")
-        scene_ids = []
-        if isinstance(selected_scenes, str) and selected_scenes.strip():
-            scene_ids = [s.strip() for s in selected_scenes.split(",") if s.strip()]
-            log.LogInfo(f"Processing only selected scenes: {len(scene_ids)} scenes")
 
-        # New filters and token options (support UNKNOWN)
-        performer_genders = to_list(combined_args.get("performerGenders") or combined_args.get("performer_genders"))
-        filter_performer_genders = to_list(combined_args.get("filterPerformerGenders") or combined_args.get("filter_performer_genders"))
-        # Prefer explicit UI args for tri-state booleans ('' -> Any/None)
-        filter_organized = tri_to_bool(args.get("filterOrganized", combined_args.get("filterOrganized") or combined_args.get("filter_organized")))
-        filter_interactive = tri_to_bool(args.get("filterInteractive", combined_args.get("filterInteractive") or combined_args.get("filter_interactive")))
-        # Min scene markers
-        msm_val = args.get("filterMinSceneMarkers", combined_args.get("filterMinSceneMarkers") or combined_args.get("filter_min_scene_markers"))
-        try:
-            filter_min_scene_markers = int(msm_val) if msm_val not in (None, "") else None
-        except Exception:
-            filter_min_scene_markers = None
-        # Studio/Groups/Tags lists
-        filter_studio = to_list(combined_args.get("filterStudio") or combined_args.get("filter_studio"))
-        filter_groups = to_list(combined_args.get("filterGroups") or combined_args.get("filter_groups"))
-        filter_tags = to_list(combined_args.get("filterTags") or combined_args.get("filter_tags"))
-        
-        # Path builder options
-        path_template = combined_args.get("pathTemplate") or combined_args.get("path_template") or ""
-        path_is_absolute = is_true(combined_args.get("pathIsAbsolute") or combined_args.get("path_is_absolute"))
+        # Build options dict for renamer.run (new API contract)
+        filename_template = (
+            combined_args.get("filename_template")
+            or combined_args.get("filenameTemplate")
+            or combined_args.get("template")
+            or "$scene.studio.name - $scene.date - $scene.title"
+        )
+        path_template = combined_args.get("path_template") or combined_args.get("pathTemplate") or ""
+        scenes_query = combined_args.get("scenes_query") or combined_args.get("scenesQuery")
+        scenes_query_variables = (
+            combined_args.get("scenes_query_variables")
+            or combined_args.get("scenesQueryVariables")
+            or None
+        )
+        if isinstance(scenes_query_variables, str):
+            try:
+                scenes_query_variables = json.loads(scenes_query_variables)
+            except Exception:
+                raise Exception("scenes_query_variables must be a JSON object")
+        scenes_query_path = combined_args.get("scenes_query_path") or combined_args.get("scenesQueryPath") or "findScenes.scenes"
+        undo_operation_id = combined_args.get("undo_operation_id") or combined_args.get("undoOperationId")
+        operations_db_path = combined_args.get("operations_db_path") or combined_args.get("operationsDbPath")
 
-        # Build options dict for renamer.run
         options = {
             "server_url": server_url,
             "cookie_name": cookie_name,
             "cookie_value": cookie_value,
-            "template": template,
+            "filename_template": filename_template,
             "dry_run": dry_run,
-            # Flags (UI only toggles when explicitly set)
-            "skip_grouped": is_true(args.get("skipGrouped")),
             "debug_mode": is_true(args.get("debugMode")) or is_true(args.get("debug")),
-            # Path filters
-            "path_like": path_like or None,
-            "exclude_path_like": exclude_path_like or None,
         }
-        if tags:
-            options["tags"] = tags
-        if scene_ids:
-            options["scene_ids"] = scene_ids
-        # Token performer genders (affects $performers/$performer)
-        if performer_genders:
-            options["performer_genders"] = performer_genders
-        # Scene-level filters
-        if filter_performer_genders:
-            options["filter_performer_genders"] = filter_performer_genders
-        if filter_organized is not None:
-            options["filter_organized"] = filter_organized
-        if filter_interactive is not None:
-            options["filter_interactive"] = filter_interactive
-        if filter_min_scene_markers is not None:
-            options["filter_min_scene_markers"] = filter_min_scene_markers
-        if filter_studio:
-            options["filter_studio"] = filter_studio
-        if filter_groups:
-            options["filter_groups"] = filter_groups
-        if filter_tags:
-            options["filter_tags"] = filter_tags
-        # New: path builder
         if path_template:
-          options["path_template"] = path_template
-        if path_is_absolute:
-          options["path_is_absolute"] = path_is_absolute
+            options["path_template"] = path_template
+        if operations_db_path:
+            options["operations_db_path"] = operations_db_path
+        if undo_operation_id:
+            options["undo_operation_id"] = undo_operation_id
+        else:
+            if scenes_query:
+                options["scenes_query"] = scenes_query
+                if scenes_query_variables is not None:
+                    options["scenes_query_variables"] = scenes_query_variables
+                if scenes_query_path:
+                    options["scenes_query_path"] = scenes_query_path
+            elif combined_args.get("scenes") is not None:
+                options["scenes"] = combined_args.get("scenes")
+            else:
+                raise Exception("Either scenes_query or scenes must be provided for rename operations")
         
         log.LogInfo("Invoking renamer...")
         from stash_renamer import run as renamer_run
@@ -395,4 +354,3 @@ def run(input_data, output):
 
 if __name__ == "__main__":
     main()
-

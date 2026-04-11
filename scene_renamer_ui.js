@@ -6,6 +6,7 @@
   const { Button } = PluginApi.libraries.Bootstrap;
   const { Link, NavLink } = PluginApi.libraries.ReactRouterDOM;
   const { faFileSignature } = PluginApi.libraries.FontAwesomeSolid;
+  const USER_PREFS_KEY = "stash_renamer_ui_prefs_v1";
 
   // Generic GraphQL caller (no explicit auth needed from UI)
   async function gql(query, variables) {
@@ -141,12 +142,10 @@
 
   // Scene Renamer UI Page
   const SceneRenamerPage = () => {
-    const [template, setTemplate] = React.useState("$studio - $date - $title");
+    const [template, setTemplate] = React.useState("$scene.studio.name - $scene.date - $scene.title");
     const [dryRun, setDryRun] = React.useState(true);
-    const [skipGrouped, setSkipGrouped] = React.useState(false);
-    // Remove moveToStudioFolder; add path builder states
+    // Path builder state
     const [pathTemplate, setPathTemplate] = React.useState("");
-    const [pathIsAbsolute, setPathIsAbsolute] = React.useState(false);
     const [pathLike, setPathLike] = React.useState("");
     const [excludePathLike, setExcludePathLike] = React.useState("");
     const [debugMode, setDebugMode] = React.useState(false);
@@ -157,21 +156,8 @@
     const [sortDirection, setSortDirection] = React.useState("asc");
 
     // New: selection/filters
-    const GENDERS = [
-      "MALE",
-      "FEMALE",
-      "TRANSGENDER_MALE",
-      "TRANSGENDER_FEMALE",
-      "INTERSEX",
-      "NON_BINARY",
-      "UNKNOWN", // Include performers with no gender set
-    ];
-    // Which performers to include in $performer/$performers tokens
-    const [performerGenders, setPerformerGenders] = React.useState([]);
-    // Scene inclusion filter: any performer in these genders
-    const [filterPerformerGenders, setFilterPerformerGenders] = React.useState(
-      []
-    );
+    const GENDERS = ["MALE", "FEMALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY", "UNKNOWN"];
+    const [filterPerformerGenders, setFilterPerformerGenders] = React.useState([]);
     // Tri-state filters: 'any' | 'true' | 'false'
     const [organized, setOrganized] = React.useState("any");
     const [interactive, setInteractive] = React.useState("any");
@@ -274,12 +260,144 @@
       }
     }, [operations]);
 
+    const buildNameRegex = (csv) => {
+      const names = (csv || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      if (!names.length) return "";
+      return `^(${names.join("|")})$`;
+    };
+
+    const buildScenesQueryInput = (mode) => {
+      const andFilters = [];
+      if (pathLike && pathLike.trim()) {
+        andFilters.push({
+          path: { value: pathLike.trim(), modifier: "INCLUDES" },
+        });
+      }
+      if (excludePathLike && excludePathLike.trim()) {
+        andFilters.push({
+          NOT: {
+            path: { value: excludePathLike.trim(), modifier: "INCLUDES" },
+          },
+        });
+      }
+      if (organized !== "any") {
+        andFilters.push({ organized: organized === "true" });
+      }
+      if (interactive !== "any") {
+        andFilters.push({ interactive: interactive === "true" });
+      }
+      if ((minSceneMarkers || "").trim() !== "") {
+        const msm = Number(minSceneMarkers);
+        if (!Number.isNaN(msm) && msm > 0) {
+          andFilters.push({ has_markers: "true" });
+        }
+      }
+      if (stashIDEndpoint && stashIDEndpoint.trim()) {
+        andFilters.push({
+          stash_id_endpoint: {
+            endpoint: stashIDEndpoint.trim(),
+            modifier: "EQUALS",
+          },
+        });
+      }
+      const selectedTagsRegex = buildNameRegex(tags);
+      if (selectedTagsRegex) {
+        andFilters.push({
+          tags_filter: {
+            name: { value: selectedTagsRegex, modifier: "MATCHES_REGEX" },
+          },
+        });
+      }
+      const tagsRegex = buildNameRegex(filterTags);
+      if (tagsRegex) {
+        andFilters.push({
+          tags_filter: { name: { value: tagsRegex, modifier: "MATCHES_REGEX" } },
+        });
+      }
+      const groupsRegex = buildNameRegex(filterGroups);
+      if (groupsRegex) {
+        andFilters.push({
+          groups_filter: {
+            name: { value: groupsRegex, modifier: "MATCHES_REGEX" },
+          },
+        });
+      }
+      const studiosRegex = buildNameRegex(filterStudio);
+      if (studiosRegex) {
+        andFilters.push({
+          studios_filter: {
+            name: { value: studiosRegex, modifier: "MATCHES_REGEX" },
+          },
+        });
+      }
+      if (filterPerformerGenders.length) {
+        andFilters.push({
+          performers_filter: {
+            gender: {
+              value: filterPerformerGenders,
+              modifier: "INCLUDES",
+            },
+          },
+        });
+      }
+
+      const sceneFilter = andFilters.length ? { AND: andFilters } : null;
+      const ids =
+        mode !== "dry_run" && selectedScenes.size > 0
+          ? Array.from(selectedScenes)
+          : null;
+      const scenesQuery = `
+        query FindScenesForRename($filter: FindFilterType, $scene_filter: SceneFilterType, $ids: [ID!]) {
+          findScenes(filter: $filter, scene_filter: $scene_filter, ids: $ids) {
+            scenes {
+              id
+              title
+              code
+              details
+              director
+              urls
+              date
+              rating100
+              organized
+              o_counter
+              interactive
+              interactive_speed
+              created_at
+              updated_at
+              last_played_at
+              resume_time
+              play_duration
+              play_count
+              files { id path }
+              studio { name }
+              performers { name gender }
+              tags { name }
+              groups { group { id name } }
+              scene_markers { id }
+              stash_ids { stash_id }
+            }
+          }
+        }
+      `;
+      const scenesQueryVariables = {
+        filter: { per_page: 10000, page: 1 },
+        scene_filter: sceneFilter,
+        ids,
+      };
+      return { scenesQuery, scenesQueryVariables };
+    };
+
     const runRename = async (mode) => {
       setRunning(true);
       setStatus("Running...");
       setOperations([]); // Clear previous results
 
       try {
+        const { scenesQuery, scenesQueryVariables } = buildScenesQueryInput(mode);
         const response = await fetch("/graphql", {
           method: "POST",
           headers: {
@@ -293,33 +411,13 @@
               plugin_id: "stash_renamer",
               args: {
                 mode: mode,
-                template: template,
+                filename_template: template,
+                path_template: pathTemplate,
                 dry_run: dryRun.toString(),
-                skipGrouped: skipGrouped.toString(),
-                // removed: moveToStudioFolder
-                pathLike: pathLike,
-                excludePathLike: excludePathLike,
                 debugMode: debugMode.toString(),
-                // Path builder
-                pathTemplate: pathTemplate,
-                pathIsAbsolute: pathIsAbsolute.toString(),
-                // New args
-                tags: tags, // comma-separated
-                stash_id_endpoint: stashIDEndpoint,
-		performerGenders: performerGenders.join(","),
-                filterPerformerGenders: filterPerformerGenders.join(","),
-                filterOrganized: organized === "any" ? "" : organized,
-                filterInteractive: interactive === "any" ? "" : interactive,
-                filterMinSceneMarkers: minSceneMarkers
-                  ? String(minSceneMarkers)
-                  : "",
-                filterStudio: filterStudio, // comma-separated exact names
-                filterGroups: filterGroups, // comma-separated exact names
-                filterTags: filterTags, // comma-separated exact names
-                selectedScenes:
-                  mode !== "dry_run" && selectedScenes.size > 0
-                    ? Array.from(selectedScenes).join(",")
-                    : "",
+                scenes_query: scenesQuery,
+                scenes_query_variables: scenesQueryVariables,
+                scenes_query_path: "findScenes.scenes",
               },
             },
           }),
@@ -338,13 +436,18 @@
             // Parse the JSON output from the plugin
             const pluginData = result.data.runPluginOperation;
             console.log("Parsed plugin data:", pluginData);
+            const operationsPayload = Array.isArray(pluginData?.operations)
+              ? pluginData.operations
+              : Array.isArray(pluginData?.output?.operations)
+              ? pluginData.output.operations
+              : [];
 
-            if (pluginData.operations && Array.isArray(pluginData.operations)) {
-              setOperations(pluginData.operations);
+            if (operationsPayload.length) {
+              setOperations(operationsPayload);
               setStatus(
-                `Completed! Found ${pluginData.operations.length} operations.`
+                `Completed! Found ${operationsPayload.length} operations.`
               );
-              console.log("Operations set:", pluginData.operations);
+              console.log("Operations set:", operationsPayload);
             } else {
               console.log("No operations array found in:", pluginData);
               setStatus(
@@ -416,7 +519,9 @@
         .then((settings) => {
           if (!mounted || !settings) return;
 
-          if (settings.template) setTemplate(settings.template);
+          if (settings.filename_template || settings.template) {
+            setTemplate(settings.filename_template ?? settings.template);
+          }
 
           if (
             settings.pathLike !== undefined ||
@@ -434,10 +539,6 @@
           }
 
           setDryRun(toBool(settings.dryRun ?? settings.dry_run, dryRun));
-          setSkipGrouped(
-            toBool(settings.skipGrouped ?? settings.skip_grouped, skipGrouped)
-          );
-          // removed: setMoveToStudioFolder(...)
           setDebugMode(
             toBool(settings.debugMode ?? settings.debug_mode, debugMode)
           );
@@ -446,15 +547,9 @@
           setPathTemplate(
             settings.pathTemplate ?? settings.path_template ?? ""
           );
-          setPathIsAbsolute(
-            toBool(settings.pathIsAbsolute ?? settings.path_is_absolute, false)
-          );
 
           // New: tag selection and filters
           setTags(toCsv(settings.tags ?? "", ""));
-          setPerformerGenders(
-            toArray(settings.performerGenders ?? settings.performer_genders)
-          );
           setFilterPerformerGenders(
             toArray(
               settings.filterPerformerGenders ??
@@ -480,12 +575,84 @@
         })
         .catch((e) => {
           console.warn("Settings load failed:", e);
+        })
+        .finally(() => {
+          if (!mounted) return;
+          try {
+            const raw = localStorage.getItem(USER_PREFS_KEY);
+            if (!raw) return;
+            const p = JSON.parse(raw);
+            if (!p || typeof p !== "object") return;
+            if (p.template !== undefined) setTemplate(String(p.template));
+            if (p.dryRun !== undefined) setDryRun(Boolean(p.dryRun));
+            if (p.pathTemplate !== undefined)
+              setPathTemplate(String(p.pathTemplate));
+            if (p.pathLike !== undefined) setPathLike(String(p.pathLike));
+            if (p.excludePathLike !== undefined)
+              setExcludePathLike(String(p.excludePathLike));
+            if (p.debugMode !== undefined) setDebugMode(Boolean(p.debugMode));
+            if (p.organized !== undefined) setOrganized(String(p.organized));
+            if (p.interactive !== undefined)
+              setInteractive(String(p.interactive));
+            if (p.filterStudio !== undefined)
+              setFilterStudio(String(p.filterStudio));
+            if (p.filterGroups !== undefined)
+              setFilterGroups(String(p.filterGroups));
+            if (p.filterTags !== undefined) setFilterTags(String(p.filterTags));
+            if (p.stashIDEndpoint !== undefined)
+              setStashIDEndpoint(String(p.stashIDEndpoint));
+            if (Array.isArray(p.filterPerformerGenders))
+              setFilterPerformerGenders(
+                p.filterPerformerGenders.map((x) => String(x))
+              );
+          } catch (e) {
+            console.warn("Failed to load user-space prefs:", e);
+          }
         });
 
       return () => {
         mounted = false;
       };
     }, []);
+
+    React.useEffect(() => {
+      try {
+        localStorage.setItem(
+          USER_PREFS_KEY,
+          JSON.stringify({
+            template,
+            dryRun,
+            pathTemplate,
+            pathLike,
+            excludePathLike,
+            debugMode,
+            organized,
+            interactive,
+            filterStudio,
+            filterGroups,
+            filterTags,
+            stashIDEndpoint,
+            filterPerformerGenders,
+          })
+        );
+      } catch (e) {
+        console.warn("Failed to persist user-space prefs:", e);
+      }
+    }, [
+      template,
+      dryRun,
+      pathTemplate,
+      pathLike,
+      excludePathLike,
+      debugMode,
+      organized,
+      interactive,
+      filterStudio,
+      filterGroups,
+      filterTags,
+      stashIDEndpoint,
+      filterPerformerGenders,
+    ]);
 
     // Lazy-load tags/groups on first open
     const ensureTagsLoaded = async () => {
@@ -549,12 +716,12 @@
             className: "form-control",
             value: template,
             onChange: (e) => setTemplate(e.target.value),
-            placeholder: "$studio - $date - $title - $performers",
+            placeholder: "$scene.studio.name - $scene.date - $scene.title",
           }),
           React.createElement(
             "small",
             { className: "form-text text-muted" },
-            "Tokens: $id $title $code $details $director $urls $date $rating100 $organized $o_counter $interactive $interactive_speed $created_at $updated_at $last_played_at $resume_time $play_duration $play_count $tags $groups $scene_markers_count $performers $studio"
+            "Use introspected tags like $scene.title, $scene.studio.name, $performer.name, $performer[0].name, $group.name."
           )
         )
       ),
@@ -578,36 +745,12 @@
             className: "form-control",
             value: pathTemplate,
             onChange: (e) => setPathTemplate(e.target.value),
-            placeholder: "e.g., $studio/$date or $up/Archive/$studio",
+            placeholder: "e.g., /Library/$scene.studio.name or $up/Archive/$scene.studio.name",
           }),
           React.createElement(
             "small",
             { className: "form-text text-muted" },
-            "Build destination folder using filename tokens. Use $up for parent in relative paths."
-          )
-        )
-      ),
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "div",
-          { className: "col-sm-10 offset-sm-2" },
-          React.createElement(
-            "div",
-            { className: "form-check" },
-            React.createElement("input", {
-              type: "checkbox",
-              className: "form-check-input",
-              id: "pathIsAbsolute",
-              checked: pathIsAbsolute,
-              onChange: (e) => setPathIsAbsolute(e.target.checked),
-            }),
-            React.createElement(
-              "label",
-              { className: "form-check-label", htmlFor: "pathIsAbsolute" },
-              "Absolute Path (otherwise relative to current file)"
-            )
+            "Build destination folder with the same tags. Starts with / or \\ = absolute path; otherwise relative. $up is replaced by .."
           )
         )
       ),
@@ -636,32 +779,6 @@
               "label",
               { className: "form-check-label", htmlFor: "dryRun" },
               "Dry Run (Preview only)"
-            )
-          )
-        )
-      ),
-
-      // Skip Grouped checkbox
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "div",
-          { className: "col-sm-10 offset-sm-2" },
-          React.createElement(
-            "div",
-            { className: "form-check" },
-            React.createElement("input", {
-              type: "checkbox",
-              className: "form-check-input",
-              id: "skipGrouped",
-              checked: skipGrouped,
-              onChange: (e) => setSkipGrouped(e.target.checked),
-            }),
-            React.createElement(
-              "label",
-              { className: "form-check-label", htmlFor: "skipGrouped" },
-              "Skip Grouped Scenes"
             )
           )
         )
@@ -899,40 +1016,6 @@
             "small",
             { className: "form-text text-muted" },
             "If set, only scenes with these tags will be selected"
-          )
-        )
-      ),
-      // Performer genders for tokens
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Performer Genders (tokens):"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement(
-            "select",
-            {
-              multiple: true,
-              className: "form-control",
-              value: performerGenders,
-              onChange: (e) =>
-                setPerformerGenders(
-                  Array.from(e.target.selectedOptions).map((o) => o.value)
-                ),
-            },
-            GENDERS.map((g) =>
-              React.createElement("option", { key: g, value: g }, g)
-            )
-          ),
-          React.createElement(
-            "small",
-            { className: "form-text text-muted" },
-            "Only these genders will be included in $performers/$performer"
           )
         )
       ),
@@ -1676,7 +1759,7 @@
         React.createElement(
           "li",
           null,
-          "Set your template using tokens like $studio, $date, $title, etc."
+          "Set your template using introspected tags like $scene.title, $scene.date, $scene.studio.name, $performer.name, and $group.name."
         ),
         React.createElement(
           "li",

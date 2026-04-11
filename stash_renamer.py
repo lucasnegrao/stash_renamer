@@ -1,31 +1,24 @@
 import os
 import re
-import math
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import requests
-
-BATCH_SIZE = 100
+from file_mover import FileMover
+from tagger import GraphQLTagger
 
 # Flags (programmatic overrides via run(options))
 USING_LOG = True
 DRY_RUN = False
 DEBUG_MODE = True
-SKIP_GROUPED = False
 
 IS_WINDOWS = os.name == "nt"
 
 # Connection/config
 CONFIG = None  # type: Optional[SimpleNamespace]
 
-# New globals for filters
-PERFORMER_GENDERS = None  # type: Optional[set]
-FILTERS = {}              # type: Dict[str, object]
-
-# Globals for path building
-PATH_TEMPLATE: Optional[str] = None
-PATH_IS_ABSOLUTE: bool = False
+TAGGER: Optional[GraphQLTagger] = None
+FILE_MOVER: Optional[FileMover] = None
 
 # Try to import Stash logging if available (when running as plugin)
 USING_STASH_LOG = False
@@ -100,28 +93,6 @@ def sanitize_filename(name: str) -> str:
     
     return name
 
-def _extract_year(date_str: str) -> str:
-    """
-    Extract a 4-digit year from a date string.
-    Supports: YYYY, YYYY-MM[-DD][time], YYYY/MM/DD, YYYY.MM.DD, DD-MM-YYYY, MM/DD/YYYY, etc.
-    Returns empty string for placeholder dates like xxxx-xx-xx or year 0000.
-    """
-    s = str(date_str or "").strip()
-    if not s:
-        return ""
-    # Ignore placeholder/unknown dates (e.g., "xxxx-xx-xx")
-    if re.search(r"(?i)\bx{4}\b", s) or "xx-xx-xx" in s.lower():
-        return ""
-    # Prefer year at the start (ISO-like)
-    m = re.match(r"^\s*(\d{4})(?!\d)", s)
-    if m and m.group(1) != "0000":
-        return m.group(1)
-    # Otherwise grab any standalone 4-digit year in the string (e.g., DD-MM-YYYY or MM/DD/YYYY)
-    m = re.search(r"(?<!\d)(\d{4})(?!\d)", s)
-    if m and m.group(1) != "0000":
-        return m.group(1)
-    return ""
-
 def _sanitize_path_component(seg: str) -> str:
     """
     Sanitize a single path segment using the same rules as filenames.
@@ -129,17 +100,21 @@ def _sanitize_path_component(seg: str) -> str:
     """
     return sanitize_filename(seg or "")
 
-def _build_target_directory(current_directory: str, scene_info: Dict[str, str], path_template: str, is_absolute: bool) -> str:
+def _build_target_directory(current_directory: str, tag_context: Dict[str, object], path_template: str) -> str:
     """
     Build a target directory from a template using the same tokens as filenames.
+    Mode detection:
+      - Starts with / or \\ => absolute path mode
+      - Otherwise => relative path mode
     Special token:
-      - $up -> parent directory (only meaningful in relative mode)
+      - $up is replaced by .. (parent traversal marker)
     Slashes (/) in the template denote subfolders.
     """
     # Replace tokens similarly to makeFilename, but allow separators
     raw = str(path_template or "")
+    is_absolute = raw.startswith("/") or raw.startswith("\\")
     # Minimal token replacement, reuse makeFilename for consistency
-    replaced = makeFilename(scene_info, raw)
+    replaced = makeFilename(raw, tag_context)
 
     # Expand $up occurrences after token replacement to literal .. marker
     replaced = replaced.replace("$up", "..")
@@ -180,93 +155,11 @@ def _build_target_directory(current_directory: str, scene_info: Dict[str, str], 
         return base
 
 
-def _apply_array_index_tokens(template: str, scene_info: Dict[str, object]) -> str:
-    """
-    Replace array-index tokens like:
-      $groups[0]        -> first group name
-      $groups[0-4]      -> first 5 group names (inclusive range)
-      $performers[1-3]  -> performers 2..4
-      $tags[0]          -> first tag
-      $urls[0-2]        -> first 3 urls
-    Arrays are read from scene_info keys: groups_list, performers_list, tags_list, urls_list.
-    """
-    pattern = re.compile(r"\$(groups|performers|tags|urls|stash_ids)\[(\d+)(?:-(\d+))?\]")
-    arrays = {
-        "groups": scene_info.get("groups_list") or [],
-        "performers": scene_info.get("performers_list") or [],
-        "tags": scene_info.get("tags_list") or [],
-        "urls": scene_info.get("urls_list") or [],
-	"stash_ids": scene_info.get("stash_ids_list") or []
-    }
-
-    def repl(m: re.Match) -> str:
-        name = m.group(1)
-        start = int(m.group(2))
-        end_str = m.group(3)
-        items: List[str] = []
-        src = arrays.get(name) or []
-        # Ensure list of strings
-        if not isinstance(src, (list, tuple)):
-            src = [src] if src else []
-        src = [str(x) for x in src if str(x)]
-        if not src:
-            return ""
-        if end_str is None:
-            # Single index
-            if 0 <= start < len(src):
-                items = [src[start]]
-        else:
-            end = int(end_str)
-            if end < start:
-                start, end = end, start
-            # Inclusive range
-            items = src[start : min(end + 1, len(src))]
-        return sanitize_filename(" ".join(items)) if items else ""
-
-    return pattern.sub(repl, template)
-
-
-def makeFilename(scene_info: Dict[str, str], query: str) -> str:
+def makeFilename(query: str, tag_context: Dict[str, object]) -> str:
     # Trim template
     s = str(query or "").strip()
-
-    # First, resolve array-index tokens (uses lists from scene_info)
-    s = _apply_array_index_tokens(s, scene_info)
-
-    # Replace tokens with values or empty strings
-    year = _extract_year(scene_info.get("date") or "")
-    tokens = {
-        # Core
-        "$id": (scene_info.get("id") or "").strip(),
-        "$title": (scene_info.get("title") or "").strip().replace(' - ',' ').replace('(',' ').replace(')',' '),
-        "$code": (scene_info.get("code") or "").strip(),
-        "$details": (scene_info.get("details") or "").strip(),
-        "$director": (scene_info.get("director") or "").strip(),
-        "$urls": (scene_info.get("urls") or "").strip(),
-        "$date": (scene_info.get("date") or "").strip(),
-        "$year": year,
-        "$rating100": (scene_info.get("rating100") or "").strip(),
-        "$organized": (scene_info.get("organized") or "").strip(),
-        "$o_counter": (scene_info.get("o_counter") or "").strip(),
-        "$interactive": (scene_info.get("interactive") or "").strip(),
-        "$interactive_speed": (scene_info.get("interactive_speed") or "").strip(),
-        "$created_at": (scene_info.get("created_at") or "").strip(),
-        "$updated_at": (scene_info.get("updated_at") or "").strip(),
-        "$last_played_at": (scene_info.get("last_played_at") or "").strip(),
-        "$resume_time": (scene_info.get("resume_time") or "").strip(),
-        "$play_duration": (scene_info.get("play_duration") or "").strip(),
-        "$play_count": (scene_info.get("play_count") or "").strip(),
-        # Collections (string-joined)
-        "$tags": (scene_info.get("tags") or "").strip(),
-        "$groups": (scene_info.get("groups") or "").strip(),
-	"$stash_ids": (scene_info.get("stash_ids") or "").strip(),
-        "$scene_markers_count": (scene_info.get("scene_markers_count") or "").strip(),
-        "$performers": (scene_info.get("performers") or "").strip(),
-        "$studio": (scene_info.get("studio") or "").strip(),
-    }
-
-    for token, value in tokens.items():
-        s = s.replace(token, value if value else "None")
+    if TAGGER:
+        s = TAGGER.render(s, tag_context)
 
     # Remove the global hyphen normalization to avoid spacing inside dates
     # s = re.sub(r"\s*-\s*", " - ", s)
@@ -286,28 +179,6 @@ def makeFilename(scene_info: Dict[str, str], query: str) -> str:
     # Final space normalization
     s = re.sub(r"\s{2,}", " ", s).strip()
     return s
-
-def _normalize_slashes(s: str) -> str:
-    return str(s or "").replace("\\", "/")
-
-def _like_to_regex(pattern: str) -> re.Pattern:
-    """
-    Convert a SQL-LIKE style pattern to a compiled regex:
-      - % matches any sequence (including path separators)
-      - _ matches any single character
-    We anchor the pattern (fullmatch) to mimic LIKE semantics.
-    """
-    pat = _normalize_slashes(pattern)
-    buf: List[str] = []
-    for ch in pat:
-        if ch == "%":
-            buf.append(".*")
-        elif ch == "_":
-            buf.append(".")
-        else:
-            buf.append(re.escape(ch))
-    regex = "^" + "".join(buf) + "$"
-    return re.compile(regex)
 
 def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
     if CONFIG is None:
@@ -345,253 +216,49 @@ def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
     return result["data"]
 
 
-def move_files_via_graphql(file_ids: List[str], destination_folder: str, destination_basename: Optional[str] = None) -> bool:
+def _extract_scenes_from_data(data: Dict[str, Any], path: Optional[str]) -> List[dict]:
     """
-    Move files using the GraphQL moveFiles mutation.
-    
-    Args:
-        file_ids: List of file IDs to move
-        destination_folder: Target directory path
-        destination_basename: New filename (optional, if None uses existing basename)
-    
-    Returns:
-        True if successful, False otherwise
-    """
-    mutation = """
-mutation moveFiles($input: MoveFilesInput!) {
-  moveFiles(input: $input)
-}
-"""
-    
-    variables = {
-        "input": {
-            "ids": file_ids,
-            "destination_folder": destination_folder
-        }
-    }
-    
-    # Add destination_basename only if provided
-    if destination_basename:
-        variables["input"]["destination_basename"] = destination_basename
-    
-    try:
-        data = __callGraphQL(mutation, variables)
-        result = data.get("moveFiles", False)
-        if not result:
-            logPrint(f"[Error] GraphQL moveFiles returned false for files {file_ids}")
-        return result
-    except Exception as e:
-        logPrint(f"[Error] GraphQL moveFiles failed for files {file_ids}: {e}")
-        return False
+    Extract scenes list from GraphQL data.
 
-
-def find_tag_ids_by_names(names: List[str]) -> Dict[str, str]:
+    Supported:
+      - explicit dot path, e.g. "findScenes.scenes"
+      - auto-detect common forms:
+          data["findScenes"]["scenes"]
+          data["scenes"]
     """
-    Resolve tag names to IDs via the GraphQL API.
-    Returns a dict {name: id} for names that could be resolved.
-    """
-    out: Dict[str, str] = {}
-    query = """
-query findTags($filter: FindFilterType!, $tag_filter: TagFilterType!) {
-  findTags(filter: $filter, tag_filter: $tag_filter) {
-    tags { id name }
-  }
-}
-"""
-    for name in names:
-        variables = {
-            "filter": {"per_page": 1, "page": 1},
-            "tag_filter": {"name": {"value": name, "modifier": "EQUALS"}},
-        }
-        try:
-            data = __callGraphQL(query, variables)
-            tags = data.get("findTags", {}).get("tags", [])
-            if tags:
-                match = next((t for t in tags if t.get("name") == name), tags[0])
-                out[name] = match["id"]
+    if path:
+        node: Any = data
+        for part in [p for p in path.split(".") if p]:
+            if isinstance(node, dict):
+                node = node.get(part)
             else:
-                variables = {
-                    "filter": {"per_page": 5, "page": 1},
-                    "tag_filter": {"name": {"value": name, "modifier": "MATCHES"}},
-                }
-                data = __callGraphQL(query, variables)
-                tags = data.get("findTags", {}).get("tags", [])
-                match = next((t for t in tags if t.get("name") == name), None)
-                if match:
-                    out[name] = match["id"]
-        except Exception as e:
-            logPrint(f"[Warn] Failed to resolve tag '{name}': {e}")
+                node = None
+                break
+        if isinstance(node, list):
+            return [s for s in node if isinstance(s, dict)]
+        raise ValueError(f"scenes_query_path '{path}' did not resolve to a list")
+
+    find_scenes = data.get("findScenes")
+    if isinstance(find_scenes, dict) and isinstance(find_scenes.get("scenes"), list):
+        return [s for s in find_scenes["scenes"] if isinstance(s, dict)]
+    if isinstance(data.get("scenes"), list):
+        return [s for s in data["scenes"] if isinstance(s, dict)]
+    raise ValueError("Could not extract scene list from query result; provide scenes_query_path")
+
+
+def _normalize_scenes(scenes: List[dict]) -> List[dict]:
+    out: List[dict] = []
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            continue
+        files = scene.get("files") or []
+        if not scene.get("path") and isinstance(files, list) and files and isinstance(files[0], dict):
+            scene["path"] = files[0].get("path")
+        out.append(scene)
     return out
 
 
-def get_total_scenes(scene_filter: dict) -> int:
-    query = """
-query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
-  findScenes(filter: $filter, scene_filter: $scene_filter) {
-    count
-  }
-}
-"""
-    variables = {"filter": {"per_page": 0}, "scene_filter": scene_filter}
-    data = __callGraphQL(query, variables)
-    return int(data["findScenes"]["count"])
-
-
-def get_scenes_page(page: int, scene_filter: dict) -> List[dict]:
-    query = """
-query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType!) {
-  findScenes(filter: $filter, scene_filter: $scene_filter) {
-    scenes {
-      id
-      title
-      code
-      details
-      director
-      urls
-      date
-      rating100
-      organized
-      o_counter
-      interactive
-      interactive_speed
-      created_at
-      updated_at
-      last_played_at
-      resume_time
-      play_duration
-      play_count
-      files { id path }
-      studio { name }
-      performers { name gender }
-      tags { name }
-      groups { group { id name } }
-      scene_markers { id }
-      stash_ids { stash_id }
-    }
-  }
-}
-"""
-    variables = {
-        "filter": {"per_page": BATCH_SIZE, "page": page},
-        "scene_filter": scene_filter,
-    }
-    data = __callGraphQL(query, variables)
-    return data["findScenes"]["scenes"]
-
-
-def build_scene_filter(base_filter: Optional[dict], tag_ids: Optional[List[str]], stash_endpoint: Optional[str]) -> dict:
-    scene_filter = base_filter.copy() if base_filter else {}
-    if tag_ids:
-        scene_filter["tags"] = {"value": tag_ids, "modifier": "INCLUDES"}
-    if stash_endpoint:
-        scene_filter["stash_id_endpoint"] = {"endpoint": stash_endpoint, "modifier": "EQUALS"}
-    return scene_filter
-
-
-def path_like_match(path: str, pattern: Optional[str]) -> bool:
-    """
-    LIKE-style matcher:
-      - % matches any sequence
-      - _ matches any single character
-    Examples:
-      - /mnt/library/adult/uncategorized/%  -> matches files in that folder and any depth below
-      - /mnt/library/adult/uncategorized/%/% -> matches only files one-or-more levels deeper (i.e., subdirectories only)
-    """
-    if not pattern:
-        return True
-    p = _normalize_slashes(path).lower()
-    r = _like_to_regex(pattern.lower())
-    return bool(r.fullmatch(p))
-
-
-def path_excluded(path: str, pattern: Optional[str]) -> bool:
-    """
-    Exclude if LIKE-style pattern matches.
-    """
-    if not pattern:
-        return False
-    p = _normalize_slashes(path).lower()
-    r = _like_to_regex(pattern.lower())
-    return bool(r.fullmatch(p))
-
-
-def iterate_scenes(scene_filter: dict, path_like: Optional[str], exclude_path_like: Optional[str]) -> List[dict]:
-    total = get_total_scenes(scene_filter)
-    pages = math.ceil(total / BATCH_SIZE)
-    results: List[dict] = []
-    for i in range(1, pages + 1):
-        logPrint(f"Processing page {i} of {pages}")
-        scenes = get_scenes_page(i, scene_filter)
-        for scene in scenes:
-            if scene.get("files"):
-                scene["path"] = scene["files"][0]["path"]
-                if path_like_match(scene["path"], path_like) and not path_excluded(scene["path"], exclude_path_like):
-                    # Apply client-side filters (* and **)
-                    if scene_passes_filters(scene):
-                        results.append(scene)
-    return results
-
-def scene_passes_filters(scene: dict) -> bool:
-    """
-    Apply client-side filters for fields marked with * and **:
-      * scene_markers, studio, groups, tags, performers
-      ** organized, interactive
-    Additional: performer gender filtering for scene inclusion.
-    """
-    # organized / interactive (booleans)
-    if "organized" in FILTERS and FILTERS.get("organized") is not None:
-        if bool(scene.get("organized")) != bool(FILTERS.get("organized")):
-            return False
-    if "interactive" in FILTERS and FILTERS.get("interactive") is not None:
-        if bool(scene.get("interactive")) != bool(FILTERS.get("interactive")):
-            return False
-
-    # scene_markers minimum
-    min_markers = FILTERS.get("min_scene_markers")
-    if isinstance(min_markers, int):
-        markers = scene.get("scene_markers") or []
-        if len(markers) < min_markers:
-            return False
-
-    # studio name set
-    studio_names = FILTERS.get("studio_names")
-    if studio_names:
-        studio_name = ((scene.get("studio") or {}).get("name") or "").strip()
-        if isinstance(studio_names, (set, list)) and studio_name not in studio_names:
-            return False
-
-    # group names set
-    group_names = FILTERS.get("group_names")
-    if group_names and isinstance(group_names, (set, list)):
-        groups = scene.get("groups") or []
-        names = [((g.get("group") or {}).get("name") or "").strip() for g in groups]
-        if not any(n in group_names for n in names if n):
-            return False
-
-    # tags names set (client-side fallback if tag_ids weren't used)
-    tag_names = FILTERS.get("tag_names")
-    if tag_names and isinstance(tag_names, set):
-        tags = scene.get("tags") or []
-        names = [(t.get("name") or "").strip() for t in tags]
-        if not any(n in tag_names for n in names if n):
-            return False
-
-    # performer genders filter (scene must have at least one matching)
-    filter_perf_genders = FILTERS.get("performer_genders")
-    if filter_perf_genders and isinstance(filter_perf_genders, set):
-        performers = scene.get("performers") or []
-        def _matches_gender(p):
-            g = (p.get("gender") or "").upper()
-            if not g:
-                return "UNKNOWN" in filter_perf_genders
-            return g in filter_perf_genders
-        if not any(_matches_gender(p) for p in performers):
-            return False
-
-    return True
-
-
-def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[List[str]], path_like: Optional[str], exclude_path_like: Optional[str], stash_id_endpoint: Optional[str] = None, scene_ids: Optional[List[str]] = None, collect_operations: bool = False):
+def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
     """
     Run the rename operation.
     
@@ -604,37 +271,12 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
     operations = []
     
     if DEBUG_MODE:
-        logPrint(f"[DEBUG] Starting edit_run with DRY_RUN={DRY_RUN}, PATH_TEMPLATE={'set' if PATH_TEMPLATE else 'none'}, PATH_IS_ABSOLUTE={PATH_IS_ABSOLUTE}")
+        logPrint(f"[DEBUG] Starting edit_run with DRY_RUN={DRY_RUN}, PATH_TEMPLATE={'set' if path_template else 'none'}")
     
-    # Resolve tags if provided
-    tag_ids: Optional[List[str]] = None
-    if tag_names:
-        mapping = find_tag_ids_by_names(tag_names)
-        if not mapping:
-            logPrint("[Warn] No tag IDs resolved; skipping tag-based selection.")
-            return operations if collect_operations else None
-        tag_ids = [mapping[name] for name in tag_names if name in mapping]
-        if not tag_ids:
-            logPrint("[Warn] No tag IDs resolved; skipping.")
-            return operations if collect_operations else None
-
-    scene_filter = build_scene_filter(base_filter, tag_ids, stash_id_endpoint)
-
-    scenes = iterate_scenes(scene_filter, path_like, exclude_path_like)
+    scenes = _normalize_scenes(scenes)
     if not scenes:
-        logPrint("[Warn] There are no scenes to change with this query")
+        logPrint("[Warn] There are no scenes to process")
         return operations if collect_operations else None
-
-    # Filter by scene IDs if provided
-    if scene_ids:
-        scene_id_set = set(scene_ids)
-        original_count = len(scenes)
-        scenes = [scene for scene in scenes if scene.get("id") in scene_id_set]
-        if DEBUG_MODE:
-            logPrint(f"[DEBUG] Filtered scenes by IDs: {original_count} -> {len(scenes)} scenes")
-        if not scenes:
-            logPrint("[Warn] No scenes found matching the provided scene IDs")
-            return operations if collect_operations else None
 
     logPrint(f"Scenes count: {len(scenes)}")
 
@@ -643,90 +285,40 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         if not current_path:
             continue
 
-        # Skip if scene is part of a group/movie (optional)
-        if SKIP_GROUPED:
-            groups = scene.get("groups") or []
-            if groups:
-                if DEBUG_MODE:
-                    logPrint(f"[DEBUG] Skipping grouped scene (ID: {scene['id']}): {os.path.basename(current_path)}")
-                continue
-
         current_directory = os.path.dirname(current_path)
         current_filename = os.path.basename(current_path)
         file_extension = os.path.splitext(current_filename)[1] or ""
 
         performers = scene.get("performers") or []
-        names: List[str] = []
+        performer_list: List[dict] = []
         for p in performers:
-            # Include only selected genders for token composition if configured (supports UNKNOWN)
-            if PERFORMER_GENDERS:
-                g = (p.get("gender") or "").upper()
-                if g in PERFORMER_GENDERS or (not g and "UNKNOWN" in PERFORMER_GENDERS):
-                    names.append(p.get("name") or "")
-            else:
-                names.append(p.get("name") or "")
-        performer_names_list = [n for n in names if n]
-        performer_name = " ".join(performer_names_list).strip()
+            if not isinstance(p, dict):
+                continue
+            performer_list.append(p)
 
-        # Derived collections for tokens
-        tag_names_list = [(t.get("name") or "").strip() for t in (scene.get("tags") or []) if (t.get("name") or "").strip()]
-        tag_names_join = " ".join(tag_names_list)
-        group_names_list = [((g.get("group") or {}).get("name") or "").strip() for g in (scene.get("groups") or []) if ((g.get("group") or {}).get("name") or "").strip()]
-        group_names_join = " ".join(group_names_list)
-        urls_list = scene.get("urls") or []
-        urls_join = " ".join(urls_list)
-        stash_ids_list = [(t.get("stash_id") or "").strip() for t in (scene.get("stash_ids") or []) if (t.get("stash_id") or "").strip()]
-        stash_ids_join = " ".join(stash_ids_list)
-        scene_markers_count = str(len(scene.get("scene_markers") or []))
         scene_title = scene.get("title") or ""
-        scene_date = scene.get("date") or ""
-        studio_name = (scene.get("studio") or {}).get("name") or ""
-
-        scene_info = {
-            # Scalars
-            "id": scene.get("id") or "",
-            "title": scene_title,
-            "code": scene.get("code") or "",
-            "details": scene.get("details") or "",
-            "director": scene.get("director") or "",
-            "urls": urls_join,
-            "date": scene_date,
-            "rating100": str(scene.get("rating100") or "") if scene.get("rating100") is not None else "",
-            "organized": "true" if scene.get("organized") else "false" if scene.get("organized") is not None else "",
-            "o_counter": str(scene.get("o_counter") or "") if scene.get("o_counter") is not None else "",
-            "interactive": "true" if scene.get("interactive") else "false" if scene.get("interactive") is not None else "",
-            "interactive_speed": str(scene.get("interactive_speed") or "") if scene.get("interactive_speed") is not None else "",
-            "created_at": scene.get("created_at") or "",
-            "updated_at": scene.get("updated_at") or "",
-            "last_played_at": scene.get("last_played_at") or "",
-            "resume_time": str(scene.get("resume_time") or "") if scene.get("resume_time") is not None else "",
-            "play_duration": str(scene.get("play_duration") or "") if scene.get("play_duration") is not None else "",
-            "play_count": str(scene.get("play_count") or "") if scene.get("play_count") is not None else "",
-            # Collections (stringified)
-            "tags": tag_names_join,
-            "groups": group_names_join,
-            "scene_markers_count": scene_markers_count,
-            "performers": performer_name,
-	    "stash_ids": stash_ids_join,
-            # Lists for array-index tokens
-            "tags_list": tag_names_list,
-            "groups_list": group_names_list,
-            "performers_list": performer_names_list,
-            "urls_list": urls_list,
-	    "stash_ids_list": stash_ids_list,
-            # Existing
-            "studio": studio_name,
-            "height": "",  # Not fetched here
-            "performer": performer_name,  # alias
+        group_list = []
+        for g in (scene.get("groups") or []):
+            if isinstance(g, dict) and isinstance(g.get("group"), dict):
+                group_list.append(g.get("group"))
+            elif isinstance(g, dict):
+                group_list.append(g)
+        # Roots used by the new tag syntax:
+        #   $scene.title
+        #   $performer.name (all performer names joined)
+        #   $performer[0].name
+        #   $group.name (all group names joined)
+        #   $group[0].name
+        tag_context: Dict[str, object] = {
+            "scene": scene,
+            "performer": performer_list,
+            "group": group_list,
         }
         if DEBUG_MODE:
-            logPrint(f"[DEBUG] Scene information: {scene_info}")
-            logPrint(f"[DEBUG] Template: {template}")
+            logPrint(f"[DEBUG] Tag context roots: {list(tag_context.keys())}")
+            logPrint(f"[DEBUG] Template: {filename_template}")
 
-        new_filename_core = makeFilename(scene_info, template)
-        if "None" in new_filename_core:
-            logPrint(f"[Error] Information missing for new filename, ID: {scene['id']}")
-            continue
+        new_filename_core = makeFilename(filename_template, tag_context)
 
         new_filename_core = sanitize_filename(new_filename_core)
         if not new_filename_core.strip():
@@ -736,13 +328,12 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
 
         # Determine target directory via path builder (absolute or relative)
         current_directory = os.path.dirname(current_path)
-        if PATH_TEMPLATE:
+        if path_template:
             try:
                 final_directory = _build_target_directory(
                     current_directory=current_directory,
-                    scene_info=scene_info,
-                    path_template=PATH_TEMPLATE,
-                    is_absolute=PATH_IS_ABSOLUTE,
+                    tag_context=tag_context,
+                    path_template=path_template,
                 )
                 if DEBUG_MODE:
                     logPrint(f"[DEBUG] Path builder: current='{current_directory}' -> target='{final_directory}'")
@@ -753,7 +344,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     else:
                         logPrint(f"[DRY] Would create target folder: {final_directory}")
             except Exception as e:
-                logPrint(f"[Error] Failed to build/create target folder from template '{PATH_TEMPLATE}': {e}")
+                logPrint(f"[Error] Failed to build/create target folder from template '{path_template}': {e}")
                 final_directory = current_directory
         else:
             final_directory = current_directory
@@ -766,10 +357,10 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
         # Handle Windows path length limitation (try to reduce path length if too long)
         if IS_WINDOWS and len(new_path) > 240:
             logPrint(f"[Warn] The Path is too long ({new_path})")
-            if scene_info.get("date"):
-                reduced_core = makeFilename(scene_info, "$date - $title")
+            if scene.get("date"):
+                reduced_core = makeFilename("$scene.date - $scene.title", tag_context)
             else:
-                reduced_core = makeFilename(scene_info, "$title")
+                reduced_core = makeFilename("$scene.title", tag_context)
             reduced_core = sanitize_filename(reduced_core)
             if not reduced_core.strip():
                 logPrint(f"[Error] Reduced filename empty, skipping scene {scene['id']}.")
@@ -826,17 +417,19 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                 if DEBUG_MODE:
                     logPrint(f"[DEBUG] GraphQL call: destination_folder='{final_directory}', destination_basename='{new_filename}'")
                 
-                success = move_files_via_graphql(
+                if FILE_MOVER is None:
+                    raise RuntimeError("FILE_MOVER not initialized")
+                success = FILE_MOVER.move_files(
                     file_ids=file_ids,
                     destination_folder=final_directory,
-                    destination_basename=new_filename
+                    destination_basename=new_filename,
                 )
                 
                 if not success:
                     raise Exception("GraphQL moveFiles returned false")
                     
             except Exception as e:
-                logPrint(f"[OS] File failed to rename ({current_filename}) due to: {e}")
+                logPrint(f"[GQL] File failed to rename ({current_filename}) due to: {e}")
                 with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
                     print(f"{current_path} -> {new_path}", file=fh)
                 if collect_operations:
@@ -853,7 +446,15 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                 continue
 
             # Success - the GraphQL mutation handles the actual file move
-            logPrint(f"[OS] File Renamed! ({current_filename})")
+            logPrint(f"[GQL] File Renamed! ({current_filename})")
+            operation_id = None
+            if FILE_MOVER is not None:
+                operation_id = FILE_MOVER.log_rename(
+                    scene_id=str(scene.get("id") or ""),
+                    old_path=current_path,
+                    new_path=new_path,
+                )
+                logPrint(f"[GQL] Rename operation logged: {operation_id}")
             if USING_LOG:
                 with open("rename_log.txt", "a", encoding="utf-8") as fh:
                     print(f"{scene['id']}|{current_path}|{new_path}", file=fh)
@@ -862,6 +463,7 @@ def edit_run(template: str, base_filter: Optional[dict], tag_names: Optional[Lis
                     "scene_id": scene['id'],
                     "title": scene_title,
                     "status": "success",
+                    "operation_id": operation_id,
                     "old_filename": current_filename,
                     "new_filename": new_filename,
                     "old_path": current_path,
@@ -895,24 +497,17 @@ def run(options: dict, collect_operations: bool = False):
 
     Expected options keys:
       - server_url: str, cookie_name: str, cookie_value: str
-      - template: str, or tags + template, or config_inline [{tag, template}]
-      - scene_filter: dict (GraphQL SceneFilterType), optional
-      - path_like, exclude_path_like: str, optional
-      - scene_ids: List[str] or comma-separated str, optional
-      - performer_genders: str|List[str] for filename token composition
-      - filter_performer_genders: str|List[str] for inclusion filtering
-      - filter_organized: bool
-      - filter_interactive: bool
-      - filter_min_scene_markers: int
-      - filter_studio: str|List[str]
-      - filter_groups: List[str]
-      - filter_tags: List[str]
-      - path_template: str (optional) Directory template using same tokens as filenames.
-          Special token: $up for parent (only in relative mode).
-      - path_is_absolute: bool (optional) If true, build absolute path; otherwise relative to current file directory.
-      - Flags: using_log, dry_run, debug_mode, skip_grouped
+      - filename_template: str
+      - path_template: str (optional)
+      - scenes: List[Scene-like dict] OR
+      - scenes_query: GraphQL query string returning scenes list
+      - scenes_query_variables: dict (optional)
+      - scenes_query_path: dot path to list in GraphQL data (optional), e.g. findScenes.scenes
+      - undo_operation_id: str (optional) if present, performs undo and ignores template/scenes input
+      - operations_db_path: str (optional) SQLite path, default: rename_operations.db
+      - Flags: using_log, dry_run, debug_mode
     """
-    global USING_LOG, DRY_RUN, DEBUG_MODE, SKIP_GROUPED, CONFIG, PERFORMER_GENDERS, FILTERS, PATH_TEMPLATE, PATH_IS_ABSOLUTE
+    global USING_LOG, DRY_RUN, DEBUG_MODE, CONFIG, TAGGER, FILE_MOVER
 
     # Configure connection (cookie-only auth)
     server_url = options.get("server_url")
@@ -926,59 +521,28 @@ def run(options: dict, collect_operations: bool = False):
         cookie_name=cookie_name,
         cookie_value=cookie_value,
     )
+    FILE_MOVER = FileMover(
+        gql_call=__callGraphQL,
+        db_path=str(options.get("operations_db_path") or "rename_operations.db"),
+        log_print=logPrint,
+    )
 
     # Update flags from options
     USING_LOG = options.get("using_log", USING_LOG)
     DRY_RUN = options.get("dry_run", DRY_RUN)
     DEBUG_MODE = options.get("debug_mode", DEBUG_MODE)
-    SKIP_GROUPED = options.get("skip_grouped", SKIP_GROUPED)
 
-    # Configure path builder
-    PATH_TEMPLATE = options.get("path_template") or None
-    PATH_IS_ABSOLUTE = bool(options.get("path_is_absolute", False))
-
-    # Parse genders and build FILTERS
-    def parse_genders(val):
-        if not val:
-            return None
-        vals = val if isinstance(val, list) else [val]
-        out = {str(v).strip().upper() for v in vals if str(v).strip()}
-        # constrain to known enum values (+ UNKNOWN pseudo-gender)
-        allowed = {"MALE", "FEMALE", "TRANSGENDER_MALE", "TRANSGENDER_FEMALE", "INTERSEX", "NON_BINARY", "UNKNOWN"}
-        out = {g for g in out if g in allowed}
-        return out or None
-
-    PERFORMER_GENDERS = parse_genders(options.get("performer_genders"))
-
-    # Build client-side FILTERS
-    FILTERS = {}
-    f_perf = parse_genders(options.get("filter_performer_genders"))
-    if f_perf:
-        FILTERS["performer_genders"] = f_perf
-    if "filter_organized" in options:
-        FILTERS["organized"] = bool(options.get("filter_organized"))
-    if "filter_interactive" in options:
-        FILTERS["interactive"] = bool(options.get("filter_interactive"))
-    if "filter_min_scene_markers" in options:
-        try:
-            value = options.get("filter_min_scene_markers")
-            if value is not None:
-                FILTERS["min_scene_markers"] = int(value)
-        except Exception:
-            pass
-    if "filter_studio" in options:
-        v = options.get("filter_studio")
-        names = v if isinstance(v, list) else [v]
-        FILTERS["studio_names"] = {str(n).strip() for n in names if str(n).strip()}
-    if "filter_groups" in options:
-        v = options.get("filter_groups") or []
-        FILTERS["group_names"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
-    if "filter_tags" in options:
-        v = options.get("filter_tags") or []
-        FILTERS["tag_names"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
-    #if "filter_endpoint_id" in options:
-    #    v = options.get("filter_stash_id_endpoint") or []
-    #    FILTERS["stash_endpoint_id"] = {str(n).strip() for n in (v if isinstance(v, list) else [v]) if str(n).strip()}
+    # Build the introspection-driven tagger.
+    TAGGER = GraphQLTagger(
+        gql_call=__callGraphQL,
+        root_types={"scene": "Scene", "group": "Group", "performer": "Performer"},
+    )
+    try:
+        TAGGER.introspect()
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Tagger ready with roots: {', '.join(TAGGER.available_roots())}")
+    except Exception as e:
+        logPrint(f"[Warn] GraphQL introspection failed, template tags may be incomplete: {e}")
 
 
     if DRY_RUN:
@@ -988,69 +552,45 @@ def run(options: dict, collect_operations: bool = False):
             pass
         logPrint("[DRY_RUN] DRY-RUN Enabled")
 
-    # Base scene filter (GraphQL)
-    base_filter: Optional[dict] = options.get("scene_filter")
+    undo_operation_id = options.get("undo_operation_id")
+    if undo_operation_id:
+        if FILE_MOVER is None:
+            raise RuntimeError("FILE_MOVER not initialized")
+        undo_result = FILE_MOVER.undo_rename(str(undo_operation_id))
+        if collect_operations:
+            return [undo_result]
+        return None
 
-    # Accept scene IDs as list or comma-separated string
-    scene_ids = options.get("scene_ids")
-    if isinstance(scene_ids, str):
-        scene_ids = [s.strip() for s in scene_ids.split(",") if s.strip()]
-    if DEBUG_MODE and scene_ids:
-        logPrint(f"[DEBUG] Processing specific scene IDs: {scene_ids}")
+    filename_template = options.get("filename_template")
+    if not filename_template or not str(filename_template).strip():
+        raise ValueError("filename_template is required")
+    path_template = options.get("path_template") or None
 
-    # Collect tag-template pairs (existing behavior)
-    tag_template_pairs: List[Tuple[str, str]] = []
-    config_inline = options.get("config_inline") or []
-    if isinstance(config_inline, list):
-        for m in config_inline:
-            tag = (m.get("tag") or "").strip()
-            template = (m.get("template") or "").strip()
-            if tag and template:
-                tag_template_pairs.append((tag, template))
+    scenes_opt = options.get("scenes")
+    scenes_query = options.get("scenes_query")
+    if scenes_opt is not None and scenes_query:
+        raise ValueError("Provide only one of 'scenes' or 'scenes_query'")
+    if scenes_opt is None and not scenes_query:
+        raise ValueError("Provide one of 'scenes' or 'scenes_query'")
 
-    tags = options.get("tags") or []
-    template = options.get("template")
-    if tags and template:
-        for t in tags:
-            tag_template_pairs.append((t, template))
-
-    all_operations: List[dict] = []
-
-    if tag_template_pairs:
-        # Per-tag runs
-        for tag_name, tpl in tag_template_pairs:
-            if not tpl or not tpl.strip():
-                logPrint(f"[Warn] Empty template for tag '{tag_name}', skipping.")
-                continue
-            ops = edit_run(
-                template=tpl,
-                base_filter=base_filter,
-                tag_names=[tag_name],
-                path_like=options.get("path_like"),
-                exclude_path_like=options.get("exclude_path_like"),
-                stash_id_endpoint=options.get("stash_id_endpoint") or None,
-                scene_ids=scene_ids,
-                collect_operations=collect_operations,
-            )
-            if ops:
-                all_operations.extend(ops)
-            logPrint("====================")
+    if scenes_opt is not None:
+        if not isinstance(scenes_opt, list):
+            raise ValueError("'scenes' must be a list of scene objects")
+        scenes = [s for s in scenes_opt if isinstance(s, dict)]
     else:
-        # No-tag mode
-        if template and template.strip():
-            ops = edit_run(
-                template=template,
-                base_filter=base_filter,
-                tag_names=None,
-                path_like=options.get("path_like"),
-                exclude_path_like=options.get("exclude_path_like"),
-                stash_id_endpoint=options.get("stash_id_endpoint") or None,
-                scene_ids=scene_ids,
-                collect_operations=collect_operations,
-            )
-            if ops:
-                all_operations.extend(ops)
-        else:
-            logPrint("[Info] No tags and no template provided. Nothing to do.")
+        variables = options.get("scenes_query_variables")
+        if variables is not None and not isinstance(variables, dict):
+            raise ValueError("'scenes_query_variables' must be an object/dict")
+        query_data = __callGraphQL(str(scenes_query), variables)
+        scenes = _extract_scenes_from_data(query_data, options.get("scenes_query_path"))
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from custom GraphQL query")
 
+    ops = edit_run(
+        filename_template=str(filename_template),
+        path_template=path_template,
+        scenes=scenes,
+        collect_operations=collect_operations,
+    )
+    all_operations: List[dict] = ops or []
     return all_operations if collect_operations else None
