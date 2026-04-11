@@ -4,36 +4,24 @@ version: 1.0.0
 url: https://github.com/lucasnegrao/stash_renamer
 ui:
   javascript:
-    - scene_renamer_ui.js
+    - ui/dist/example.js
 settings:
   template:
     displayName: Filename Template
     type: STRING
-    description: "Template for renaming files. Tokens: $studio, $date, $title, $performer, $height"
-  femaleOnly:
-    displayName: Female Performers Only
-    type: BOOLEAN
-    description: Include only female performers in $performer token
-  skipGrouped:
-    displayName: Skip Grouped Scenes
-    type: BOOLEAN
-    description: Skip scenes that are part of a group/movie
-  moveToStudioFolder:
-    displayName: Move to Studio Folder
-    type: BOOLEAN
-    description: Move scenes to a studio-named subfolder if studio exists
-  pathLike:
-    displayName: Path Filter (Include)
+    description: "Template for renaming files."
+  scenesPathTemplate:
+    displayName: Scenes path template
     type: STRING
-    description: "Optional substring to match in file path (e.g., /mnt/media/)"
-  excludePathLike:
-    displayName: Path Filter (Exclude)
+    description: "Template for renaming scenes folders."
+  groupsPathTemplate:
+    displayName: Groups path template
     type: STRING
-    description: Optional substring to exclude matching file paths
-  debugMode:
-    displayName: Debug Mode
+    description: "Template for renaming scenes folders."
+  useSamePathForGroups:
+    displayName: Use scenes path template for groups
     type: BOOLEAN
-    description: Enable debug output for troubleshooting
+    description: "If true, the scenes path template will be used for renaming groups folders instead of the groups path template."
 exec:
   - python3
   - "{pluginDir}/stash_renamer_plugin.py"
