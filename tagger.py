@@ -119,13 +119,17 @@ class GraphQLTagger:
         if isinstance(value, list):
             out = []
             for item in value:
-                if isinstance(item, dict) and key in item:
-                    out.append(item.get(key))
-                elif hasattr(item, key):
-                    out.append(getattr(item, key))
+                item_u = self._unwrap_single_nested(item) if isinstance(item, dict) else item
+                if isinstance(item_u, dict) and key in item_u:
+                    out.append(item_u.get(key))
+                elif hasattr(item_u, key):
+                    out.append(getattr(item_u, key))
             return out
         if isinstance(value, dict):
-            return value.get(key)
+            value_u = self._unwrap_single_nested(value)
+            if isinstance(value_u, dict):
+                return value_u.get(key)
+            return None
         if hasattr(value, key):
             return getattr(value, key)
         return None
@@ -136,9 +140,25 @@ class GraphQLTagger:
                 if 0 <= key < len(value):
                     return value[key]
                 return None
+            if isinstance(key, str):
+                out = []
+                for item in value:
+                    v = self._access_index(item, key)
+                    if v is None:
+                        v = self._access_attr(item, key)
+                    if v is not None:
+                        out.append(v)
+                return out
             return None
         if isinstance(value, dict):
-            return value.get(key)
+            value_u = self._unwrap_single_nested(value)
+            if isinstance(value_u, dict):
+                return value_u.get(key)
+            if isinstance(value_u, list) and isinstance(key, int):
+                if 0 <= key < len(value_u):
+                    return value_u[key]
+                return None
+            return None
         return None
 
     def _stringify(self, value: Any) -> str:
@@ -163,3 +183,17 @@ class GraphQLTagger:
                 out.extend(self._flatten(v))
             return out
         return [str(value)]
+
+    def _unwrap_single_nested(self, value: Dict[str, Any]) -> Any:
+        """
+        Some GraphQL relations are wrapped like {"group": {...}}.
+        If there is a single nested dict/list value, expose it for attribute access.
+        """
+        current: Any = value
+        while isinstance(current, dict) and len(current) == 1:
+            only_val = next(iter(current.values()))
+            if isinstance(only_val, (dict, list)):
+                current = only_val
+                continue
+            break
+        return current
