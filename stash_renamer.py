@@ -258,6 +258,129 @@ def _normalize_scenes(scenes: List[dict]) -> List[dict]:
     return out
 
 
+def _build_field_tree_from_templates(filename_template: str, path_template: Optional[str]) -> Dict[str, Any]:
+    """
+    Build a GraphQL field tree for findScenes based on template expressions.
+    Keeps mandatory fields required for renaming operations.
+    """
+    def add_path(tree: Dict[str, Any], path: List[str]) -> None:
+        if not path:
+            return
+        node = tree
+        for key in path:
+            if key not in node or not isinstance(node.get(key), dict):
+                node[key] = {}
+            node = node[key]
+
+    tree: Dict[str, Any] = {}
+    # Mandatory for rename operations and output.
+    add_path(tree, ["id"])
+    add_path(tree, ["title"])
+    add_path(tree, ["files", "id"])
+    add_path(tree, ["files", "path"])
+
+    templates = [filename_template or "", path_template or ""]
+    for tpl in templates:
+        if not TAGGER:
+            continue
+        for expr in TAGGER.extract_expressions(tpl):
+            root, segments = TAGGER.parse_expression(expr)
+            attr_path = [str(v) for t, v in segments if t == "attr"]
+            if root == "scene":
+                if attr_path and not TAGGER.has_root_field("scene", attr_path[0]):
+                    continue
+                add_path(tree, attr_path)
+            elif root == "performer":
+                if attr_path and not TAGGER.has_root_field("performer", attr_path[0]):
+                    continue
+                add_path(tree, ["performers"] + attr_path)
+            elif root == "group":
+                if attr_path and not TAGGER.has_root_field("group", attr_path[0]):
+                    continue
+                add_path(tree, ["groups", "group"] + attr_path)
+
+    # Ensure grouped wrappers have usable identity/name when group fields requested.
+    groups_node = tree.get("groups")
+    if isinstance(groups_node, dict):
+        groups_node.setdefault("scene_index", {})
+        group_node = groups_node.get("group")
+        if not isinstance(group_node, dict):
+            groups_node["group"] = {"id": {}, "name": {}}
+        else:
+            group_node.setdefault("id", {})
+            group_node.setdefault("name", {})
+
+    # Ensure performer name is present when performer root is used.
+    if "performers" in tree and isinstance(tree["performers"], dict):
+        tree["performers"].setdefault("name", {})
+
+    return tree
+
+
+def _field_tree_to_selection(tree: Dict[str, Any]) -> str:
+    def is_leaf(node: Any) -> bool:
+        return not isinstance(node, dict) or len(node) == 0
+
+    parts: List[str] = []
+    for field in sorted(tree.keys()):
+        node = tree[field]
+        if is_leaf(node):
+            parts.append(field)
+        else:
+            parts.append(f"{field} {{ {_field_tree_to_selection(node)} }}")
+    return " ".join(parts)
+
+
+def _build_find_scenes_query(filename_template: str, path_template: Optional[str]) -> str:
+    tree = _build_field_tree_from_templates(filename_template, path_template)
+    selection = _field_tree_to_selection(tree)
+    return (
+        "query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType, $ids: [ID!]) { "
+        "findScenes(filter: $filter, scene_filter: $scene_filter, ids: $ids) { "
+        f"scenes {{ {selection} }} "
+        "} }"
+    )
+
+
+def _fetch_scenes_from_filter(
+    scene_filter: Optional[dict],
+    ids: Optional[List[str]],
+    find_filter: Optional[dict],
+    filename_template: str,
+    path_template: Optional[str],
+) -> List[dict]:
+    """
+    Fetch scenes using backend-managed canonical query and pagination.
+    """
+    ff = (find_filter or {}).copy()
+    per_page = int(ff.get("per_page") or 250)
+    if per_page <= 0:
+        per_page = 250
+    page = int(ff.get("page") or 1)
+    if page <= 0:
+        page = 1
+
+    all_scenes: List[dict] = []
+    find_scenes_query = _build_find_scenes_query(filename_template, path_template)
+    while True:
+        page_filter = ff.copy()
+        page_filter["per_page"] = per_page
+        page_filter["page"] = page
+        variables = {
+            "filter": page_filter,
+            "scene_filter": scene_filter,
+            "ids": ids if ids else None,
+        }
+        data = __callGraphQL(find_scenes_query, variables)
+        scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
+        page_scenes = [s for s in scenes if isinstance(s, dict)]
+        all_scenes.extend(page_scenes)
+        if len(page_scenes) < per_page:
+            break
+        page += 1
+    return all_scenes
+
+
 def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
     """
     Run the rename operation.
@@ -500,7 +623,10 @@ def run(options: dict, collect_operations: bool = False):
       - filename_template: str
       - path_template: str (optional)
       - scenes: List[Scene-like dict] OR
-      - scenes_query: GraphQL query string returning scenes list
+      - scene_filter: SceneFilterType-like dict (optional)
+      - ids: [ID] list (optional)
+      - find_filter: FindFilterType-like dict (optional, defaults per_page=250,page=1)
+      - scenes_query: GraphQL query string returning scenes list (optional advanced mode)
       - scenes_query_variables: dict (optional)
       - scenes_query_path: dot path to list in GraphQL data (optional), e.g. findScenes.scenes
       - undo_operation_id: str (optional) if present, performs undo and ignores template/scenes input
@@ -568,16 +694,23 @@ def run(options: dict, collect_operations: bool = False):
 
     scenes_opt = options.get("scenes")
     scenes_query = options.get("scenes_query")
-    if scenes_opt is not None and scenes_query:
-        raise ValueError("Provide only one of 'scenes' or 'scenes_query'")
-    if scenes_opt is None and not scenes_query:
-        raise ValueError("Provide one of 'scenes' or 'scenes_query'")
+    scene_filter = options.get("scene_filter")
+    ids_opt = options.get("ids")
+    find_filter = options.get("find_filter")
+    has_filter_mode = scene_filter is not None or ids_opt is not None or find_filter is not None
+
+    if scenes_opt is not None and (scenes_query or has_filter_mode):
+        raise ValueError("Provide only one scene source: 'scenes', query mode, or filter mode")
+    if scenes_query and has_filter_mode:
+        raise ValueError("Provide either query mode or filter mode, not both")
+    if scenes_opt is None and not scenes_query and not has_filter_mode:
+        raise ValueError("Provide scenes, query mode, or filter mode")
 
     if scenes_opt is not None:
         if not isinstance(scenes_opt, list):
             raise ValueError("'scenes' must be a list of scene objects")
         scenes = [s for s in scenes_opt if isinstance(s, dict)]
-    else:
+    elif scenes_query:
         variables = options.get("scenes_query_variables")
         if variables is not None and not isinstance(variables, dict):
             raise ValueError("'scenes_query_variables' must be an object/dict")
@@ -585,6 +718,25 @@ def run(options: dict, collect_operations: bool = False):
         scenes = _extract_scenes_from_data(query_data, options.get("scenes_query_path"))
         if DEBUG_MODE:
             logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from custom GraphQL query")
+    else:
+        ids: Optional[List[str]] = None
+        if ids_opt is not None:
+            if not isinstance(ids_opt, list):
+                raise ValueError("'ids' must be a list")
+            ids = [str(x) for x in ids_opt if str(x).strip()]
+        if scene_filter is not None and not isinstance(scene_filter, dict):
+            raise ValueError("'scene_filter' must be an object/dict")
+        if find_filter is not None and not isinstance(find_filter, dict):
+            raise ValueError("'find_filter' must be an object/dict")
+        scenes = _fetch_scenes_from_filter(
+            scene_filter,
+            ids,
+            find_filter,
+            filename_template=str(filename_template),
+            path_template=path_template,
+        )
+        if DEBUG_MODE:
+            logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from backend filter mode")
 
     ops = edit_run(
         filename_template=str(filename_template),

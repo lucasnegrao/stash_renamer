@@ -33,6 +33,14 @@ class GraphQLTagger:
     def available_roots(self) -> List[str]:
         return sorted(self._root_types.keys())
 
+    def has_root_field(self, root: str, field: str) -> bool:
+        if not self.is_ready():
+            return True
+        known = self._fields_by_root.get(root)
+        if known is None:
+            return False
+        return field in known
+
     def render(self, template: str, context: Dict[str, Any]) -> str:
         def repl(match: re.Match) -> str:
             expr = match.group(1)
@@ -40,6 +48,12 @@ class GraphQLTagger:
             return self._stringify(value)
 
         return self._TOKEN_RE.sub(repl, template or "")
+
+    def extract_expressions(self, template: str) -> List[str]:
+        return [m.group(1) for m in self._TOKEN_RE.finditer(template or "")]
+
+    def parse_expression(self, expr: str) -> Tuple[str, List[Tuple[str, Any]]]:
+        return self._parse_expr(expr)
 
     def _resolve_expr(self, expr: str, context: Dict[str, Any]) -> Any:
         root, segments = self._parse_expr(expr)

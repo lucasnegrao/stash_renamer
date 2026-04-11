@@ -280,7 +280,7 @@
       return `^(${names.join("|")})$`;
     };
 
-    const buildScenesQueryInput = (mode) => {
+    const buildSceneSelectionInput = (mode) => {
       const sceneFilter = {};
       if (pathLike && pathLike.trim()) {
         sceneFilter.path = { value: pathLike.trim(), modifier: "INCLUDES" };
@@ -338,45 +338,11 @@
         mode !== "dry_run" && selectedScenes.size > 0
           ? Array.from(selectedScenes)
           : null;
-      const scenesQuery = `
-        query FindScenesForRename($filter: FindFilterType, $scene_filter: SceneFilterType, $ids: [ID!]) {
-          findScenes(filter: $filter, scene_filter: $scene_filter, ids: $ids) {
-            scenes {
-              id
-              title
-              code
-              details
-              director
-              urls
-              date
-              rating100
-              organized
-              o_counter
-              interactive
-              interactive_speed
-              created_at
-              updated_at
-              last_played_at
-              resume_time
-              play_duration
-              play_count
-              files { id path }
-              studio { name }
-              performers { name gender }
-              tags { name }
-              groups { group { id name } }
-              scene_markers { id }
-              stash_ids { stash_id }
-            }
-          }
-        }
-      `;
-      const scenesQueryVariables = {
-        filter: { per_page: 10000, page: 1 },
-        scene_filter: sceneFilterPayload,
+      return {
+        sceneFilter: sceneFilterPayload,
         ids,
+        findFilter: { per_page: 250, page: 1 },
       };
-      return { scenesQuery, scenesQueryVariables };
     };
 
     const runRename = async (mode) => {
@@ -385,7 +351,7 @@
       setOperations([]); // Clear previous results
 
       try {
-        const { scenesQuery, scenesQueryVariables } = buildScenesQueryInput(mode);
+        const { sceneFilter, ids, findFilter } = buildSceneSelectionInput(mode);
         const response = await fetch("/graphql", {
           method: "POST",
           headers: {
@@ -403,9 +369,9 @@
                 path_template: pathTemplate,
                 dry_run: dryRun.toString(),
                 debugMode: debugMode.toString(),
-                scenes_query: scenesQuery,
-                scenes_query_variables: scenesQueryVariables,
-                scenes_query_path: "findScenes.scenes",
+                scene_filter: sceneFilter,
+                ids: ids,
+                find_filter: findFilter,
               },
             },
           }),
@@ -1512,30 +1478,10 @@
                   React.createElement(
                     "th",
                     {
-                      onClick: () => handleSort("old_filename"),
-                      style: { cursor: "pointer", userSelect: "none" },
-                    },
-                    "Old Filename ",
-                    sortField === "old_filename" &&
-                      (sortDirection === "asc" ? "▲" : "▼")
-                  ),
-                  React.createElement(
-                    "th",
-                    {
-                      onClick: () => handleSort("new_filename"),
-                      style: { cursor: "pointer", userSelect: "none" },
-                    },
-                    "New Filename ",
-                    sortField === "new_filename" &&
-                      (sortDirection === "asc" ? "▲" : "▼")
-                  ),
-                  React.createElement(
-                    "th",
-                    {
                       onClick: () => handleSort("old_path"),
                       style: { cursor: "pointer", userSelect: "none" },
                     },
-                    "Old Path ",
+                    "Old ",
                     sortField === "old_path" &&
                       (sortDirection === "asc" ? "▲" : "▼")
                   ),
@@ -1545,7 +1491,7 @@
                       onClick: () => handleSort("new_path"),
                       style: { cursor: "pointer", userSelect: "none" },
                     },
-                    "New Path ",
+                    "New ",
                     sortField === "new_path" &&
                       (sortDirection === "asc" ? "▲" : "▼")
                   ),
@@ -1598,26 +1544,8 @@
                     React.createElement(
                       "td",
                       {
-                        className: "text-truncate",
-                        style: { maxWidth: "250px" },
-                        title: op.old_filename,
-                      },
-                      op.old_filename
-                    ),
-                    React.createElement(
-                      "td",
-                      {
-                        className: "text-truncate",
-                        style: { maxWidth: "250px" },
-                        title: op.new_filename,
-                      },
-                      op.new_filename
-                    ),
-                    React.createElement(
-                      "td",
-                      {
-                        className: "text-truncate",
-                        style: { maxWidth: "300px" },
+                        className: "text-truncate font-monospace",
+                        style: { maxWidth: "420px" },
                         title: op.old_path,
                       },
                       op.old_path || ""
@@ -1625,8 +1553,8 @@
                     React.createElement(
                       "td",
                       {
-                        className: "text-truncate",
-                        style: { maxWidth: "300px" },
+                        className: "text-truncate font-monospace",
+                        style: { maxWidth: "420px" },
                         title: op.new_path,
                       },
                       op.new_path || ""

@@ -305,6 +305,11 @@ def run(input_data, output):
             except Exception:
                 raise Exception("scenes_query_variables must be a JSON object")
         scenes_query_path = combined_args.get("scenes_query_path") or combined_args.get("scenesQueryPath") or "findScenes.scenes"
+        scene_filter = combined_args.get("scene_filter") or combined_args.get("sceneFilter")
+        find_filter = combined_args.get("find_filter") or combined_args.get("findFilter")
+        ids = combined_args.get("ids")
+        if isinstance(ids, str):
+            ids = [s.strip() for s in ids.split(",") if s.strip()]
         undo_operation_id = combined_args.get("undo_operation_id") or combined_args.get("undoOperationId")
         operations_db_path = combined_args.get("operations_db_path") or combined_args.get("operationsDbPath")
 
@@ -323,7 +328,14 @@ def run(input_data, output):
         if undo_operation_id:
             options["undo_operation_id"] = undo_operation_id
         else:
-            if scenes_query:
+            if scene_filter is not None or find_filter is not None or ids is not None:
+                if scene_filter is not None:
+                    options["scene_filter"] = scene_filter
+                if find_filter is not None:
+                    options["find_filter"] = find_filter
+                if ids is not None:
+                    options["ids"] = ids
+            elif scenes_query:
                 options["scenes_query"] = scenes_query
                 if scenes_query_variables is not None:
                     options["scenes_query_variables"] = scenes_query_variables
