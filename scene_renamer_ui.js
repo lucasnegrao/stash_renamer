@@ -281,77 +281,63 @@
     };
 
     const buildScenesQueryInput = (mode) => {
-      const andFilters = [];
+      const sceneFilter = {};
       if (pathLike && pathLike.trim()) {
-        andFilters.push({
-          path: { value: pathLike.trim(), modifier: "INCLUDES" },
-        });
+        sceneFilter.path = { value: pathLike.trim(), modifier: "INCLUDES" };
       }
       if (excludePathLike && excludePathLike.trim()) {
-        andFilters.push({
-          NOT: {
-            path: { value: excludePathLike.trim(), modifier: "INCLUDES" },
-          },
-        });
+        sceneFilter.NOT = {
+          path: { value: excludePathLike.trim(), modifier: "INCLUDES" },
+        };
       }
       if (organized !== "any") {
-        andFilters.push({ organized: organized === "true" });
+        sceneFilter.organized = organized === "true";
       }
       if (grouped === "true") {
-        andFilters.push({
-          groups_filter: {
-            name: { value: "", modifier: "NOT_NULL" },
-          },
-        });
+        sceneFilter.groups_filter = {
+          name: { value: "", modifier: "NOT_NULL" },
+        };
       } else if (grouped === "false") {
-        andFilters.push({
-          groups_filter: {
-            name: { value: "", modifier: "IS_NULL" },
-          },
-        });
+        sceneFilter.groups_filter = {
+          name: { value: "", modifier: "IS_NULL" },
+        };
       }
       if (stashIDEndpoint && stashIDEndpoint.trim()) {
-        andFilters.push({
-          stash_id_endpoint: {
-            endpoint: stashIDEndpoint.trim(),
-            modifier: "EQUALS",
-          },
-        });
+        sceneFilter.stash_id_endpoint = {
+          endpoint: stashIDEndpoint.trim(),
+          modifier: "EQUALS",
+        };
       }
       const tagsRegex = buildNameRegex(filterTags);
       if (tagsRegex) {
-        andFilters.push({
-          tags_filter: { name: { value: tagsRegex, modifier: "MATCHES_REGEX" } },
-        });
+        sceneFilter.tags_filter = {
+          name: { value: tagsRegex, modifier: "MATCHES_REGEX" },
+        };
       }
       const groupsRegex = buildNameRegex(filterGroups);
       if (groupsRegex) {
-        andFilters.push({
-          groups_filter: {
-            name: { value: groupsRegex, modifier: "MATCHES_REGEX" },
-          },
-        });
+        sceneFilter.groups_filter = {
+          name: { value: groupsRegex, modifier: "MATCHES_REGEX" },
+        };
       }
       const studiosRegex = buildNameRegex(filterStudio);
       if (studiosRegex) {
-        andFilters.push({
-          studios_filter: {
-            name: { value: studiosRegex, modifier: "MATCHES_REGEX" },
-          },
-        });
+        sceneFilter.studios_filter = {
+          name: { value: studiosRegex, modifier: "MATCHES_REGEX" },
+        };
       }
       if (filterPerformerGenders.length) {
-        andFilters.push({
-          performers_filter: {
-            gender: {
-              value: filterPerformerGenders,
-              modifier: "INCLUDES",
-            },
+        sceneFilter.performers_filter = {
+          gender: {
+            value: filterPerformerGenders,
+            modifier: "INCLUDES",
           },
-        });
+        };
       }
 
-      const sceneFilter = andFilters.length ? { AND: andFilters } : null;
+      const sceneFilterPayload = Object.keys(sceneFilter).length
+        ? sceneFilter
+        : null;
       const ids =
         mode !== "dry_run" && selectedScenes.size > 0
           ? Array.from(selectedScenes)
@@ -391,7 +377,7 @@
       `;
       const scenesQueryVariables = {
         filter: { per_page: 10000, page: 1 },
-        scene_filter: sceneFilter,
+        scene_filter: sceneFilterPayload,
         ids,
       };
       return { scenesQuery, scenesQueryVariables };
