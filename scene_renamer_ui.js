@@ -160,13 +160,10 @@
     const [filterPerformerGenders, setFilterPerformerGenders] = React.useState([]);
     // Tri-state filters: 'any' | 'true' | 'false'
     const [organized, setOrganized] = React.useState("any");
-    const [interactive, setInteractive] = React.useState("any");
-    const [minSceneMarkers, setMinSceneMarkers] = React.useState("");
+    const [grouped, setGrouped] = React.useState("any");
     const [filterStudio, setFilterStudio] = React.useState("");
     const [filterGroups, setFilterGroups] = React.useState("");
     const [filterTags, setFilterTags] = React.useState("");
-    // Optional tag-based selection (comma-separated)
-    const [tags, setTags] = React.useState("");
     const [stashIDEndpoint, setStashIDEndpoint] = React.useState("");
     // Available catalogs and picker states
     const [availableTags, setAvailableTags] = React.useState([]);
@@ -177,8 +174,6 @@
     const [loadingGroups, setLoadingGroups] = React.useState(false);
     // New: loading studios
     const [loadingStudios, setLoadingStudios] = React.useState(false);
-    const [showSelectTagsPicker, setShowSelectTagsPicker] =
-      React.useState(false);
     const [showFilterTagsPicker, setShowFilterTagsPicker] =
       React.useState(false);
     const [showFilterGroupsPicker, setShowFilterGroupsPicker] =
@@ -192,6 +187,8 @@
     const [studioSearch, setStudioSearch] = React.useState("");
     // Scene selection state for operations table
     const [selectedScenes, setSelectedScenes] = React.useState(new Set());
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [pageSize, setPageSize] = React.useState(25);
 
     // Helpers for CSV <-> Set
     const csvToSet = (csv) =>
@@ -233,6 +230,13 @@
       });
     };
 
+    const getPaginatedOperations = () => {
+      const sorted = getSortedOperations();
+      const start = (currentPage - 1) * pageSize;
+      return sorted.slice(start, start + pageSize);
+    };
+    const totalPages = Math.max(1, Math.ceil(operations.length / pageSize));
+
 
     // Scene selection handlers for operations table
     const handleSceneSelection = (sceneId, checked) => {
@@ -258,7 +262,13 @@
       if (operations.length > 0) {
         setSelectedScenes(new Set(operations.map((op) => op.scene_id)));
       }
+      setCurrentPage(1);
     }, [operations]);
+    React.useEffect(() => {
+      if (currentPage > totalPages) {
+        setCurrentPage(totalPages);
+      }
+    }, [currentPage, totalPages]);
 
     const buildNameRegex = (csv) => {
       const names = (csv || "")
@@ -287,28 +297,24 @@
       if (organized !== "any") {
         andFilters.push({ organized: organized === "true" });
       }
-      if (interactive !== "any") {
-        andFilters.push({ interactive: interactive === "true" });
-      }
-      if ((minSceneMarkers || "").trim() !== "") {
-        const msm = Number(minSceneMarkers);
-        if (!Number.isNaN(msm) && msm > 0) {
-          andFilters.push({ has_markers: "true" });
-        }
+      if (grouped === "true") {
+        andFilters.push({
+          groups_filter: {
+            name: { value: "", modifier: "NOT_NULL" },
+          },
+        });
+      } else if (grouped === "false") {
+        andFilters.push({
+          groups_filter: {
+            name: { value: "", modifier: "IS_NULL" },
+          },
+        });
       }
       if (stashIDEndpoint && stashIDEndpoint.trim()) {
         andFilters.push({
           stash_id_endpoint: {
             endpoint: stashIDEndpoint.trim(),
             modifier: "EQUALS",
-          },
-        });
-      }
-      const selectedTagsRegex = buildNameRegex(tags);
-      if (selectedTagsRegex) {
-        andFilters.push({
-          tags_filter: {
-            name: { value: selectedTagsRegex, modifier: "MATCHES_REGEX" },
           },
         });
       }
@@ -548,8 +554,7 @@
             settings.pathTemplate ?? settings.path_template ?? ""
           );
 
-          // New: tag selection and filters
-          setTags(toCsv(settings.tags ?? "", ""));
+          // New: filters
           setFilterPerformerGenders(
             toArray(
               settings.filterPerformerGenders ??
@@ -559,12 +564,7 @@
           setOrganized(
             toTri(settings.filterOrganized ?? settings.filter_organized)
           );
-          setInteractive(
-            toTri(settings.filterInteractive ?? settings.filter_interactive)
-          );
-          const msm =
-            settings.filterMinSceneMarkers ?? settings.filter_min_scene_markers;
-          setMinSceneMarkers(msm != null ? String(msm) : "");
+          setGrouped(toTri(settings.filterGrouped ?? settings.filter_grouped));
           setFilterStudio(
             toCsv(settings.filterStudio ?? settings.filter_studio, "")
           );
@@ -592,8 +592,7 @@
               setExcludePathLike(String(p.excludePathLike));
             if (p.debugMode !== undefined) setDebugMode(Boolean(p.debugMode));
             if (p.organized !== undefined) setOrganized(String(p.organized));
-            if (p.interactive !== undefined)
-              setInteractive(String(p.interactive));
+            if (p.grouped !== undefined) setGrouped(String(p.grouped));
             if (p.filterStudio !== undefined)
               setFilterStudio(String(p.filterStudio));
             if (p.filterGroups !== undefined)
@@ -601,6 +600,8 @@
             if (p.filterTags !== undefined) setFilterTags(String(p.filterTags));
             if (p.stashIDEndpoint !== undefined)
               setStashIDEndpoint(String(p.stashIDEndpoint));
+            if (p.pageSize !== undefined && Number(p.pageSize) > 0)
+              setPageSize(Number(p.pageSize));
             if (Array.isArray(p.filterPerformerGenders))
               setFilterPerformerGenders(
                 p.filterPerformerGenders.map((x) => String(x))
@@ -627,11 +628,12 @@
             excludePathLike,
             debugMode,
             organized,
-            interactive,
+            grouped,
             filterStudio,
             filterGroups,
             filterTags,
             stashIDEndpoint,
+            pageSize,
             filterPerformerGenders,
           })
         );
@@ -646,11 +648,12 @@
       excludePathLike,
       debugMode,
       organized,
-      interactive,
+      grouped,
       filterStudio,
       filterGroups,
       filterTags,
       stashIDEndpoint,
+      pageSize,
       filterPerformerGenders,
     ]);
 
@@ -895,130 +898,6 @@
       // Selection and Filters
       React.createElement("hr", null),
       React.createElement("h5", null, "Selection and Filters"),
-      // Tag-based selection
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Select by Tags:"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement(
-            "div",
-            { className: "d-flex" },
-            React.createElement("input", {
-              type: "text",
-              className: "form-control",
-              value: tags,
-              onChange: (e) => setTags(e.target.value),
-              placeholder: "Comma-separated tag names for selection (optional)",
-            }),
-            React.createElement(
-              Button,
-              {
-                className: "ml-2",
-                onClick: async () => {
-                  await ensureTagsLoaded();
-                  setShowSelectTagsPicker((v) => !v);
-                },
-              },
-              "Browse…"
-            )
-          ),
-          showSelectTagsPicker &&
-            React.createElement(
-              "div",
-              {
-                className: "border rounded p-2 mt-2",
-                style: { maxHeight: "280px", overflow: "auto" },
-              },
-              React.createElement(
-                "div",
-                { className: "d-flex mb-2" },
-                React.createElement("input", {
-                  type: "text",
-                  className: "form-control",
-                  placeholder: "Search tags…",
-                  value: tagSearch,
-                  onChange: (e) => setTagSearch(e.target.value),
-                }),
-                React.createElement(
-                  Button,
-                  { className: "ml-2", onClick: () => setTagSearch("") },
-                  "Clear"
-                )
-              ),
-              loadingTags
-                ? React.createElement("div", null, "Loading tags…")
-                : React.createElement(
-                    React.Fragment,
-                    null,
-                    (availableTags || [])
-                      .filter((n) =>
-                        n.toLowerCase().includes(tagSearch.toLowerCase())
-                      )
-                      .map((name) =>
-                        React.createElement(
-                          "div",
-                          { key: name, className: "form-check" },
-                          React.createElement("input", {
-                            type: "checkbox",
-                            id: `sel-tag-${name}`,
-                            className: "form-check-input",
-                            checked: csvToSet(tags).has(name),
-                            onChange: (e) => {
-                              const next = csvToSet(tags);
-                              if (e.target.checked) next.add(name);
-                              else next.delete(name);
-                              setTags(setToCsv(next));
-                            },
-                          }),
-                          React.createElement(
-                            "label",
-                            {
-                              className: "form-check-label",
-                              htmlFor: `sel-tag-${name}`,
-                            },
-                            name
-                          )
-                        )
-                      )
-                  ),
-              React.createElement(
-                "div",
-                { className: "mt-2 d-flex" },
-                React.createElement(
-                  Button,
-                  {
-                    variant: "secondary",
-                    onClick: () => setShowSelectTagsPicker(false),
-                  },
-                  "Close"
-                ),
-                React.createElement(
-                  Button,
-                  {
-                    className: "ml-2",
-                    onClick: () => {
-                      setTags("");
-                      setTagSearch("");
-                    },
-                  },
-                  "Clear All"
-                )
-              )
-            ),
-          React.createElement(
-            "small",
-            { className: "form-text text-muted" },
-            "If set, only scenes with these tags will be selected"
-          )
-        )
-      ),
       // Performer genders filter
       React.createElement(
         "div",
@@ -1084,14 +963,14 @@
         )
       ),
 
-      // Interactive tri-state
+      // Grouped tri-state
       React.createElement(
         "div",
         { className: "form-group row" },
         React.createElement(
           "label",
           { className: "col-sm-2 col-form-label" },
-          "Interactive:"
+          "Grouped:"
         ),
         React.createElement(
           "div",
@@ -1100,45 +979,21 @@
             "select",
             {
               className: "form-control",
-              value: interactive,
-              onChange: (e) => setInteractive(e.target.value),
+              value: grouped,
+              onChange: (e) => setGrouped(e.target.value),
             },
             React.createElement("option", { value: "any" }, "Any"),
             React.createElement(
               "option",
               { value: "true" },
-              "Only interactive"
+              "Only grouped"
             ),
             React.createElement(
               "option",
               { value: "false" },
-              "Only non-interactive"
+              "Only ungrouped"
             )
           )
-        )
-      ),
-
-      // Min scene markers
-      React.createElement(
-        "div",
-        { className: "form-group row" },
-        React.createElement(
-          "label",
-          { className: "col-sm-2 col-form-label" },
-          "Min Scene Markers:"
-        ),
-        React.createElement(
-          "div",
-          { className: "col-sm-10" },
-          React.createElement("input", {
-            type: "number",
-            min: "0",
-            className: "form-control",
-            value: minSceneMarkers,
-            onChange: (e) =>
-              setMinSceneMarkers(e.target.value.replace(/\D/g, "")),
-            placeholder: "e.g., 1",
-          })
         )
       ),
 
@@ -1574,6 +1429,61 @@
             "div",
             { className: "table-responsive" },
             React.createElement(
+              "div",
+              { className: "d-flex justify-content-between align-items-center mb-2" },
+              React.createElement(
+                "div",
+                null,
+                React.createElement(
+                  "small",
+                  { className: "text-muted" },
+                  `Page ${currentPage} of ${totalPages}`
+                )
+              ),
+              React.createElement(
+                "div",
+                { className: "d-flex align-items-center" },
+                React.createElement(
+                  "label",
+                  { className: "mb-0 mr-2" },
+                  "Rows:"
+                ),
+                React.createElement(
+                  "select",
+                  {
+                    className: "form-control form-control-sm mr-2",
+                    style: { width: "88px" },
+                    value: String(pageSize),
+                    onChange: (e) => setPageSize(Number(e.target.value) || 25),
+                  },
+                  [10, 25, 50, 100].map((n) =>
+                    React.createElement("option", { key: n, value: String(n) }, String(n))
+                  )
+                ),
+                React.createElement(
+                  Button,
+                  {
+                    variant: "secondary",
+                    size: "sm",
+                    className: "mr-1",
+                    disabled: currentPage <= 1,
+                    onClick: () => setCurrentPage((p) => Math.max(1, p - 1)),
+                  },
+                  "Prev"
+                ),
+                React.createElement(
+                  Button,
+                  {
+                    variant: "secondary",
+                    size: "sm",
+                    disabled: currentPage >= totalPages,
+                    onClick: () => setCurrentPage((p) => Math.min(totalPages, p + 1)),
+                  },
+                  "Next"
+                )
+              )
+            ),
+            React.createElement(
               "table",
               { className: "table table-striped table-sm" },
               React.createElement(
@@ -1672,10 +1582,10 @@
               React.createElement(
                 "tbody",
                 null,
-                getSortedOperations().map((op, idx) =>
+                getPaginatedOperations().map((op, idx) =>
                   React.createElement(
                     "tr",
-                    { key: idx },
+                    { key: `${op.scene_id || "scene"}-${idx}` },
                     React.createElement(
                       "td",
                       null,
