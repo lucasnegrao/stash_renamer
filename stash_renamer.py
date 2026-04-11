@@ -156,8 +156,51 @@ def _build_target_directory(current_directory: str, tag_context: Dict[str, objec
 
 
 def makeFilename(query: str, tag_context: Dict[str, object]) -> str:
+    def _is_empty_value(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return value.strip() == ""
+        if isinstance(value, (int, float, bool)):
+            return False
+        if isinstance(value, list):
+            return all(_is_empty_value(v) for v in value)
+        if isinstance(value, dict):
+            return all(_is_empty_value(v) for v in value.values())
+        return str(value).strip() == ""
+
+    def _render_conditionals(template: str) -> str:
+        s = template or ""
+        pattern = re.compile(r"\{([^{}]*)\}")
+        while True:
+            changed = False
+
+            def repl(match: re.Match) -> str:
+                nonlocal changed
+                changed = True
+                inner_raw = match.group(1) or ""
+                inner_processed = _render_conditionals(inner_raw)
+                if not TAGGER:
+                    return inner_processed
+                exprs = TAGGER.extract_expressions(inner_raw)
+                if not exprs:
+                    return inner_processed if inner_processed.strip() else ""
+                has_value = any(
+                    not _is_empty_value(TAGGER.resolve_expression(expr, tag_context))
+                    for expr in exprs
+                )
+                if not has_value:
+                    return ""
+                return TAGGER.render(inner_processed, tag_context)
+
+            new_s = pattern.sub(repl, s)
+            if not changed:
+                return s
+            s = new_s
+
     # Trim template
     s = str(query or "").strip()
+    s = _render_conditionals(s)
     if TAGGER:
         s = TAGGER.render(s, tag_context)
 

@@ -408,6 +408,14 @@
 
         const result = await response.json();
 
+        if (result.errors && result.errors.length) {
+          const gqlErr = result.errors
+            .map((e) => e?.message || JSON.stringify(e))
+            .join(" | ");
+          setStatus(`Error: ${gqlErr}`);
+          return;
+        }
+
         // The plugin outputs JSON which Stash returns here
         if (result.data && result.data.runPluginOperation) {
           try {
@@ -419,6 +427,15 @@
             // Parse the JSON output from the plugin
             const pluginData = result.data.runPluginOperation;
             console.log("Parsed plugin data:", pluginData);
+            const pluginError =
+              pluginData?.error ||
+              pluginData?.output?.error ||
+              pluginData?.message ||
+              null;
+            if (pluginError) {
+              setStatus(`Error: ${pluginError}`);
+              return;
+            }
             const operationsPayload = Array.isArray(pluginData?.operations)
               ? pluginData.operations
               : Array.isArray(pluginData?.output?.operations)
@@ -440,13 +457,11 @@
           } catch (parseError) {
             console.error("Failed to parse plugin output:", parseError);
             console.error("Raw output was:", result.data.runPluginOperation);
-            setStatus(
-              "Completed! Check Settings → Logs → Plugins for the rename operations list."
-            );
+            setStatus(`Error: ${parseError?.message || String(parseError)}`);
           }
         } else {
           console.log("No runPluginOperation in result");
-          setStatus("Completed! Check Settings → Logs → Plugins for details.");
+          setStatus("Error: No response from plugin operation.");
         }
       } catch (error) {
         setStatus("Error: " + error.message);

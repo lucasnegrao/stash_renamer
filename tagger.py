@@ -55,6 +55,9 @@ class GraphQLTagger:
     def parse_expression(self, expr: str) -> Tuple[str, List[Tuple[str, Any]]]:
         return self._parse_expr(expr)
 
+    def resolve_expression(self, expr: str, context: Dict[str, Any]) -> Any:
+        return self._resolve_expr(expr, context)
+
     def _resolve_expr(self, expr: str, context: Dict[str, Any]) -> Any:
         root, segments = self._parse_expr(expr)
         if not root:
