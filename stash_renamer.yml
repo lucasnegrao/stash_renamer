@@ -5,7 +5,6 @@ url: https://github.com/lucasnegrao/stash_renamer
 ui:
   javascript:
     - scene_renamer_ui.js
-    - scene_renamer_undo_ui.js
 settings:
   template:
     displayName: Filename Template
