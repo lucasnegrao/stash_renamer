@@ -455,6 +455,77 @@ def _fetch_scenes_from_filter(
     return all_scenes
 
 
+def _normalize_criteria(criteria: List[Any]) -> List[dict]:
+    """
+    Normalize UI-captured criteria entries into GraphQL-ish criterion objects.
+    Supports:
+      - already normalized: {type, modifier, value}
+      - UI state shape: {criterionOption:{type}, _modifier, _value}
+    """
+    out: List[dict] = []
+
+    def _normalize_value(value: Any) -> Any:
+        # Normalize common "picker" payloads:
+        # {items:[{id,label}], excluded:[...], depth:n}
+        if isinstance(value, dict) and isinstance(value.get("items"), list):
+            items = []
+            for item in value.get("items") or []:
+                if isinstance(item, dict) and item.get("id") is not None:
+                    items.append(str(item.get("id")))
+                elif item is not None:
+                    items.append(str(item))
+            excluded = []
+            for item in value.get("excluded") or []:
+                if isinstance(item, dict) and item.get("id") is not None:
+                    excluded.append(str(item.get("id")))
+                elif item is not None:
+                    excluded.append(str(item))
+            if excluded or "depth" in value:
+                return {
+                    "items": items,
+                    "excluded": excluded,
+                    "depth": int(value.get("depth") or 0),
+                }
+            return items
+        if isinstance(value, str):
+            lower = value.strip().lower()
+            if lower == "true":
+                return True
+            if lower == "false":
+                return False
+        return value
+
+    for raw in criteria:
+        if not isinstance(raw, dict):
+            continue
+
+        # Already normalized (or close to it)
+        if "type" in raw and "modifier" in raw:
+            entry = {
+                "type": raw.get("type"),
+                "modifier": raw.get("modifier"),
+                "value": _normalize_value(raw.get("value")),
+            }
+            out.append(entry)
+            continue
+
+        option = raw.get("criterionOption")
+        ctype = option.get("type") if isinstance(option, dict) else None
+        modifier = raw.get("_modifier")
+        value = _normalize_value(raw.get("_value"))
+        if not ctype or not modifier:
+            continue
+        out.append(
+            {
+                "type": ctype,
+                "modifier": modifier,
+                "value": value,
+            }
+        )
+
+    return out
+
+
 def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
     """
     Run the rename operation.
@@ -740,6 +811,7 @@ def run(options: dict, collect_operations: bool = False):
       - path_template: str (optional)
       - scenes: List[Scene-like dict] OR
       - scene_filter: SceneFilterType-like dict (optional)
+      - criteria: List[CriterionInput-like dict] (optional, merged into find_filter.criteria)
       - ids: [ID] list (optional)
       - find_filter: FindFilterType-like dict (optional, defaults per_page=250,page=1)
       - scenes_query: GraphQL query string returning scenes list (optional advanced mode)
@@ -819,9 +891,15 @@ def run(options: dict, collect_operations: bool = False):
         scenes_opt = options.get("scenes")
         scenes_query = options.get("scenes_query")
         scene_filter = options.get("scene_filter")
+        criteria_opt = options.get("criteria")
         ids_opt = options.get("ids")
         find_filter = options.get("find_filter")
-        has_filter_mode = scene_filter is not None or ids_opt is not None or find_filter is not None
+        has_filter_mode = (
+            scene_filter is not None
+            or criteria_opt is not None
+            or ids_opt is not None
+            or find_filter is not None
+        )
 
         if scenes_opt is not None and (scenes_query or has_filter_mode):
             raise ValueError("Provide only one scene source: 'scenes', query mode, or filter mode")
@@ -848,6 +926,34 @@ def run(options: dict, collect_operations: bool = False):
                 if not isinstance(ids_opt, list):
                     raise ValueError("'ids' must be a list")
                 ids = [str(x) for x in ids_opt if str(x).strip()]
+
+            if criteria_opt is not None:
+                if not isinstance(criteria_opt, list):
+                    raise ValueError("'criteria' must be a list")
+                criteria = _normalize_criteria(criteria_opt)
+                if DEBUG_MODE:
+                    logPrint(f"[DEBUG] Received raw criteria={len(criteria_opt)} normalized={len(criteria)}")
+                if criteria_opt and not criteria:
+                    logPrint("[Warn] Criteria payload was provided but no valid criteria entries were normalized")
+                if find_filter is None:
+                    find_filter = {"criteria": criteria}
+                else:
+                    if not isinstance(find_filter, dict):
+                        raise ValueError("'find_filter' must be an object/dict")
+                    merged_find_filter = dict(find_filter)
+                    existing_criteria = merged_find_filter.get("criteria")
+                    if existing_criteria is None:
+                        merged_find_filter["criteria"] = criteria
+                    elif isinstance(existing_criteria, list):
+                        merged_find_filter["criteria"] = [
+                            c for c in existing_criteria if isinstance(c, dict)
+                        ] + criteria
+                    else:
+                        raise ValueError("'find_filter.criteria' must be a list when provided")
+                    find_filter = merged_find_filter
+                if DEBUG_MODE:
+                    logPrint(f"[DEBUG] Criteria normalized and attached to find_filter ({len(criteria)} entries)")
+
             if scene_filter is not None and not isinstance(scene_filter, dict):
                 raise ValueError("'scene_filter' must be an object/dict")
             if find_filter is not None and not isinstance(find_filter, dict):

@@ -6,8 +6,9 @@
   "license": "AGPL-3.0",
   "scripts": {
     "tsc": "tsc",
+    "pau": "scp dist/* root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/stash_renamer/ui/dist/",
     "compile:ts": "npm run tsc",
-    "compile": "npm run compile:ts",
+    "compile": "npm run compile:ts && pau",
     "build": "npm run compile"
   },
  "devDependencies": {

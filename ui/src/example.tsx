@@ -52,172 +52,149 @@ interface IPluginApi {
   const { Button, Nav, Tab } = PluginApi.libraries.Bootstrap;
   const { faEthernet } = PluginApi.libraries.FontAwesomeSolid;
   const {
-    Link,
     NavLink,
   } = PluginApi.libraries.ReactRouterDOM;
 
-  const {
-    NavUtils
-  } = PluginApi.utils;
+var CRITERIA = [] as any[];
 
-  PluginApi.Event.addEventListener("stash:location", (e) => console.log("Page Changed", e.detail.data.location.pathname, e.detail.data.location.search))
-
-  const ScenePerformer: React.FC<{
-    performer: any;
-  }> = ({ performer }) => {
-    // PluginApi.components may not be registered when the outside function is run
-    // need to initialise these inside the function component
-    const {
-      HoverPopover,
-    } = PluginApi.components;
-
-    const popoverContent = React.useMemo(
-      () => (
-        <div className="scene-performer-popover">
-          <Link to={`/performers/${performer.id}`}>
-            <img
-              className="image-thumbnail"
-              alt={performer.name ?? ""}
-              src={performer.image_path ?? ""}
-            />
-          </Link>
-        </div>
-      ),
-      [performer]
-    );
-  
-    return (
-      <HoverPopover
-        className="scene-card__performer"
-        placement="top"
-        content={popoverContent}
-        leaveDelay={100}
-      >
-        <a href={NavUtils.makePerformerScenesUrl(performer)}>{performer.name}</a>
-      </HoverPopover>
-    );
-  };
-
-  function SceneDetails(props: any) {
-    const {
-      TagLink,
-    } = PluginApi.components;
-
-    function maybeRenderPerformers() {
-      if (props.scene.performers.length <= 0) return;
-  
-      return (
-        <div className="scene-card__performers">
-          {props.scene.performers.map((performer: any) => (
-            <ScenePerformer performer={performer} key={performer.id} />
-          ))}
-        </div>
-      );
-    }
-  
-    function maybeRenderTags() {
-      if (props.scene.tags.length <= 0) return;
-  
-      return (
-        <div className="scene-card__tags">
-          {props.scene.tags.map((tag: any) => (
-            <TagLink key={tag.id} tag={tag} />
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="scene-card__details">
-        <span className="scene-card__date">{props.scene.date}</span>
-        {maybeRenderPerformers()}
-        {maybeRenderTags()}
-      </div>
-    );
-  }
-
-  function Overlays() {
-    return <span className="example-react-component-custom-overlay">Custom overlay</span>;
-  }
-
-  PluginApi.patch.instead("SceneCard.Details", function (props: any, _: any, original: any) {
-    return <SceneDetails {...props} />;
-  });
-
-  PluginApi.patch.instead("SceneCard.Overlays", function (props: any, _: any, original: (props: any) => any) {  
-    return <><Overlays />{original({...props})}</>;
-  });
-
-  PluginApi.patch.instead("FrontPage", function (props: any, _: any, original: (props: any) => any) {  
-    return <><p>Hello from Test React!</p>{original({...props})}</>;
-  });
+PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
+    CRITERIA = props?.filter?.criteria || [];
+  return result;
+});
 
   const TestPage: React.FC = () => {
     const componentsToLoad = [
-      PluginApi.loadableComponents.SceneCard,
-      PluginApi.loadableComponents.PerformerSelect,
+      PluginApi.loadableComponents.Scenes,
+      PluginApi.loadableComponents.Scene,
+      PluginApi.loadableComponents.SceneList,
+      PluginApi.loadableComponents.SceneQueryModal,
+
     ];
     const componentsLoading = PluginApi.hooks.useLoadComponents(componentsToLoad);
     
     const {
-      SceneCard,
       LoadingIndicator,
-      PerformerSelect,
+      FilteredSceneList
     } = PluginApi.components;
 
-    // read a random scene and show a scene card for it
-    const { data } = GQL.useFindScenesQuery({
-      variables: {
-        filter: {
-          per_page: 1,
-          sort: "random",
-        },
-      },
-    });
+    const [template, setTemplate] = React.useState("$scene.studio.name - $scene.date - $scene.title");
+    const [pathTemplate, setPathTemplate] = React.useState("");
+    const [status, setStatus] = React.useState("");
 
-    const scene = data?.findScenes.scenes[0];
+    React.useEffect(() => {
+      const styleId = "test-page-hide-controls";
+      if (document.getElementById(styleId)) return;
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `div.clearable-input-group.search-term-input, div.list-operations, th.select-col, td.select-col, 
+    div.saved-filter-dropdown.dropdown.btn-group, 
+    div.item-list-container.scene-list > div > div.sidebar-pane-content > div.filtered-list-toolbar.btn-toolbar > div:nth-child(6) > button:nth-child(4),
+    div.item-list-container.scene-list > div > div.sidebar-pane-content > div.pagination-index-container > div
+    { display: none !important; }`;
+      document.head.appendChild(style);
+    }, []);
+
+    const submitRenameTask = async (dryRun = false) => {
+      try {
+        setStatus("Queueing task...");
+        const resp = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation RunPluginTask($plugin_id: ID!, $task_name: String, $description: String, $args_map: Map) {
+              runPluginTask(
+                plugin_id: $plugin_id,
+                task_name: $task_name,
+                description: $description,
+                args_map: $args_map
+              )
+            }`,
+            variables: {
+              plugin_id: "stash_renamer",
+              task_name: dryRun ? "Rename Scenes (Dry Run)" : "Rename Scenes",
+              description: dryRun ? "Test page dry run" : "Test page rename",
+              args_map: {
+                mode: dryRun ? "dry_run" : "rename",
+                filename_template: template,
+                path_template: pathTemplate,
+                dry_run: String(dryRun),
+                criteria: CRITERIA,
+                findFilter: { per_page: 250, page: 1 }
+              },
+            },
+          }),
+        });
+        const result = await resp.json();
+        if (result.errors && result.errors.length) {
+          throw new Error(result.errors.map((e: any) => e?.message || String(e)).join(" | "));
+        }
+        const jobId = result?.data?.runPluginTask;
+        setStatus(jobId ? `Queued job ${jobId}` : "Queued (no job id returned)");
+      } catch (e: any) {
+        setStatus(`Error: ${e?.message || String(e)}`);
+      }
+    };
 
     if (componentsLoading) return (
       <LoadingIndicator />
     );
-    
+
     return (
       <div>
-        <div>This is a test page.</div>
-        {!!scene && <SceneCard scene={data.findScenes.scenes[0]} />}
-        <div>
-          <PerformerSelect isMulti onSelect={() => {}} values={[]} />
+        <div className="form-group row">
+          <label className="col-sm-2 col-form-label">Filename Template:</label>
+          <div className="col-sm-10">
+            <input
+              type="text"
+              className="form-control"
+              value={template}
+              onChange={(e: any) => setTemplate(e.target.value)}
+              placeholder="$scene.studio.name - $scene.date - $scene.title"
+            />
+            <small className="form-text text-muted">
+              Use introspected tags like $scene.title, $scene.studio.name, $performer.name, $performer[0].name, $group.name.
+            </small>
+          </div>
         </div>
+
+        <hr />
+        <h4>Path Builder</h4>
+        <div className="form-group row">
+          <label className="col-sm-2 col-form-label">Path Template:</label>
+          <div className="col-sm-10">
+            <input
+              type="text"
+              className="form-control"
+              value={pathTemplate}
+              onChange={(e: any) => setPathTemplate(e.target.value)}
+              placeholder="e.g., /Library/$scene.studio.name or $up/Archive/$scene.studio.name"
+            />
+            <small className="form-text text-muted">
+              Build destination folder with the same tags. Starts with / or \ = absolute path; otherwise relative. $up is replaced by ..
+            </small>
+          </div>
+        </div>
+
+        <div className="d-flex gap-2 mb-2">
+          <Button onClick={() => submitRenameTask(true)}>
+            Dry run
+          </Button>
+          <Button onClick={() => submitRenameTask(false)}>
+            Rename
+          </Button>
+       </div>
+        {status ? <div className="mb-2">{status}</div> : null}
+      <div>
+        <FilteredSceneList  />
+      </div>
       </div>
     );
   };
 
+
   PluginApi.register.route("/plugins/test-react", TestPage);
 
-  PluginApi.patch.before("SettingsToolsSection", function (props: any) {
-    const {
-      Setting,
-    } = PluginApi.components;
-
-    return [
-      {
-        children: (
-          <>
-            {props.children}
-            <Setting
-              heading={
-                <Link to="/plugins/test-react">
-                  <Button>
-                    Test page
-                  </Button>
-                </Link>
-              }
-            />
-          </>
-        ),
-      },
-    ];
-  });
+ 
 
   PluginApi.patch.before("MainNavBar.UtilityItems", function (props: any) {
     const {
@@ -264,18 +241,5 @@ interface IPluginApi {
     ];
   });
 
-  PluginApi.patch.before("ScenePage.TabContent", function (props: any) {
-    return [
-      {
-        children: (
-          <>
-            {props.children}
-            <Tab.Pane eventKey="test-react-tab">
-              Test React tab content {props.scene.id}
-            </Tab.Pane>
-          </>
-        ),
-      },
-    ];
-  });
+ 
 })();

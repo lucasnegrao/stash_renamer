@@ -139,6 +139,28 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
 
     scene_filter = combined.get("scene_filter") or combined.get("sceneFilter")
     find_filter = combined.get("find_filter") or combined.get("findFilter")
+    criteria = combined.get("criteria")
+
+    if isinstance(scene_filter, str):
+        try:
+            scene_filter = json.loads(scene_filter)
+        except Exception:
+            raise Exception("scene_filter must be a JSON object")
+    if isinstance(find_filter, str):
+        try:
+            find_filter = json.loads(find_filter)
+        except Exception:
+            raise Exception("find_filter must be a JSON object")
+    if isinstance(criteria, str):
+        try:
+            criteria = json.loads(criteria)
+        except Exception:
+            raise Exception("criteria must be a JSON array")
+
+    if criteria is not None:
+        if not isinstance(criteria, list):
+            raise Exception("criteria must be an array/list")
+        criteria = [c for c in criteria if isinstance(c, dict)]
     ids = combined.get("ids")
     if isinstance(ids, str):
         ids = [s.strip() for s in ids.split(",") if s.strip()]
@@ -193,13 +215,15 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
         options["list_operations"] = True
         return options
 
-    if scene_filter is not None or find_filter is not None or ids is not None:
+    if scene_filter is not None or find_filter is not None or ids is not None or criteria is not None:
         if scene_filter is not None:
             options["scene_filter"] = scene_filter
         if find_filter is not None:
             options["find_filter"] = find_filter
         if ids is not None:
             options["ids"] = ids
+        if criteria is not None:
+            options["criteria"] = criteria
         return options
 
     if scenes_query:
