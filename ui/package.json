@@ -11,11 +11,25 @@
     "compile": "npm run compile:ts && pau",
     "build": "npm run compile"
   },
- "devDependencies": {
-    "@types/react": "^18.2.31",
-    "@types/react-dom": "^18.2.14",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "cpx": "^1.5.0",
-    "sass": "^1.69.4",
-    "typescript": "^5.2.2"
+    "sass": "^1.99.0",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@apollo/client": "3.8.10",
+    "@graphql-codegen/time": "^6.0.0",
+    "@graphql-codegen/typescript-react-apollo": "^4.4.1",
+    "classnames": "^2.5.1",
+    "graphql-codegen-typescript-react-apollo-template": "^0.18.2",
+    "i18n-iso-countries": "^7.14.0",
+    "utilities": "link:@apollo/client/utilities"
+  },
+  "pnpm": {
+    "overrides": {
+      "graphql": "^16.13.2"
+    }
   }
 }

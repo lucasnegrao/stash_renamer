@@ -1,66 +1,23 @@
-interface IPluginApi {
-  React: typeof React;
-  GQL: any;
-  Event: {
-    addEventListener: (event: string, callback: (e: CustomEvent) => void) => void;
-  };
-  libraries: {
-    ReactRouterDOM: {
-      Link: React.FC<any>;
-      Route: React.FC<any>;
-      NavLink: React.FC<any>;
-    },
-    Bootstrap: {
-      Button: React.FC<any>;
-      Nav: React.FC<any> & {
-        Link: React.FC<any>;
-        Item: React.FC<any>;
-      };
-      Tab: React.FC<any> & {
-        Pane: React.FC<any>;
-      }
-    },
-    FontAwesomeSolid: {
-      faEthernet: any;
-    },
-    Intl: {
-      FormattedMessage: React.FC<any>;
-    }
-  },
-  loadableComponents: any;
-  components: Record<string, React.FC<any>>;
-  utils: {
-    NavUtils: any;
-    loadComponents: any;
-  },
-  hooks: any;
-  patch: {
-    before: (target: string, fn: Function) => void;
-    instead: (target: string, fn: Function) => void;
-    after: (target: string, fn: Function) => void;
-  },
-  register: {
-    route: (path: string, component: React.FC<any>) => void;
-  }
-}
-
+import { SceneListTreeble } from "./components/SceneListTable";
 (function () {
-  const PluginApi = (window as any).PluginApi as IPluginApi;
+
+  const PluginApi = (window as any).PluginApi;
   const React = PluginApi.React;
   const GQL = PluginApi.GQL;
 
   const { Button, Nav, Tab } = PluginApi.libraries.Bootstrap;
   const { faEthernet } = PluginApi.libraries.FontAwesomeSolid;
-  const {
-    NavLink,
-  } = PluginApi.libraries.ReactRouterDOM;
+  const { NavLink } = PluginApi.libraries.ReactRouterDOM;
 
-var CRITERIA = [] as any[];
+  var CRITERIA = [] as any[];
 
-PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
-    CRITERIA = props?.filter?.criteria || [];
-  return result;
-});
+  PluginApi.patch.after(
+    "SceneList",
+    (props: any, original: any, result: any) => {
+      CRITERIA = props?.filter?.criteria || [];
+      return result;
+    },
+  );
 
   const TestPage: React.FC = () => {
     const componentsToLoad = [
@@ -68,16 +25,15 @@ PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
       PluginApi.loadableComponents.Scene,
       PluginApi.loadableComponents.SceneList,
       PluginApi.loadableComponents.SceneQueryModal,
-
     ];
-    const componentsLoading = PluginApi.hooks.useLoadComponents(componentsToLoad);
-    
-    const {
-      LoadingIndicator,
-      FilteredSceneList
-    } = PluginApi.components;
+    const componentsLoading =
+      PluginApi.hooks.useLoadComponents(componentsToLoad);
 
-    const [template, setTemplate] = React.useState("$scene.studio.name - $scene.date - $scene.title");
+    const { LoadingIndicator, FilteredSceneList } = PluginApi.components;
+
+    const [template, setTemplate] = React.useState(
+      "$scene.studio.name - $scene.date - $scene.title",
+    );
     const [pathTemplate, setPathTemplate] = React.useState("");
     const [status, setStatus] = React.useState("");
 
@@ -119,25 +75,26 @@ PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
                 path_template: pathTemplate,
                 dry_run: String(dryRun),
                 criteria: CRITERIA,
-                findFilter: { per_page: 250, page: 1 }
               },
             },
           }),
         });
         const result = await resp.json();
         if (result.errors && result.errors.length) {
-          throw new Error(result.errors.map((e: any) => e?.message || String(e)).join(" | "));
+          throw new Error(
+            result.errors.map((e: any) => e?.message || String(e)).join(" | "),
+          );
         }
         const jobId = result?.data?.runPluginTask;
-        setStatus(jobId ? `Queued job ${jobId}` : "Queued (no job id returned)");
+        setStatus(
+          jobId ? `Queued job ${jobId}` : "Queued (no job id returned)",
+        );
       } catch (e: any) {
         setStatus(`Error: ${e?.message || String(e)}`);
       }
     };
 
-    if (componentsLoading) return (
-      <LoadingIndicator />
-    );
+    if (componentsLoading) return <LoadingIndicator />;
 
     return (
       <div>
@@ -152,13 +109,11 @@ PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
               placeholder="$scene.studio.name - $scene.date - $scene.title"
             />
             <small className="form-text text-muted">
-              Use introspected tags like $scene.title, $scene.studio.name, $performer.name, $performer[0].name, $group.name.
+              Use introspected tags like $scene.title, $scene.studio.name,
+              $performer.name, $performer[0].name, $group.name.
             </small>
           </div>
         </div>
-
-        <hr />
-        <h4>Path Builder</h4>
         <div className="form-group row">
           <label className="col-sm-2 col-form-label">Path Template:</label>
           <div className="col-sm-10">
@@ -170,76 +125,52 @@ PluginApi.patch.after("SceneList", (props: any,original:any,result:any) => {
               placeholder="e.g., /Library/$scene.studio.name or $up/Archive/$scene.studio.name"
             />
             <small className="form-text text-muted">
-              Build destination folder with the same tags. Starts with / or \ = absolute path; otherwise relative. $up is replaced by ..
+              Build destination folder with the same tags. Starts with / or \ =
+              absolute path; otherwise relative. $up is replaced by ..
             </small>
           </div>
-        </div>
 
         <div className="d-flex gap-2 mb-2">
-          <Button onClick={() => submitRenameTask(true)}>
-            Dry run
-          </Button>
-          <Button onClick={() => submitRenameTask(false)}>
-            Rename
-          </Button>
-       </div>
+          <Button onClick={() => submitRenameTask(true)}>Dry run</Button>
+          <Button onClick={() => submitRenameTask(false)}>Rename</Button>
+        </div>
         {status ? <div className="mb-2">{status}</div> : null}
-      <div>
-        <FilteredSceneList  />
+        <div>
+          <FilteredSceneList />
+        </div>
       </div>
       </div>
     );
   };
 
-
-  PluginApi.register.route("/plugins/test-react", TestPage);
-
- 
+  PluginApi.register.route("/plugins/test-React", TestPage);
+  // PluginApi.patch.instead("SceneList", function (props: any) {
+  //   return [
+  //     {
+  //       children: <SceneListTable {...props} />,
+  //     },
+  //   ];
+  // });
 
   PluginApi.patch.before("MainNavBar.UtilityItems", function (props: any) {
-    const {
-      Icon,
-    } = PluginApi.components;
+    const { Icon } = PluginApi.components;
 
     return [
       {
         children: (
           <>
             {props.children}
-            <NavLink
-              className="nav-utility"
-              exact
-              to="/plugins/test-react"
-            >
+            <NavLink className="nav-utility" exact to="/plugins/test-React">
               <Button
                 className="minimal d-flex align-items-center h-100"
-                title="Test page"
-              >
+                title="Test page">
                 <Icon icon={faEthernet} />
               </Button>
             </NavLink>
-          </>
-        )
-      }
-    ]
-  });
-
-  PluginApi.patch.before("ScenePage.Tabs", function (props: any) {
-    return [
-      {
-        children: (
-          <>
-            {props.children}
-            <Nav.Item>
-              <Nav.Link eventKey="test-react-tab">
-                Test React tab
-              </Nav.Link>
-            </Nav.Item>
           </>
         ),
       },
     ];
   });
 
- 
 })();
