@@ -526,6 +526,67 @@ def _normalize_criteria(criteria: List[Any]) -> List[dict]:
     return out
 
 
+def _criterion_to_scene_condition(criterion: dict) -> Optional[dict]:
+    ctype = str(criterion.get("type") or "").strip()
+    modifier = str(criterion.get("modifier") or "").strip()
+    value = criterion.get("value")
+    if not ctype or not modifier:
+        return None
+
+    def _ids_from_value(v: Any) -> List[str]:
+        if isinstance(v, list):
+            return [str(x) for x in v if str(x).strip()]
+        if isinstance(v, dict):
+            items = v.get("items")
+            if isinstance(items, list):
+                ids: List[str] = []
+                for item in items:
+                    if isinstance(item, dict) and item.get("id") is not None:
+                        ids.append(str(item.get("id")))
+                    elif item is not None:
+                        ids.append(str(item))
+                return [x for x in ids if x.strip()]
+        if v is None:
+            return []
+        s = str(v).strip()
+        return [s] if s else []
+
+    # Match main SceneFilterType fields used by the UI.
+    if ctype == "organized":
+        if modifier == "EQUALS":
+            if isinstance(value, bool):
+                return {"organized": value}
+            if isinstance(value, str):
+                lv = value.strip().lower()
+                if lv == "true":
+                    return {"organized": True}
+                if lv == "false":
+                    return {"organized": False}
+        return None
+
+    if ctype in ("tags", "groups", "performers", "studios", "path"):
+        if modifier in ("IS_NULL", "NOT_NULL"):
+            return {ctype: {"modifier": modifier}}
+        ids = _ids_from_value(value)
+        if not ids:
+            return None
+        return {ctype: {"modifier": modifier, "value": ids}}
+
+    # Unsupported criteria types are ignored (safe fallback).
+    return None
+
+
+def _combine_scene_filters(left: Optional[dict], right: Optional[dict]) -> Optional[dict]:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    # Keep same style used by UI helper: sceneFilter = { AND: previous, ...nextCondition }
+    out = dict(right)
+    out["AND"] = left
+    return out
+
+
 def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
     """
     Run the rename operation.
@@ -811,7 +872,7 @@ def run(options: dict, collect_operations: bool = False):
       - path_template: str (optional)
       - scenes: List[Scene-like dict] OR
       - scene_filter: SceneFilterType-like dict (optional)
-      - criteria: List[CriterionInput-like dict] (optional, merged into find_filter.criteria)
+      - criteria: List[CriterionInput-like dict] (optional, converted and merged into scene_filter)
       - ids: [ID] list (optional)
       - find_filter: FindFilterType-like dict (optional, defaults per_page=250,page=1)
       - scenes_query: GraphQL query string returning scenes list (optional advanced mode)
@@ -935,24 +996,16 @@ def run(options: dict, collect_operations: bool = False):
                     logPrint(f"[DEBUG] Received raw criteria={len(criteria_opt)} normalized={len(criteria)}")
                 if criteria_opt and not criteria:
                     logPrint("[Warn] Criteria payload was provided but no valid criteria entries were normalized")
-                if find_filter is None:
-                    find_filter = {"criteria": criteria}
-                else:
-                    if not isinstance(find_filter, dict):
-                        raise ValueError("'find_filter' must be an object/dict")
-                    merged_find_filter = dict(find_filter)
-                    existing_criteria = merged_find_filter.get("criteria")
-                    if existing_criteria is None:
-                        merged_find_filter["criteria"] = criteria
-                    elif isinstance(existing_criteria, list):
-                        merged_find_filter["criteria"] = [
-                            c for c in existing_criteria if isinstance(c, dict)
-                        ] + criteria
-                    else:
-                        raise ValueError("'find_filter.criteria' must be a list when provided")
-                    find_filter = merged_find_filter
+                criteria_scene_filter: Optional[dict] = None
+                for entry in criteria:
+                    cond = _criterion_to_scene_condition(entry)
+                    criteria_scene_filter = _combine_scene_filters(criteria_scene_filter, cond)
+                if criteria_scene_filter is not None:
+                    if scene_filter is not None and not isinstance(scene_filter, dict):
+                        raise ValueError("'scene_filter' must be an object/dict")
+                    scene_filter = _combine_scene_filters(scene_filter, criteria_scene_filter)
                 if DEBUG_MODE:
-                    logPrint(f"[DEBUG] Criteria normalized and attached to find_filter ({len(criteria)} entries)")
+                    logPrint("[DEBUG] Criteria normalized and attached to scene_filter")
 
             if scene_filter is not None and not isinstance(scene_filter, dict):
                 raise ValueError("'scene_filter' must be an object/dict")
