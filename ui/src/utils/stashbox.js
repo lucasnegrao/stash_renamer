@@ -1,0 +1,12 @@
+export function stashboxDisplayName(name, index) {
+    return name || `Stash-Box #${index + 1}`;
+}
+export const getStashboxBase = (endpoint) => { var _a; return (_a = endpoint.match(/(https?:\/\/.*?\/)graphql/)) === null || _a === void 0 ? void 0 : _a[1]; };
+// mergeStashIDs merges the src stash ID into the dest stash IDs.
+// If the src stash ID is already in dest, the src stash ID overwrites the dest stash ID.
+export function mergeStashIDs(dest, src) {
+    return dest
+        .filter((i) => !src.find((j) => i.endpoint === j.endpoint))
+        .concat(src);
+}
+//# sourceMappingURL=stashbox.js.map
