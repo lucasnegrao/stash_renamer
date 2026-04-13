@@ -2,15 +2,24 @@
 import TextUtils from "../utils/text";
 import { objectTitle } from "../core/files";
 import { galleryTitle } from "../core/galleries";
-import SceneQueue from "../models/SceneQueue";
+import type SceneQueue from "../models/SceneQueue";
 import { ISlimSceneData } from "../models/SlimSceneData";
 import { IColumn, ListTable } from "./list/ListTable";
 import { FileSize } from "./shared/FileSize";
 import { useTableColumns } from "../hooks/useTableColumns";
-const PluginApi = (window as any).PluginApi;
+
+const PluginApi = window.PluginApi;
+type TSceneOperationStatus = "success" | "fail" | "warn";
+
+interface ISceneOperationResult {
+  status?: TSceneOperationStatus | null;
+  statusText?: string | null;
+  newPath?: string | null;
+}
 
 interface ISceneListTableProps {
   scenes: ISlimSceneData[];
+  sceneOperationById?: Record<string, ISceneOperationResult>;
   queue?: SceneQueue;
   selectedIds: Set<string>;
   onSelectChange: (id: string, selected: boolean, shiftKey: boolean) => void;
@@ -20,6 +29,9 @@ interface ISceneListTableProps {
   const Link = PluginApi.libraries.ReactRouterDOM.Link;
   const NavUtils = PluginApi.utils.NavUtils;
   const { FormattedMessage } = PluginApi.libraries.Intl;
+  const { Icon } = PluginApi.components;
+  const { faCircleCheck, faCircleXmark, faTriangleExclamation } =
+    PluginApi.libraries.FontAwesomeSolid;
   const { useSceneUpdate } = PluginApi.utils.StashService;
 
 const TABLE_NAME = "scenes";
@@ -70,12 +82,12 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 
     return (
       <Link to={sceneLink} title={title}>
-        <span className="ellips-data">{title}</span>
+        <span>{title}</span>
       </Link>
     );
   };
 
-  const DateCell = (scene: ISlimSceneData) => <>{scene.date}</>;
+  const DateCell = (scene: ISlimSceneData) => <>{scene.date || "-"}</>;
 
   const RatingCell = (scene: ISlimSceneData) => (
   <h1>{scene.rating100}</h1>
@@ -125,7 +137,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
           to={NavUtils.makeStudioScenesUrl(scene.studio)}
           title={scene.studio.name}
         >
-          <span className="ellips-data">{scene.studio.name}</span>
+          <span>{scene.studio.name}</span>
         </Link>
       );
     }
@@ -136,7 +148,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
       {scene.groups.map((sceneGroup) => (
         <li key={sceneGroup.group.id}>
           <Link to={NavUtils.makeGroupScenesUrl(sceneGroup.group)}>
-            <span className="ellips-data">{sceneGroup.group.name}</span>
+            <span>{sceneGroup.group.name}</span>
           </Link>
         </li>
       ))}
@@ -241,13 +253,41 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
   );
 
   const PathCell = (scene: ISlimSceneData) => (
-    <ul className="newline-list overflowable TruncatedText">
+    <>
       {scene.files.map((file) => (
-        <li key={file.id}>
           <span>{file.path}</span>
-        </li>
       ))}
-    </ul>
+    </>
+  );
+
+  const StatusCell = (scene: ISlimSceneData) => {
+    const status = props.sceneOperationById?.[scene.id]?.status;
+    const statusText = props.sceneOperationById?.[scene.id]?.statusText || "";
+    if (!status) return <span>-</span>;
+
+    if (status === "success") {
+      return <Icon icon={faCircleCheck} className="text-success" />;
+    }
+    if (status === "warn") {
+      return (
+        <span title={statusText || "Warning"}>
+          <Icon icon={faTriangleExclamation} className="text-warning" />
+        </span>
+      );
+    }
+    return (
+      <span title={statusText || "Error"}>
+        <Icon icon={faCircleXmark} className="text-danger" />
+      </span>
+    );
+  };
+
+  const StatusTextCell = (scene: ISlimSceneData) => (
+    <span>{props.sceneOperationById?.[scene.id]?.statusText || "-"}</span>
+  );
+
+  const NewPathCell = (scene: ISlimSceneData) => (
+    <span>{props.sceneOperationById?.[scene.id]?.newPath || "-"}</span>
   );
 
   interface IColumnSpec {
@@ -255,6 +295,11 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
     label: string;
     defaultShow?: boolean;
     mandatory?: boolean;
+    resizable?: boolean;
+    defaultWidth?: number;
+    minWidth?: number;
+    multiline?: boolean;
+    maxLines?: number;
     render?: (
       scene: ISlimSceneData,
       index: number
@@ -266,116 +311,209 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
       value: "cover_image",
       label: intl.formatMessage({ id: "cover_image" }),
       defaultShow: true,
+      resizable: false,
+      defaultWidth: 204,
+      minWidth: 204,
+      multiline: false,
       render: CoverImageCell,
     },
     {
       value: "title",
       label: intl.formatMessage({ id: "title" }),
       defaultShow: true,
-      mandatory: true,
+      defaultWidth: 280,
+      minWidth: 180,
+      multiline: true,
+      maxLines: 3,
       render: TitleCell,
     },
     {
       value: "date",
       label: intl.formatMessage({ id: "date" }),
       defaultShow: true,
+      defaultWidth: 120,
+      minWidth: 110,
+      multiline: false,
       render: DateCell,
     },
     {
       value: "rating",
       label: intl.formatMessage({ id: "rating" }),
       defaultShow: true,
+      defaultWidth: 96,
+      minWidth: 90,
+      multiline: false,
       render: RatingCell,
     },
     {
       value: "scene_code",
       label: intl.formatMessage({ id: "scene_code" }),
+      defaultWidth: 140,
+      minWidth: 120,
+      multiline: false,
       render: (s) => <>{s.code}</>,
     },
     {
       value: "duration",
       label: intl.formatMessage({ id: "duration" }),
       defaultShow: true,
+      defaultWidth: 110,
+      minWidth: 100,
+      multiline: false,
       render: DurationCell,
     },
     {
       value: "studio",
       label: intl.formatMessage({ id: "studio" }),
       defaultShow: true,
+      defaultWidth: 180,
+      minWidth: 140,
       render: StudioCell,
     },
     {
       value: "performers",
       label: intl.formatMessage({ id: "performers" }),
       defaultShow: true,
+      defaultWidth: 240,
+      minWidth: 180,
+      multiline: true,
+      maxLines: 3,
       render: PerformersCell,
     },
     {
       value: "tags",
       label: intl.formatMessage({ id: "tags" }),
       defaultShow: true,
+      defaultWidth: 260,
+      minWidth: 180,
+      multiline: true,
+      maxLines: 3,
       render: TagCell,
     },
     {
       value: "groups",
       label: intl.formatMessage({ id: "groups" }),
       defaultShow: true,
+      defaultWidth: 220,
+      minWidth: 160,
       render: GroupCell,
     },
     {
       value: "galleries",
       label: intl.formatMessage({ id: "galleries" }),
       defaultShow: true,
+      defaultWidth: 220,
+      minWidth: 170,
       render: GalleriesCell,
     },
     {
       value: "play_count",
       label: intl.formatMessage({ id: "play_count" }),
+      defaultWidth: 120,
+      minWidth: 110,
+      multiline: false,
       render: PlayCountCell,
     },
     {
       value: "play_duration",
       label: intl.formatMessage({ id: "play_duration" }),
+      defaultWidth: 130,
+      minWidth: 120,
+      multiline: false,
       render: PlayDurationCell,
     },
     {
       value: "o_counter",
       label: intl.formatMessage({ id: "o_count" }),
+      defaultWidth: 100,
+      minWidth: 90,
+      multiline: false,
       render: (s) => <>{s.o_counter}</>,
     },
     {
       value: "resolution",
       label: intl.formatMessage({ id: "resolution" }),
+      defaultWidth: 130,
+      minWidth: 120,
+      multiline: false,
       render: ResolutionCell,
     },
     {
       value: "path",
       label: intl.formatMessage({ id: "path" }),
+      defaultWidth: 460,
+      minWidth: 260,
+      multiline: true,
+      maxLines: 2,
       render: PathCell,
+    },
+    {
+      value: "status",
+      label: "Status",
+      defaultShow: true,
+      defaultWidth: 90,
+      minWidth: 90,
+      multiline: false,
+      render: StatusCell,
+    },
+    {
+      value: "status_text",
+      label: "Status Text",
+      defaultShow: true,
+      defaultWidth: 240,
+      minWidth: 180,
+      multiline: true,
+      maxLines: 2,
+      render: StatusTextCell,
+    },
+    {
+      value: "new_path",
+      label: "New Path",
+      defaultShow: true,
+      defaultWidth: 420,
+      minWidth: 240,
+      multiline: true,
+      maxLines: 2,
+      render: NewPathCell,
     },
     {
       value: "filesize",
       label: intl.formatMessage({ id: "filesize" }),
+      defaultWidth: 130,
+      minWidth: 110,
+      multiline: false,
       render: FileSizeCell,
     },
     {
       value: "framerate",
       label: intl.formatMessage({ id: "framerate" }),
+      defaultWidth: 140,
+      minWidth: 120,
+      multiline: false,
       render: FrameRateCell,
     },
     {
       value: "bitrate",
       label: intl.formatMessage({ id: "bitrate" }),
+      defaultWidth: 130,
+      minWidth: 120,
+      multiline: false,
       render: BitRateCell,
     },
     {
       value: "video_codec",
       label: intl.formatMessage({ id: "video_codec" }),
+      defaultWidth: 130,
+      minWidth: 120,
+      multiline: false,
       render: VideoCodecCell,
     },
     {
       value: "audio_codec",
       label: intl.formatMessage({ id: "audio_codec" }),
+      defaultWidth: 130,
+      minWidth: 120,
+      multiline: false,
       render: AudioCodecCell,
     },
   ];
@@ -411,6 +549,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 
   return (
     <ListTable
+      tableName={TABLE_NAME}
       className="scene-table"
       items={props.scenes}
       allColumns={allColumns}

@@ -6,7 +6,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
-const { Button,Collapse, CollapseProps } = PluginApi.libraries.Bootstrap;
+const { Button, Collapse } = PluginApi.libraries.Bootstrap;
 const { Icon } = PluginApi.components;
 
 interface IProps {

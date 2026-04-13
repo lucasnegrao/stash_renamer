@@ -316,6 +316,11 @@ def run(input_data, output):
             or is_true(combined_args.get("list_operations"))
             or is_true(combined_args.get("listOperations"))
         )
+        preview_dry_run = (
+            str(mode).strip().lower() == "preview_dry_run"
+            or is_true(combined_args.get("preview_dry_run"))
+            or is_true(combined_args.get("previewDryRun"))
+        )
         operations_db_path = combined_args.get("operations_db_path") or combined_args.get("operationsDbPath")
 
         options = {
@@ -334,6 +339,9 @@ def run(input_data, output):
             options["undo_operation_id"] = undo_operation_id
         elif list_operations:
             options["list_operations"] = True
+        elif preview_dry_run:
+            options["preview_dry_run"] = True
+            options["scenes"] = combined_args.get("scenes") or []
         else:
             if scene_filter is not None or find_filter is not None or ids is not None:
                 if scene_filter is not None:
@@ -355,10 +363,13 @@ def run(input_data, output):
         
         log.LogInfo("Invoking renamer...")
         from stash_renamer import run as renamer_run
-        operations = renamer_run(options, collect_operations=True)
-        
-        log.LogInfo(f"Scene Renamer completed successfully - {len(operations) if operations else 0} operations")
-        output["output"] = {"operations": operations if operations else []} #json_output
+        result = renamer_run(options, collect_operations=True)
+        if isinstance(result, dict):
+            output["output"] = result
+        else:
+            operations = result or []
+            log.LogInfo(f"Scene Renamer completed successfully - {len(operations)} operations")
+            output["output"] = {"operations": operations}
 
     except Exception as e:
         import traceback

@@ -2,6 +2,7 @@
     "compilerOptions": {
       "target": "es2019",
       "outDir": "dist",
+      "rootDir": "./src",
     "lib": ["dom", "dom.iterable", "esnext"],
       "skipLibCheck": true,
       "esModuleInterop": true,
@@ -16,6 +17,7 @@
       "jsx": "react",
       "experimentalDecorators": true,
       "baseUrl": ".",
+      "ignoreDeprecations": "6.0",
       "sourceMap": true,
       "allowJs": true,
       // "isolatedModules": true,

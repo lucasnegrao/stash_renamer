@@ -186,6 +186,11 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
         or is_true(combined.get("list_selectors"))
         or is_true(combined.get("listSelectors"))
     )
+    preview_dry_run = (
+        str(mode).strip().lower() == "preview_dry_run"
+        or is_true(combined.get("preview_dry_run"))
+        or is_true(combined.get("previewDryRun"))
+    )
     operations_db_path = combined.get("operations_db_path") or combined.get("operationsDbPath")
 
     server_conn = input_data.get("server_connection") or {}
@@ -222,6 +227,13 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
 
     if list_selectors:
         options["list_selectors"] = True
+        return options
+
+    if preview_dry_run:
+        options["preview_dry_run"] = True
+        if scenes is None:
+            raise Exception("scenes must be provided for preview_dry_run")
+        options["scenes"] = scenes
         return options
 
     if scene_filter is not None or find_filter is not None or ids is not None or criteria is not None:

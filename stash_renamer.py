@@ -456,6 +456,175 @@ def _fetch_scenes_from_filter(
     return all_scenes
 
 
+def _scene_missing_fields(scene: Dict[str, Any], tree: Dict[str, Any]) -> bool:
+    for key, child in tree.items():
+        if key not in scene or scene.get(key) is None:
+            return True
+        if not isinstance(child, dict) or not child:
+            continue
+        value = scene.get(key)
+        if isinstance(value, dict):
+            if _scene_missing_fields(value, child):
+                return True
+            continue
+        if isinstance(value, list):
+            if not value:
+                continue
+            first = value[0]
+            if isinstance(first, dict) and _scene_missing_fields(first, child):
+                return True
+            continue
+        return True
+    return False
+
+
+def _merge_scene_data(base: Any, extra: Any) -> Any:
+    if isinstance(base, dict) and isinstance(extra, dict):
+        out = dict(base)
+        for key, extra_value in extra.items():
+            base_value = out.get(key)
+            if key not in out or base_value in (None, "", [], {}):
+                out[key] = extra_value
+            else:
+                out[key] = _merge_scene_data(base_value, extra_value)
+        return out
+
+    if isinstance(base, list) and isinstance(extra, list):
+        if not base:
+            return list(extra)
+        return base
+
+    return base
+
+
+def _fetch_scene_by_id_for_templates(
+    scene_id: str,
+    filename_template: str,
+    path_template: Optional[str],
+) -> Optional[dict]:
+    tree = _build_field_tree_from_templates(filename_template, path_template)
+    selection = _field_tree_to_selection(tree)
+    query = (
+        "query previewSceneById($filter: FindFilterType!, $ids: [ID!]) { "
+        "findScenes(filter: $filter, ids: $ids) { "
+        f"scenes {{ {selection} }} "
+        "} }"
+    )
+    variables = {
+        "filter": {"page": 1, "per_page": 1},
+        "ids": [scene_id],
+    }
+    data = __callGraphQL(query, variables)
+    scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
+    if not scenes:
+        return None
+    first = scenes[0]
+    return first if isinstance(first, dict) else None
+
+
+def _build_preview_for_scene(
+    filename_template: str,
+    path_template: Optional[str],
+    scene: dict,
+) -> dict:
+    scene_id = str(scene.get("id") or "")
+    preview: Dict[str, Any] = {
+        "scene_id": scene_id,
+        "status": "fail",
+        "new_name": "",
+        "new_filename": "",
+        "new_path": "",
+        "log": "",
+    }
+    try:
+        if not scene_id:
+            preview["log"] = "Scene id is missing"
+            return preview
+
+        work_scene = dict(scene)
+        required_tree = _build_field_tree_from_templates(filename_template, path_template)
+        if _scene_missing_fields(work_scene, required_tree):
+            fetched = _fetch_scene_by_id_for_templates(
+                scene_id=scene_id,
+                filename_template=filename_template,
+                path_template=path_template,
+            )
+            if fetched:
+                work_scene = _merge_scene_data(work_scene, fetched)
+
+        work_scene = _normalize_scenes([work_scene])[0]
+        current_path = work_scene.get("path")
+        if not current_path:
+            preview["status"] = "warn"
+            preview["log"] = "Scene has no file path"
+            return preview
+
+        current_directory = os.path.dirname(current_path)
+        current_filename = os.path.basename(current_path)
+        file_extension = os.path.splitext(current_filename)[1] or ""
+
+        performers = work_scene.get("performers") or []
+        performer_list: List[dict] = [p for p in performers if isinstance(p, dict)]
+        group_list = []
+        for g in (work_scene.get("groups") or []):
+            if isinstance(g, dict) and isinstance(g.get("group"), dict):
+                group_list.append(g.get("group"))
+            elif isinstance(g, dict):
+                group_list.append(g)
+        tag_context: Dict[str, object] = {
+            "scene": work_scene,
+            "performer": performer_list,
+            "group": group_list,
+        }
+
+        new_filename_core = sanitize_filename(makeFilename(filename_template, tag_context))
+        if not new_filename_core.strip():
+            preview["log"] = "Rendered filename is empty"
+            return preview
+
+        new_filename = new_filename_core + file_extension
+        if path_template:
+            final_directory = _build_target_directory(
+                current_directory=current_directory,
+                tag_context=tag_context,
+                path_template=path_template,
+            )
+        else:
+            final_directory = current_directory
+        target_path = os.path.join(final_directory, new_filename)
+
+        status = "success"
+        log_message = "Preview generated"
+        if target_path == current_path:
+            status = "warn"
+            log_message = "No change (same path and filename)"
+        elif os.path.exists(target_path):
+            status = "warn"
+            log_message = "Target file already exists"
+
+        preview["status"] = status
+        preview["new_name"] = new_filename
+        preview["new_filename"] = new_filename
+        preview["new_path"] = final_directory
+        preview["log"] = log_message
+        preview["old_path"] = current_path
+        return preview
+    except Exception as e:
+        preview["status"] = "fail"
+        preview["log"] = str(e)
+        return preview
+
+
+def preview_run(filename_template: str, path_template: Optional[str], scenes: List[dict]) -> List[dict]:
+    normalized = _normalize_scenes(scenes)
+    out: List[dict] = []
+    for scene in normalized:
+        if not isinstance(scene, dict):
+            continue
+        out.append(_build_preview_for_scene(filename_template, path_template, scene))
+    return out
+
+
 def _normalize_criteria(criteria: List[Any]) -> List[dict]:
     """
     Normalize UI-captured criteria entries into GraphQL-ish criterion objects.
@@ -1069,6 +1238,16 @@ def run(options: dict, collect_operations: bool = False):
         path_template = options.get("path_template") or None
 
         scenes_opt = options.get("scenes")
+        if options.get("preview_dry_run"):
+            if scenes_opt is None or not isinstance(scenes_opt, list):
+                raise ValueError("'scenes' must be provided as a list for preview_dry_run")
+            scenes_preview = [s for s in scenes_opt if isinstance(s, dict)]
+            return preview_run(
+                filename_template=str(filename_template),
+                path_template=path_template,
+                scenes=scenes_preview,
+            )
+
         scenes_query = options.get("scenes_query")
         scene_filter = options.get("scene_filter")
         criteria_opt = options.get("criteria")

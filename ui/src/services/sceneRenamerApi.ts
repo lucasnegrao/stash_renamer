@@ -4,9 +4,22 @@ export interface ITokenTreeNode {
   children?: ITokenTreeNode[];
 }
 
+export interface IScenePreviewResult {
+  scene_id: string;
+  status?: string;
+  new_name?: string;
+  new_filename?: string;
+  new_path?: string;
+  log?: string;
+  error?: string;
+}
+
 interface IGraphQLErrorLike {
   message?: string;
 }
+
+let selectorsCatalogCache: any | null = null;
+let selectorsCatalogInflight: Promise<any> | null = null;
 
 async function postGraphQL<T = any>(query: string, variables: Record<string, any>): Promise<T> {
   const resp = await fetch("/graphql", {
@@ -54,6 +67,59 @@ export async function queueRenameTask(args: {
   return result?.data?.runPluginTask ? String(result.data.runPluginTask) : null;
 }
 
+export async function previewRenameScenes(args: {
+  template: string;
+  pathTemplate: string;
+  scenes: any[];
+}): Promise<IScenePreviewResult[]> {
+  const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
+    runPluginOperation(plugin_id: $plugin_id, args: $args)
+  }`;
+  const variables = {
+    plugin_id: "stash_renamer",
+    args: {
+      mode: "preview_dry_run",
+      preview_dry_run: true,
+      dry_run: true,
+      filename_template: args.template,
+      path_template: args.pathTemplate,
+      scenes: args.scenes,
+    },
+  };
+  const result = await postGraphQL<any>(query, variables);
+  const payload = result?.data?.runPluginOperation;
+  const output = payload?.output || payload || {};
+  const operations = output?.operations;
+  if (!Array.isArray(operations)) return [];
+  return operations as IScenePreviewResult[];
+}
+
+export async function runDryRunForFilteredScenes(args: {
+  template: string;
+  pathTemplate: string;
+  criteria: any[];
+}): Promise<IScenePreviewResult[]> {
+  const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
+    runPluginOperation(plugin_id: $plugin_id, args: $args)
+  }`;
+  const variables = {
+    plugin_id: "stash_renamer",
+    args: {
+      mode: "dry_run",
+      dry_run: true,
+      filename_template: args.template,
+      path_template: args.pathTemplate,
+      criteria: args.criteria,
+    },
+  };
+  const result = await postGraphQL<any>(query, variables);
+  const payload = result?.data?.runPluginOperation;
+  const output = payload?.output || payload || {};
+  const operations = output?.operations;
+  if (!Array.isArray(operations)) return [];
+  return operations as IScenePreviewResult[];
+}
+
 export async function fetchSelectorsCatalog(): Promise<any> {
   const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
     runPluginOperation(plugin_id: $plugin_id, args: $args)
@@ -69,6 +135,24 @@ export async function fetchSelectorsCatalog(): Promise<any> {
   const result = await postGraphQL<any>(query, variables);
   const payload = result?.data?.runPluginOperation;
   return payload?.output || payload || {};
+}
+
+export async function fetchSelectorsCatalogCached(force = false): Promise<any> {
+  if (!force && selectorsCatalogCache) {
+    return selectorsCatalogCache;
+  }
+  if (!force && selectorsCatalogInflight) {
+    return selectorsCatalogInflight;
+  }
+  selectorsCatalogInflight = fetchSelectorsCatalog()
+    .then((catalog) => {
+      selectorsCatalogCache = catalog || {};
+      return selectorsCatalogCache;
+    })
+    .finally(() => {
+      selectorsCatalogInflight = null;
+    });
+  return selectorsCatalogInflight;
 }
 
 export function extractSceneTokenTree(catalog: any): ITokenTreeNode[] {
