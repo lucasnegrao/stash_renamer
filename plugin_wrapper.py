@@ -307,20 +307,68 @@ def run(input_data, output):
         scenes_query_path = combined_args.get("scenes_query_path") or combined_args.get("scenesQueryPath") or "findScenes.scenes"
         scene_filter = combined_args.get("scene_filter") or combined_args.get("sceneFilter")
         find_filter = combined_args.get("find_filter") or combined_args.get("findFilter")
+        excluded_scene_ids = combined_args.get("excluded_scene_ids") or combined_args.get("excludedSceneIds")
         ids = combined_args.get("ids")
         if isinstance(ids, str):
             ids = [s.strip() for s in ids.split(",") if s.strip()]
+        if isinstance(excluded_scene_ids, str):
+            try:
+                excluded_scene_ids = json.loads(excluded_scene_ids)
+            except Exception:
+                excluded_scene_ids = [s.strip() for s in excluded_scene_ids.split(",") if s.strip()]
+        if excluded_scene_ids is not None:
+            if not isinstance(excluded_scene_ids, list):
+                raise Exception("excluded_scene_ids must be a list")
+            excluded_scene_ids = [str(x).strip() for x in excluded_scene_ids if str(x).strip()]
         undo_operation_id = combined_args.get("undo_operation_id") or combined_args.get("undoOperationId")
         list_operations = (
             str(mode).strip().lower() == "list_operations"
             or is_true(combined_args.get("list_operations"))
             or is_true(combined_args.get("listOperations"))
         )
+        list_operation_batches = (
+            str(mode).strip().lower() == "list_operation_batches"
+            or is_true(combined_args.get("list_operation_batches"))
+            or is_true(combined_args.get("listOperationBatches"))
+        )
+        list_templates = (
+            str(mode).strip().lower() == "list_templates"
+            or is_true(combined_args.get("list_templates"))
+            or is_true(combined_args.get("listTemplates"))
+        )
+        save_template = (
+            str(mode).strip().lower() == "save_template"
+            or is_true(combined_args.get("save_template"))
+            or is_true(combined_args.get("saveTemplate"))
+        )
+        update_template = (
+            str(mode).strip().lower() == "update_template"
+            or is_true(combined_args.get("update_template"))
+            or is_true(combined_args.get("updateTemplate"))
+        )
+        delete_template = (
+            str(mode).strip().lower() == "delete_template"
+            or is_true(combined_args.get("delete_template"))
+            or is_true(combined_args.get("deleteTemplate"))
+        )
+        list_batch_operations = (
+            str(mode).strip().lower() == "list_batch_operations"
+            or is_true(combined_args.get("list_batch_operations"))
+            or is_true(combined_args.get("listBatchOperations"))
+        )
+        undo_batch_operation = (
+            str(mode).strip().lower() == "undo_batch_operation"
+            or is_true(combined_args.get("undo_batch_operation"))
+            or is_true(combined_args.get("undoBatchOperation"))
+        )
+        batch_id = combined_args.get("batch_id") or combined_args.get("batchId")
         preview_dry_run = (
             str(mode).strip().lower() == "preview_dry_run"
             or is_true(combined_args.get("preview_dry_run"))
             or is_true(combined_args.get("previewDryRun"))
         )
+        template_name = combined_args.get("template_name") or combined_args.get("templateName")
+        template_id = combined_args.get("template_id") or combined_args.get("templateId")
         operations_db_path = combined_args.get("operations_db_path") or combined_args.get("operationsDbPath")
 
         options = {
@@ -335,10 +383,38 @@ def run(input_data, output):
             options["path_template"] = path_template
         if operations_db_path:
             options["operations_db_path"] = operations_db_path
+        if excluded_scene_ids:
+            options["excluded_scene_ids"] = excluded_scene_ids
         if undo_operation_id:
             options["undo_operation_id"] = undo_operation_id
         elif list_operations:
             options["list_operations"] = True
+        elif list_operation_batches:
+            options["list_operation_batches"] = True
+        elif list_templates:
+            options["list_templates"] = True
+        elif save_template:
+            options["save_template"] = True
+            if template_name is not None:
+                options["template_name"] = template_name
+            if template_id is not None:
+                options["template_id"] = template_id
+        elif update_template:
+            options["update_template"] = True
+            if template_name is not None:
+                options["template_name"] = template_name
+            if template_id is not None:
+                options["template_id"] = template_id
+        elif delete_template:
+            options["delete_template"] = True
+            if template_id is not None:
+                options["template_id"] = template_id
+        elif list_batch_operations:
+            options["list_batch_operations"] = True
+            options["batch_id"] = batch_id
+        elif undo_batch_operation:
+            options["undo_batch_operation"] = True
+            options["batch_id"] = batch_id
         elif preview_dry_run:
             options["preview_dry_run"] = True
             options["scenes"] = combined_args.get("scenes") or []

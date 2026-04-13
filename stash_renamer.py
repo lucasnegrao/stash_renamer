@@ -114,6 +114,20 @@ def _sanitize_path_component(seg: str) -> str:
     """
     return sanitize_filename(seg or "")
 
+
+def _apply_extension_if_missing(filename_core: str, file_extension: str) -> str:
+    """
+    Append extension only if missing (case-insensitive).
+    `file_extension` should include the leading dot when present.
+    """
+    core = str(filename_core or "")
+    ext = str(file_extension or "")
+    if not ext:
+        return core
+    if core.lower().endswith(ext.lower()):
+        return core
+    return core + ext
+
 def _build_target_directory(current_directory: str, tag_context: Dict[str, object], path_template: str) -> str:
     """
     Build a target directory from a template using the same tokens as filenames.
@@ -212,11 +226,70 @@ def makeFilename(query: str, tag_context: Dict[str, object]) -> str:
                 return s
             s = new_s
 
+    def _find_top_level_chooser(expr: str) -> int:
+        depth_curly = 0
+        depth_bracket = 0
+        depth_paren = 0
+        for i, ch in enumerate(expr or ""):
+            if ch == "{":
+                depth_curly += 1
+                continue
+            if ch == "}":
+                depth_curly = max(0, depth_curly - 1)
+                continue
+            if ch == "[":
+                depth_bracket += 1
+                continue
+            if ch == "]":
+                depth_bracket = max(0, depth_bracket - 1)
+                continue
+            if ch == "(":
+                depth_paren += 1
+                continue
+            if ch == ")":
+                depth_paren = max(0, depth_paren - 1)
+                continue
+            if ch != ":":
+                continue
+            if depth_curly or depth_bracket or depth_paren:
+                continue
+            # Keep Windows drive syntax intact (e.g., C:/..., C:\...).
+            nxt = expr[i + 1] if i + 1 < len(expr) else ""
+            if i == 1 and expr[0].isalpha() and nxt in ("/", "\\"):
+                continue
+            return i
+        return -1
+
+    def _is_effectively_empty_rendered(text: Any) -> bool:
+        s = str(text or "").strip()
+        if not s:
+            return True
+        # Ignore common separators when checking chooser emptiness.
+        compact = re.sub(r"[-–—_:|,.\s]+", "", s)
+        return compact == ""
+
+    def _eval_template_expr(expr: str) -> str:
+        raw = str(expr or "").strip()
+        if not raw:
+            return ""
+
+        split_idx = _find_top_level_chooser(raw)
+        if split_idx >= 0:
+            left_raw = raw[:split_idx]
+            right_raw = raw[split_idx + 1 :]
+            left_val = _eval_template_expr(left_raw)
+            if not _is_effectively_empty_rendered(left_val):
+                return left_val
+            return _eval_template_expr(right_raw)
+
+        # Conditional groups take precedence over chooser resolution.
+        processed = _render_conditionals(raw)
+        if TAGGER:
+            processed = TAGGER.render(processed, tag_context)
+        return processed
+
     # Trim template
-    s = str(query or "").strip()
-    s = _render_conditionals(s)
-    if TAGGER:
-        s = TAGGER.render(s, tag_context)
+    s = _eval_template_expr(str(query or "").strip())
 
     # Remove the global hyphen normalization to avoid spacing inside dates
     # s = re.sub(r"\s*-\s*", " - ", s)
@@ -265,9 +338,18 @@ def __callGraphQL(query: str, variables: Optional[dict] = None) -> dict:
             f"GraphQL query failed:{resp.status_code} - {resp.content}. Query: {query}. Variables: {variables}"
         )
     result = resp.json()
-    if result.get("error"):
-        for error in result["error"]["errors"]:
-            raise Exception(f"GraphQL error: {error}")
+    # GraphQL responses may use either "errors" (spec) or wrapped "error.errors".
+    errors = []
+    if isinstance(result.get("errors"), list):
+        errors.extend(result.get("errors") or [])
+    wrapped = result.get("error")
+    if isinstance(wrapped, dict) and isinstance(wrapped.get("errors"), list):
+        errors.extend(wrapped.get("errors") or [])
+    if errors:
+        message = " | ".join(str(err) for err in errors)
+        raise Exception(
+            f"GraphQL errors: {message}. Query: {query}. Variables: {variables}"
+        )
     if result.get("data") is None:
         raise Exception("GraphQL response missing 'data'")
     return result["data"]
@@ -313,6 +395,13 @@ def _normalize_scenes(scenes: List[dict]) -> List[dict]:
             scene["path"] = files[0].get("path")
         out.append(scene)
     return out
+
+
+def _exclude_scenes_by_ids(scenes: List[dict], excluded_ids: List[str]) -> List[dict]:
+    excluded_set = {str(x).strip() for x in (excluded_ids or []) if str(x).strip()}
+    if not excluded_set:
+        return scenes
+    return [s for s in scenes if str((s or {}).get("id") or "").strip() not in excluded_set]
 
 
 def _build_field_tree_from_templates(filename_template: str, path_template: Optional[str]) -> Dict[str, Any]:
@@ -492,7 +581,16 @@ def _merge_scene_data(base: Any, extra: Any) -> Any:
     if isinstance(base, list) and isinstance(extra, list):
         if not base:
             return list(extra)
-        return base
+        merged: List[Any] = []
+        max_len = max(len(base), len(extra))
+        for i in range(max_len):
+            if i < len(base) and i < len(extra):
+                merged.append(_merge_scene_data(base[i], extra[i]))
+            elif i < len(base):
+                merged.append(base[i])
+            else:
+                merged.append(extra[i])
+        return merged
 
     return base
 
@@ -582,7 +680,7 @@ def _build_preview_for_scene(
             preview["log"] = "Rendered filename is empty"
             return preview
 
-        new_filename = new_filename_core + file_extension
+        new_filename = _apply_extension_if_missing(new_filename_core, file_extension)
         if path_template:
             final_directory = _build_target_directory(
                 current_directory=current_directory,
@@ -617,12 +715,46 @@ def _build_preview_for_scene(
 
 def preview_run(filename_template: str, path_template: Optional[str], scenes: List[dict]) -> List[dict]:
     normalized = _normalize_scenes(scenes)
-    out: List[dict] = []
+    hydrated: List[dict] = []
+
+    required_tree = _build_field_tree_from_templates(filename_template, path_template)
     for scene in normalized:
         if not isinstance(scene, dict):
             continue
-        out.append(_build_preview_for_scene(filename_template, path_template, scene))
-    return out
+        work_scene = dict(scene)
+        scene_id = str(work_scene.get("id") or "")
+        if scene_id and _scene_missing_fields(work_scene, required_tree):
+            fetched = _fetch_scene_by_id_for_templates(
+                scene_id=scene_id,
+                filename_template=filename_template,
+                path_template=path_template,
+            )
+            if fetched:
+                work_scene = _merge_scene_data(work_scene, fetched)
+        hydrated.append(work_scene)
+
+    # Use the exact same guard/mutation pipeline as the official run,
+    # but force dry-run mode so no moveFiles call is executed.
+    global DRY_RUN
+    prev_dry_run = DRY_RUN
+    DRY_RUN = True
+    try:
+        operations = edit_run(
+            filename_template=filename_template,
+            path_template=path_template,
+            scenes=hydrated,
+            collect_operations=True,
+            batch_id=None,
+        ) or []
+    finally:
+        DRY_RUN = prev_dry_run
+
+    # In preview mode, map dry-run "pending" to "success" for clearer UI semantics.
+    for op in operations:
+        if isinstance(op, dict) and str(op.get("status") or "").lower() == "pending":
+            op["status"] = "success"
+
+    return operations
 
 
 def _normalize_criteria(criteria: List[Any]) -> List[dict]:
@@ -761,7 +893,9 @@ def _build_selectors_catalog() -> Dict[str, Any]:
     def _unwrap_type(type_info: Optional[dict]) -> Dict[str, Any]:
         cur = type_info or {}
         is_list = False
-        while isinstance(cur, dict):
+        guard = 0
+        while isinstance(cur, dict) and guard < 24:
+            guard += 1
             kind = cur.get("kind")
             if kind == "NON_NULL":
                 cur = cur.get("ofType") or {}
@@ -777,7 +911,7 @@ def _build_selectors_catalog() -> Dict[str, Any]:
             "kind": kind,
             "name": name,
             "is_list": is_list,
-            "is_object_like": kind in ("OBJECT", "INTERFACE"),
+            "is_object_like": kind in ("OBJECT", "INTERFACE", "UNION"),
         }
 
     def _introspect_type_fields(type_name: str) -> List[dict]:
@@ -788,6 +922,61 @@ def _build_selectors_catalog() -> Dict[str, Any]:
             return [f for f in fields if isinstance(f, dict) and f.get("name")]
         except Exception:
             return []
+
+    def _build_scene_node(
+        field_name: str,
+        field_meta: Dict[str, Any],
+        prefix: str,
+        nested_type_cache: Dict[str, List[dict]],
+        visited_types: List[str],
+        depth: int,
+        max_depth: int = 3,
+    ) -> Dict[str, Any]:
+        node: Dict[str, Any] = {
+            "name": field_name,
+            "token": prefix,
+            "kind": field_meta.get("kind"),
+            "is_list": bool(field_meta.get("is_list")),
+            "children": [],
+        }
+
+        if depth >= max_depth:
+            return node
+
+        nested_type_name = str(field_meta.get("name") or "")
+        is_object_like = bool(field_meta.get("is_object_like"))
+        if not (is_object_like and nested_type_name):
+            return node
+
+        # Prevent cycles in self-referential graph types.
+        if nested_type_name in visited_types:
+            return node
+
+        if nested_type_name not in nested_type_cache:
+            nested_type_cache[nested_type_name] = _introspect_type_fields(nested_type_name)
+
+        next_visited = [*visited_types, nested_type_name]
+        for sub in nested_type_cache[nested_type_name]:
+            sub_name = str(sub.get("name") or "")
+            if not sub_name:
+                continue
+            sub_meta = _unwrap_type(sub.get("type"))
+            if node["is_list"]:
+                token = f"{prefix}[0].{sub_name}"
+            else:
+                token = f"{prefix}.{sub_name}"
+            child = _build_scene_node(
+                sub_name,
+                sub_meta,
+                token,
+                nested_type_cache,
+                next_visited,
+                depth + 1,
+                max_depth=max_depth,
+            )
+            node["children"].append(child)
+
+        return node
 
     roots: List[Dict[str, Any]] = []
     fields_by_root: Dict[str, List[str]] = {}
@@ -808,39 +997,44 @@ def _build_selectors_catalog() -> Dict[str, Any]:
                 }
             )
 
-        # Build one-level nested token tree for scene root
+        # Build nested token tree for scene root.
         scene_fields = _introspect_type_fields("Scene")
         nested_type_cache: Dict[str, List[dict]] = {}
+        seen_scene_tokens: set = set()
         for field in scene_fields:
             field_name = str(field.get("name"))
             type_meta = _unwrap_type(field.get("type"))
-            node: Dict[str, Any] = {
-                "name": field_name,
-                "token": f"$scene.{field_name}",
-                "kind": type_meta.get("kind"),
-                "is_list": bool(type_meta.get("is_list")),
-                "children": [],
-            }
-
-            nested_type_name = type_meta.get("name")
-            if type_meta.get("is_object_like") and nested_type_name:
-                if nested_type_name not in nested_type_cache:
-                    nested_type_cache[nested_type_name] = _introspect_type_fields(
-                        str(nested_type_name)
-                    )
-                for sub in nested_type_cache[nested_type_name]:
-                    sub_name = str(sub.get("name"))
-                    if node["is_list"]:
-                        token = f"$scene.{field_name}[0].{sub_name}"
-                    else:
-                        token = f"$scene.{field_name}.{sub_name}"
-                    node["children"].append(
-                        {
-                            "name": sub_name,
-                            "token": token,
-                        }
-                    )
+            if not field_name:
+                continue
+            node = _build_scene_node(
+                field_name=field_name,
+                field_meta=type_meta,
+                prefix=f"$scene.{field_name}",
+                nested_type_cache=nested_type_cache,
+                visited_types=["Scene"],
+                depth=0,
+            )
             scene_tree.append(node)
+            seen_scene_tokens.add(node.get("token"))
+
+        # Dynamic fallback: if Scene introspection missed any root fields,
+        # add root-level tokens from the tagger metadata so selector list stays complete.
+        for root_field in fields_by_root.get("scene", []):
+            token = f"$scene.{root_field}"
+            if token in seen_scene_tokens:
+                continue
+            scene_tree.append(
+                {
+                    "name": root_field,
+                    "token": token,
+                    "kind": None,
+                    "is_list": False,
+                    "children": [],
+                }
+            )
+            seen_scene_tokens.add(token)
+
+        scene_tree.sort(key=lambda n: str(n.get("token") or ""))
     else:
         for root in ["scene", "performer", "group"]:
             roots.append(
@@ -871,7 +1065,13 @@ def _build_selectors_catalog() -> Dict[str, Any]:
     }
 
 
-def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
+def edit_run(
+    filename_template: str,
+    path_template: Optional[str],
+    scenes: List[dict],
+    collect_operations: bool = False,
+    batch_id: Optional[str] = None,
+):
     """
     Run the rename operation.
     
@@ -910,10 +1110,51 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                 f"success={success_count} skipped={skipped_count} errors={error_count}"
             )
 
+    def _log_operation_to_db(
+        scene_id: str,
+        old_path: str,
+        new_path: str,
+        success: bool,
+        error: Optional[str],
+    ) -> Optional[str]:
+        if FILE_MOVER is None or not batch_id:
+            return None
+        sid = str(scene_id or "")
+        # Dry-run operations should not be persisted.
+        if DRY_RUN:
+            return None
+        return FILE_MOVER.log_rename_result(
+            scene_id=sid,
+            old_path=str(old_path or ""),
+            new_path=str(new_path or ""),
+            batch_id=batch_id,
+            success=success,
+            error=error,
+        )
+
     for scene in scenes:
         processed += 1
         current_path = scene.get("path")
         if not current_path:
+            op_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path="",
+                new_path="",
+                success=False,
+                error="Scene has no primary file path",
+            )
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene.get("id"),
+                    "title": scene.get("title") or "",
+                    "status": "skipped",
+                    "log": "Scene has no primary file path",
+                    "operation_id": op_id,
+                    "old_filename": "",
+                    "new_filename": "",
+                    "old_path": "",
+                    "new_path": ""
+                })
             skipped_count += 1
             _log_progress()
             continue
@@ -956,10 +1197,29 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         new_filename_core = sanitize_filename(new_filename_core)
         if not new_filename_core.strip():
             logPrint(f"[Error] New filename resolved empty for scene {scene['id']}, skipping.")
+            op_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path=current_path,
+                new_path=current_path,
+                success=False,
+                error="Rendered filename is empty",
+            )
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene.get("id"),
+                    "title": scene_title,
+                    "status": "error",
+                    "error": "Rendered filename is empty",
+                    "operation_id": op_id,
+                    "old_filename": current_filename,
+                    "new_filename": "",
+                    "old_path": current_path,
+                    "new_path": current_path
+                })
             skipped_count += 1
             _log_progress()
             continue
-        new_filename = new_filename_core + file_extension
+        new_filename = _apply_extension_if_missing(new_filename_core, file_extension)
 
         # Determine target directory via path builder (absolute or relative)
         current_directory = os.path.dirname(current_path)
@@ -999,15 +1259,53 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
             reduced_core = sanitize_filename(reduced_core)
             if not reduced_core.strip():
                 logPrint(f"[Error] Reduced filename empty, skipping scene {scene['id']}.")
+                op_id = _log_operation_to_db(
+                    scene_id=str(scene.get("id") or ""),
+                    old_path=current_path,
+                    new_path=current_path,
+                    success=False,
+                    error="Reduced filename resolved empty",
+                )
+                if collect_operations:
+                    operations.append({
+                        "scene_id": scene.get("id"),
+                        "title": scene_title,
+                        "status": "error",
+                        "error": "Reduced filename resolved empty",
+                        "operation_id": op_id,
+                        "old_filename": current_filename,
+                        "new_filename": "",
+                        "old_path": current_path,
+                        "new_path": current_path
+                    })
                 skipped_count += 1
                 _log_progress()
                 continue
-            new_filename = reduced_core + file_extension
+            new_filename = _apply_extension_if_missing(reduced_core, file_extension)
             new_path = os.path.join(current_directory, new_filename)
             if len(new_path) <= 240:
                 logPrint(f"[Info] Reduced filename to: {new_filename}")
             else:
                 logPrint(f"[Error] Can't manage to reduce the path, ID: {scene['id']}")
+                op_id = _log_operation_to_db(
+                    scene_id=str(scene.get("id") or ""),
+                    old_path=current_path,
+                    new_path=new_path,
+                    success=False,
+                    error="Path exceeds Windows length limit",
+                )
+                if collect_operations:
+                    operations.append({
+                        "scene_id": scene.get("id"),
+                        "title": scene_title,
+                        "status": "error",
+                        "error": "Path exceeds Windows length limit",
+                        "operation_id": op_id,
+                        "old_filename": current_filename,
+                        "new_filename": new_filename,
+                        "old_path": current_path,
+                        "new_path": new_path
+                    })
                 skipped_count += 1
                 _log_progress()
                 continue
@@ -1017,6 +1315,25 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
             logPrint(f"[Error] Target already exists: {new_path}")
             with open("renamer_duplicate.txt", "a", encoding="utf-8") as fh:
                 print(f"[{scene['id']}] - {new_filename}", file=fh)
+            op_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path=current_path,
+                new_path=new_path,
+                success=False,
+                error="Target already exists",
+            )
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene.get("id"),
+                    "title": scene_title,
+                    "status": "error",
+                    "error": "Target already exists",
+                    "operation_id": op_id,
+                    "old_filename": current_filename,
+                    "new_filename": new_filename,
+                    "old_path": current_path,
+                    "new_path": new_path
+                })
             error_count += 1
             _log_progress()
             continue
@@ -1028,6 +1345,25 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
         if new_path == current_path:
             if DEBUG_MODE:
                 logPrint("[DEBUG] File already good.\n")
+            op_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path=current_path,
+                new_path=new_path,
+                success=False,
+                error="No change (same path and filename)",
+            )
+            if collect_operations:
+                operations.append({
+                    "scene_id": scene["id"],
+                    "title": scene_title,
+                    "status": "warn",
+                    "log": "No change (same path and filename)",
+                    "operation_id": op_id,
+                    "old_filename": current_filename,
+                    "new_filename": new_filename,
+                    "old_path": current_path,
+                    "new_path": new_path
+                })
             skipped_count += 1
             _log_progress()
             continue
@@ -1042,12 +1378,20 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
             
             if not file_ids:
                 logPrint(f"[Error] No file ID found for path: {current_path}")
+                op_id = _log_operation_to_db(
+                    scene_id=str(scene.get("id") or ""),
+                    old_path=current_path,
+                    new_path=new_path,
+                    success=False,
+                    error="No file ID found for path",
+                )
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
                         "title": scene_title,
                         "status": "error",
                         "error": "No file ID found for path",
+                        "operation_id": op_id,
                         "old_filename": current_filename,
                         "new_filename": new_filename,
                         "old_path": current_path,
@@ -1077,12 +1421,20 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                 logPrint(f"[GQL] File failed to rename ({current_filename}) due to: {e}")
                 with open("renamer_fail.txt", "a", encoding="utf-8") as fh:
                     print(f"{current_path} -> {new_path}", file=fh)
+                op_id = _log_operation_to_db(
+                    scene_id=str(scene.get("id") or ""),
+                    old_path=current_path,
+                    new_path=new_path,
+                    success=False,
+                    error=str(e),
+                )
                 if collect_operations:
                     operations.append({
                         "scene_id": scene['id'],
                         "title": scene_title,
                         "status": "error",
                         "error": str(e),
+                        "operation_id": op_id,
                         "old_filename": current_filename,
                         "new_filename": new_filename,
                         "old_path": current_path,
@@ -1094,13 +1446,14 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
 
             # Success - the GraphQL mutation handles the actual file move
             logPrint(f"[GQL] File Renamed! ({current_filename})")
-            operation_id = None
-            if FILE_MOVER is not None:
-                operation_id = FILE_MOVER.log_rename(
-                    scene_id=str(scene.get("id") or ""),
-                    old_path=current_path,
-                    new_path=new_path,
-                )
+            operation_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path=current_path,
+                new_path=new_path,
+                success=True,
+                error=None,
+            )
+            if operation_id:
                 logPrint(f"[GQL] Rename operation logged: {operation_id}")
             if USING_LOG:
                 with open("rename_log.txt", "a", encoding="utf-8") as fh:
@@ -1126,11 +1479,19 @@ def edit_run(filename_template: str, path_template: Optional[str], scenes: List[
                 logPrint(f"[DRY] RENAME: {current_filename} -> {new_filename}")
             with open("renamer_dryrun.txt", "a", encoding="utf-8") as fh:
                 print(f"{current_path} -> {new_path}", file=fh)
+            operation_id = _log_operation_to_db(
+                scene_id=str(scene.get("id") or ""),
+                old_path=current_path,
+                new_path=new_path,
+                success=True,
+                error=None,
+            )
             if collect_operations:
                 operations.append({
                     "scene_id": scene['id'],
                     "title": scene_title,
                     "status": "pending",
+                    "operation_id": operation_id,
                     "old_filename": current_filename,
                     "new_filename": new_filename,
                     "old_path": current_path,
@@ -1228,14 +1589,99 @@ def run(options: dict, collect_operations: bool = False):
             operations = FILE_MOVER.list_rename_operations()
             return operations if collect_operations else None
 
+        if options.get("list_operation_batches"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            batches = FILE_MOVER.list_operation_batches()
+            return {"batches": batches}
+
+        if options.get("list_batch_operations"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            batch_id = str(options.get("batch_id") or "")
+            if not batch_id:
+                raise ValueError("batch_id is required for list_batch_operations")
+            operations = FILE_MOVER.list_batch_operations(batch_id=batch_id)
+            return {"operations": operations}
+
+        if options.get("undo_batch_operation"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            batch_id = str(options.get("batch_id") or "")
+            if not batch_id:
+                raise ValueError("batch_id is required for undo_batch_operation")
+            result = FILE_MOVER.undo_batch_operation(batch_id=batch_id)
+            return result
+
         if options.get("list_selectors"):
             selectors = _build_selectors_catalog()
             return selectors
+
+        if options.get("list_templates"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            templates = FILE_MOVER.list_templates()
+            return {"templates": templates}
+
+        if options.get("save_template"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            template_name = str(options.get("template_name") or "").strip()
+            filename_tpl = str(options.get("filename_template") or "").strip()
+            path_tpl = str(options.get("path_template") or "")
+            if not template_name:
+                raise ValueError("template_name is required for save_template")
+            if not filename_tpl:
+                raise ValueError("filename_template is required for save_template")
+            saved = FILE_MOVER.save_template(
+                name=template_name,
+                filename_template=filename_tpl,
+                path_template=path_tpl,
+            )
+            return {"template": saved}
+
+        if options.get("update_template"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            template_id = str(options.get("template_id") or "").strip()
+            template_name = str(options.get("template_name") or "").strip()
+            filename_tpl = str(options.get("filename_template") or "").strip()
+            path_tpl = str(options.get("path_template") or "")
+            if not template_id:
+                raise ValueError("template_id is required for update_template")
+            if not template_name:
+                raise ValueError("template_name is required for update_template")
+            if not filename_tpl:
+                raise ValueError("filename_template is required for update_template")
+            updated = FILE_MOVER.update_template(
+                template_id=template_id,
+                name=template_name,
+                filename_template=filename_tpl,
+                path_template=path_tpl,
+            )
+            if not updated:
+                raise ValueError(f"Template not found: {template_id}")
+            return {"template": updated}
+
+        if options.get("delete_template"):
+            if FILE_MOVER is None:
+                raise RuntimeError("FILE_MOVER not initialized")
+            template_id = str(options.get("template_id") or "").strip()
+            if not template_id:
+                raise ValueError("template_id is required for delete_template")
+            deleted = FILE_MOVER.delete_template(template_id=template_id)
+            return {"deleted": bool(deleted), "template_id": template_id}
 
         filename_template = options.get("filename_template")
         if not filename_template or not str(filename_template).strip():
             raise ValueError("filename_template is required")
         path_template = options.get("path_template") or None
+        excluded_scene_ids_opt = options.get("excluded_scene_ids")
+        excluded_scene_ids: List[str] = []
+        if isinstance(excluded_scene_ids_opt, list):
+            excluded_scene_ids = [
+                str(x).strip() for x in excluded_scene_ids_opt if str(x).strip()
+            ]
 
         scenes_opt = options.get("scenes")
         if options.get("preview_dry_run"):
@@ -1319,14 +1765,49 @@ def run(options: dict, collect_operations: bool = False):
             if DEBUG_MODE:
                 logPrint(f"[DEBUG] Loaded {len(scenes)} scenes from backend filter mode")
 
-        ops = edit_run(
-            filename_template=str(filename_template),
-            path_template=path_template,
-            scenes=scenes,
-            collect_operations=collect_operations,
-        )
-        all_operations: List[dict] = ops or []
-        return all_operations if collect_operations else None
+        if excluded_scene_ids:
+            before_count = len(scenes)
+            scenes = _exclude_scenes_by_ids(scenes, excluded_scene_ids)
+            removed_count = before_count - len(scenes)
+            if DEBUG_MODE:
+                logPrint(
+                    f"[DEBUG] Excluded {removed_count} scene(s) by selected IDs; remaining {len(scenes)}"
+                )
+
+        if FILE_MOVER is None:
+            raise RuntimeError("FILE_MOVER not initialized")
+
+        # Dry runs should not create operation batches.
+        if DRY_RUN:
+            ops = edit_run(
+                filename_template=str(filename_template),
+                path_template=path_template,
+                scenes=scenes,
+                collect_operations=collect_operations,
+                batch_id=None,
+            )
+            all_operations: List[dict] = ops or []
+            if collect_operations:
+                return {"operations": all_operations}
+            return None
+
+        batch_id = FILE_MOVER.start_batch(mode="rename")
+        try:
+            ops = edit_run(
+                filename_template=str(filename_template),
+                path_template=path_template,
+                scenes=scenes,
+                collect_operations=collect_operations,
+                batch_id=batch_id,
+            )
+            FILE_MOVER.complete_batch(batch_id=batch_id, success=True, error=None)
+            all_operations: List[dict] = ops or []
+            if collect_operations:
+                return {"batch_id": batch_id, "operations": all_operations}
+            return None
+        except Exception as e:
+            FILE_MOVER.complete_batch(batch_id=batch_id, success=False, error=str(e))
+            raise
     finally:
         if FILE_MOVER is not None:
             try:

@@ -4,7 +4,7 @@ INTROSPECTION_TYPE_QUERY = """
 query IntrospectType($typeName: String!) {
   __type(name: $typeName) {
     name
-    fields {
+    fields(includeDeprecated: true) {
       name
       type {
         kind
@@ -15,6 +15,26 @@ query IntrospectType($typeName: String!) {
           ofType {
             kind
             name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                  ofType {
+                    kind
+                    name
+                    ofType {
+                      kind
+                      name
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

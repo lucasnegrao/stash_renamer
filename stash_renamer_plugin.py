@@ -140,6 +140,7 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
     scene_filter = combined.get("scene_filter") or combined.get("sceneFilter")
     find_filter = combined.get("find_filter") or combined.get("findFilter")
     criteria = combined.get("criteria")
+    excluded_scene_ids = combined.get("excluded_scene_ids") or combined.get("excludedSceneIds")
 
     if isinstance(scene_filter, str):
         try:
@@ -156,6 +157,16 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
             criteria = json.loads(criteria)
         except Exception:
             raise Exception("criteria must be a JSON array")
+    if isinstance(excluded_scene_ids, str):
+        try:
+            parsed_excluded = json.loads(excluded_scene_ids)
+            excluded_scene_ids = parsed_excluded
+        except Exception:
+            excluded_scene_ids = [s.strip() for s in excluded_scene_ids.split(",") if s.strip()]
+    if excluded_scene_ids is not None:
+        if not isinstance(excluded_scene_ids, list):
+            raise Exception("excluded_scene_ids must be a list")
+        excluded_scene_ids = [str(x).strip() for x in excluded_scene_ids if str(x).strip()]
 
     if criteria is not None:
         if not isinstance(criteria, list):
@@ -186,11 +197,49 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
         or is_true(combined.get("list_selectors"))
         or is_true(combined.get("listSelectors"))
     )
+    list_operation_batches = (
+        str(mode).strip().lower() == "list_operation_batches"
+        or is_true(combined.get("list_operation_batches"))
+        or is_true(combined.get("listOperationBatches"))
+    )
+    list_templates = (
+        str(mode).strip().lower() == "list_templates"
+        or is_true(combined.get("list_templates"))
+        or is_true(combined.get("listTemplates"))
+    )
+    save_template = (
+        str(mode).strip().lower() == "save_template"
+        or is_true(combined.get("save_template"))
+        or is_true(combined.get("saveTemplate"))
+    )
+    update_template = (
+        str(mode).strip().lower() == "update_template"
+        or is_true(combined.get("update_template"))
+        or is_true(combined.get("updateTemplate"))
+    )
+    delete_template = (
+        str(mode).strip().lower() == "delete_template"
+        or is_true(combined.get("delete_template"))
+        or is_true(combined.get("deleteTemplate"))
+    )
+    list_batch_operations = (
+        str(mode).strip().lower() == "list_batch_operations"
+        or is_true(combined.get("list_batch_operations"))
+        or is_true(combined.get("listBatchOperations"))
+    )
+    undo_batch_operation = (
+        str(mode).strip().lower() == "undo_batch_operation"
+        or is_true(combined.get("undo_batch_operation"))
+        or is_true(combined.get("undoBatchOperation"))
+    )
+    batch_id = combined.get("batch_id") or combined.get("batchId")
     preview_dry_run = (
         str(mode).strip().lower() == "preview_dry_run"
         or is_true(combined.get("preview_dry_run"))
         or is_true(combined.get("previewDryRun"))
     )
+    template_name = combined.get("template_name") or combined.get("templateName")
+    template_id = combined.get("template_id") or combined.get("templateId")
     operations_db_path = combined.get("operations_db_path") or combined.get("operationsDbPath")
 
     server_conn = input_data.get("server_connection") or {}
@@ -216,6 +265,8 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
         options["path_template"] = path_template
     if operations_db_path:
         options["operations_db_path"] = operations_db_path
+    if excluded_scene_ids:
+        options["excluded_scene_ids"] = excluded_scene_ids
 
     if undo_operation_id:
         options["undo_operation_id"] = undo_operation_id
@@ -227,6 +278,46 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
 
     if list_selectors:
         options["list_selectors"] = True
+        return options
+
+    if list_operation_batches:
+        options["list_operation_batches"] = True
+        return options
+
+    if list_templates:
+        options["list_templates"] = True
+        return options
+
+    if save_template:
+        options["save_template"] = True
+        if template_name is not None:
+            options["template_name"] = template_name
+        if template_id is not None:
+            options["template_id"] = template_id
+        return options
+
+    if update_template:
+        options["update_template"] = True
+        if template_name is not None:
+            options["template_name"] = template_name
+        if template_id is not None:
+            options["template_id"] = template_id
+        return options
+
+    if delete_template:
+        options["delete_template"] = True
+        if template_id is not None:
+            options["template_id"] = template_id
+        return options
+
+    if list_batch_operations:
+        options["list_batch_operations"] = True
+        options["batch_id"] = batch_id
+        return options
+
+    if undo_batch_operation:
+        options["undo_batch_operation"] = True
+        options["batch_id"] = batch_id
         return options
 
     if preview_dry_run:

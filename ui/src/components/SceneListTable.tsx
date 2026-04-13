@@ -547,6 +547,12 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
     if (render) return render(scene, index);
   }
 
+  function isSceneSelectable(scene: ISlimSceneData): boolean {
+    const status = props.sceneOperationById?.[scene.id]?.status;
+    if (!status) return true;
+    return status === "success";
+  }
+
   return (
     <ListTable
       tableName={TABLE_NAME}
@@ -557,6 +563,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
       setColumns={(c: string[]) => saveColumns(c)}
       selectedIds={props.selectedIds}
       onSelectChange={props.onSelectChange}
+      isRowSelectable={(scene) => isSceneSelectable(scene)}
       renderCell={renderCell}
     />
   );

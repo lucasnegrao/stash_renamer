@@ -59,6 +59,7 @@ interface IListTableProps<T> {
   selectedIds: Set<string>;
   onSelectChange: (id: string, selected: boolean, shiftKey: boolean) => void;
   renderCell: (column: IColumn, item: T, index: number) => React.ReactNode;
+  isRowSelectable?: (item: T, index: number) => boolean;
 }
 
 export const ListTable = <T extends { id: string }>(
@@ -74,6 +75,7 @@ export const ListTable = <T extends { id: string }>(
     selectedIds,
     onSelectChange,
     renderCell,
+    isRowSelectable,
   } = props;
 
   const allColumnsByValue = useMemo(
@@ -278,6 +280,7 @@ export const ListTable = <T extends { id: string }>(
 
   const renderObjectRow = (item: T, index: number) => {
     let shiftKey = false;
+    const rowSelectable = isRowSelectable ? isRowSelectable(item, index) : true;
 
     return (
       <tr key={item.id}>
@@ -286,6 +289,7 @@ export const ListTable = <T extends { id: string }>(
             <Form.Control
               type="checkbox"
               checked={selectedIds.has(item.id)}
+              disabled={!rowSelectable}
               onChange={() =>
                 onSelectChange(item.id, !selectedIds.has(item.id), shiftKey)
               }
