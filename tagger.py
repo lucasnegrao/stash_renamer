@@ -33,6 +33,9 @@ class GraphQLTagger:
     def available_roots(self) -> List[str]:
         return sorted(self._root_types.keys())
 
+    def available_fields(self, root: str) -> List[str]:
+        return sorted(list(self._fields_by_root.get(root, set())))
+
     def has_root_field(self, root: str, field: str) -> bool:
         if not self.is_ready():
             return True

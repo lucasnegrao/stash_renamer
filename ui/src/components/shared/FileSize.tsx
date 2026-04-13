@@ -1,5 +1,5 @@
 import React from "react";
-import TextUtils from "src/utils/text";
+import TextUtils from "../../utils/text";
 
 export const FileSize: React.FC<{ size: number }> = ({ size: fileSize }) => {
   const { size, unit } = TextUtils.fileSize(fileSize);

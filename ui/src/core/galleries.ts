@@ -1,4 +1,4 @@
-import TextUtils from "src/utils/text";
+import TextUtils from "../utils/text";
 
 interface IFile {
   path: string;

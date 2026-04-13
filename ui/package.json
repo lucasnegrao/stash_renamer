@@ -6,20 +6,25 @@
   "license": "AGPL-3.0",
   "scripts": {
     "tsc": "tsc",
-    "pau": "scp dist/* root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/stash_renamer/ui/dist/",
+    "pau": "npx webpack ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/",
     "compile:ts": "npm run tsc",
     "compile": "npm run compile:ts && pau",
-    "build": "npm run compile"
+    "build": "npm run pau"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "cpx": "^1.5.0",
     "sass": "^1.99.0",
-    "typescript": "^6.0.2"
+    "ts-loader": "^9.5.7",
+    "typescript": "^6.0.2",
+    "webpack": "^5.106.1",
+    "webpack-cli": "^7.0.2"
   },
   "dependencies": {
     "@apollo/client": "3.8.10",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
+    "@fortawesome/react-fontawesome": "^3.3.0",
     "@graphql-codegen/time": "^6.0.0",
     "@graphql-codegen/typescript-react-apollo": "^4.4.1",
     "classnames": "^2.5.1",

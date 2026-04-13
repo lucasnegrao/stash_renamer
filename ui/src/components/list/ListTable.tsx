@@ -1,4 +1,3 @@
-import React, { useMemo } from "react";
 // import { CheckBoxSelect } from "../Shared/Select";
 import cx from "classnames";
   const PluginApi = (window as any).PluginApi;
@@ -9,7 +8,8 @@ export interface IColumn {
   value: string;
   mandatory?: boolean;
 }
-
+const React = PluginApi.React;
+const useMemo = React.useMemo;
 export const ColumnSelector: React.FC<{
   selected: string[];
   allColumns: IColumn[];

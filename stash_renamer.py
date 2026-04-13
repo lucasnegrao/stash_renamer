@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from file_mover import FileMover
+from graphql_queries import INTROSPECTION_TYPE_QUERY
 from tagger import GraphQLTagger
 
 # Flags (programmatic overrides via run(options))
@@ -587,6 +588,120 @@ def _combine_scene_filters(left: Optional[dict], right: Optional[dict]) -> Optio
     return out
 
 
+def _build_selectors_catalog() -> Dict[str, Any]:
+    def _unwrap_type(type_info: Optional[dict]) -> Dict[str, Any]:
+        cur = type_info or {}
+        is_list = False
+        while isinstance(cur, dict):
+            kind = cur.get("kind")
+            if kind == "NON_NULL":
+                cur = cur.get("ofType") or {}
+                continue
+            if kind == "LIST":
+                is_list = True
+                cur = cur.get("ofType") or {}
+                continue
+            break
+        kind = (cur or {}).get("kind")
+        name = (cur or {}).get("name")
+        return {
+            "kind": kind,
+            "name": name,
+            "is_list": is_list,
+            "is_object_like": kind in ("OBJECT", "INTERFACE"),
+        }
+
+    def _introspect_type_fields(type_name: str) -> List[dict]:
+        try:
+            data = __callGraphQL(INTROSPECTION_TYPE_QUERY, {"typeName": type_name})
+            type_info = (data or {}).get("__type") or {}
+            fields = type_info.get("fields") or []
+            return [f for f in fields if isinstance(f, dict) and f.get("name")]
+        except Exception:
+            return []
+
+    roots: List[Dict[str, Any]] = []
+    fields_by_root: Dict[str, List[str]] = {}
+    scene_tree: List[Dict[str, Any]] = []
+    if TAGGER is not None and TAGGER.is_ready():
+        for root in TAGGER.available_roots():
+            root_fields = TAGGER.available_fields(root)
+            fields_by_root[root] = root_fields
+            roots.append(
+                {
+                    "root": root,
+                    "token": f"${root}",
+                    "fields": root_fields,
+                    "examples": [
+                        f"${root}.{root_fields[0]}" if root_fields else f"${root}.id",
+                        f"${root}[0].{root_fields[0]}" if root_fields else f"${root}[0].id",
+                    ],
+                }
+            )
+
+        # Build one-level nested token tree for scene root
+        scene_fields = _introspect_type_fields("Scene")
+        nested_type_cache: Dict[str, List[dict]] = {}
+        for field in scene_fields:
+            field_name = str(field.get("name"))
+            type_meta = _unwrap_type(field.get("type"))
+            node: Dict[str, Any] = {
+                "name": field_name,
+                "token": f"$scene.{field_name}",
+                "kind": type_meta.get("kind"),
+                "is_list": bool(type_meta.get("is_list")),
+                "children": [],
+            }
+
+            nested_type_name = type_meta.get("name")
+            if type_meta.get("is_object_like") and nested_type_name:
+                if nested_type_name not in nested_type_cache:
+                    nested_type_cache[nested_type_name] = _introspect_type_fields(
+                        str(nested_type_name)
+                    )
+                for sub in nested_type_cache[nested_type_name]:
+                    sub_name = str(sub.get("name"))
+                    if node["is_list"]:
+                        token = f"$scene.{field_name}[0].{sub_name}"
+                    else:
+                        token = f"$scene.{field_name}.{sub_name}"
+                    node["children"].append(
+                        {
+                            "name": sub_name,
+                            "token": token,
+                        }
+                    )
+            scene_tree.append(node)
+    else:
+        for root in ["scene", "performer", "group"]:
+            roots.append(
+                {
+                    "root": root,
+                    "token": f"${root}",
+                    "fields": [],
+                    "examples": [f"${root}.id", f"${root}[0].id"],
+                }
+            )
+
+    return {
+        "roots": roots,
+        "fields_by_root": fields_by_root,
+        "scene_tree": scene_tree,
+        "virtual_selectors": [
+            {
+                "selector": "$scene.year",
+                "description": "Derived from $scene.date (first 4 digits)",
+            }
+        ],
+        "syntax": {
+            "dot": "$scene.title",
+            "index": "$performer[0].name",
+            "nested": "$scene.studio.name",
+            "conditional": "{ $scene.date } - $scene.title",
+        },
+    }
+
+
 def edit_run(filename_template: str, path_template: Optional[str], scenes: List[dict], collect_operations: bool = False):
     """
     Run the rename operation.
@@ -943,6 +1058,10 @@ def run(options: dict, collect_operations: bool = False):
                 raise RuntimeError("FILE_MOVER not initialized")
             operations = FILE_MOVER.list_rename_operations()
             return operations if collect_operations else None
+
+        if options.get("list_selectors"):
+            selectors = _build_selectors_catalog()
+            return selectors
 
         filename_template = options.get("filename_template")
         if not filename_template or not str(filename_template).strip():

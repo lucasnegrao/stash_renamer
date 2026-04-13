@@ -181,6 +181,11 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
         or is_true(combined.get("list_operations"))
         or is_true(combined.get("listOperations"))
     )
+    list_selectors = (
+        str(mode).strip().lower() == "list_selectors"
+        or is_true(combined.get("list_selectors"))
+        or is_true(combined.get("listSelectors"))
+    )
     operations_db_path = combined.get("operations_db_path") or combined.get("operationsDbPath")
 
     server_conn = input_data.get("server_connection") or {}
@@ -213,6 +218,10 @@ def normalize_options(input_data: Dict[str, Any], settings: Dict[str, Any]) -> D
 
     if list_operations:
         options["list_operations"] = True
+        return options
+
+    if list_selectors:
+        options["list_selectors"] = True
         return options
 
     if scene_filter is not None or find_filter is not None or ids is not None or criteria is not None:
@@ -263,8 +272,12 @@ def main() -> None:
 
         from stash_renamer import run as renamer_run
 
-        operations = renamer_run(options, collect_operations=True) or []
-        output["output"] = {"operations": operations}
+        result = renamer_run(options, collect_operations=True)
+        if isinstance(result, dict):
+            output["output"] = result
+        else:
+            operations = result or []
+            output["output"] = {"operations": operations}
 
     except Exception as e:
         import traceback

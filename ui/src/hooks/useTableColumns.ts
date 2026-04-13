@@ -1,6 +1,6 @@
   const PluginApi = (window as any).PluginApi;
 
-const { useConfigurationContext, useConfigureUI } = PluginApi.utils.StashService; 
+const { useConfiguration, useConfigureUI } = PluginApi.utils.StashService; 
 
 export const useTableColumns = (
   tableName: string,
@@ -8,7 +8,7 @@ export const useTableColumns = (
 ) => {
   const Toast = PluginApi.hooks.useToast();
 
-  const { configuration } = useConfigurationContext();
+  const { configuration } = useConfiguration();
   const [saveUI] = useConfigureUI();
 
   const ui = configuration?.ui;

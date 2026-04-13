@@ -1,12 +1,12 @@
 
-import TextUtils from "src/utils/text";
-import { objectTitle } from "src/core/files";
-import { galleryTitle } from "src/core/galleries";
+import TextUtils from "../utils/text";
+import { objectTitle } from "../core/files";
+import { galleryTitle } from "../core/galleries";
 import SceneQueue from "../models/SceneQueue";
 import { ISlimSceneData } from "../models/SlimSceneData";
 import { IColumn, ListTable } from "./list/ListTable";
 import { FileSize } from "./shared/FileSize";
-import { useTableColumns } from "src/hooks/useTableColumns";
+import { useTableColumns } from "../hooks/useTableColumns";
 const PluginApi = (window as any).PluginApi;
 
 interface ISceneListTableProps {
