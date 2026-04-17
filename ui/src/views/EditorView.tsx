@@ -127,7 +127,7 @@ function getSceneDuration(scene: ISlimSceneData): number {
 	return Number(scene?.files?.[0]?.duration || 0);
 }
 
-export const TestFilter: React.FC = () => {
+export const EditorView: React.FC = () => {
 	const Pagination =
 		(PluginApi.components as any).Pagination ||
 		(PluginApi.components as any).pagination;

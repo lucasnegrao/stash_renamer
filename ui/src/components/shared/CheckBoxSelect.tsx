@@ -1,7 +1,6 @@
-import {
+import type {
 	OnChangeValue,
 	OptionProps,
-	components as reactSelectComponents,
 	DropdownIndicatorProps,
 } from "react-select";
 

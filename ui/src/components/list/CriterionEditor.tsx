@@ -9,6 +9,7 @@ import {
 	NumberCriterion,
 	TimestampCriterion,
 } from "src/models/list-filter/criteria/criterion";
+import { FolderCriterion } from "src/models/list-filter/criteria/folder";
 import {
 	criterionIsDateValue,
 	criterionIsNumberValue,
@@ -34,6 +35,8 @@ import { RatingFilter } from "./Filters/RatingFilter";
 import { StashIDFilter } from "./Filters/StashIDFilter";
 import { TimestampFilter } from "./Filters/TimestampFilter";
 import { ModifierSelectorButtons } from "./ModifierSelect";
+import { FolderFilter } from "./Filters/FolderFilter";
+import { CustomFieldsFilter } from "./Filters/CustomFieldsFilter";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
@@ -52,6 +55,7 @@ const GenericCriterionEditor: React.FC<IGenericCriterionEditorProps> = ({
 	criterion,
 	setCriterion,
 }) => {
+	console.log(criterion);
 	const { options, modifierOptions, inputType } =
 		criterion.modifierCriterionOption();
 
@@ -120,20 +124,14 @@ const GenericCriterionEditor: React.FC<IGenericCriterionEditorProps> = ({
 				onValueChanged={onValueChanged}
 			/>
 		);
-	} else if (
-		criterion instanceof DateCriterion ||
-		criterionIsDateValue(criterion.value)
-	) {
+	} else if (criterion instanceof DateCriterion) {
 		valueControl = (
 			<DateFilter
 				criterion={criterion as any}
 				onValueChanged={onValueChanged}
 			/>
 		);
-	} else if (
-		criterion instanceof TimestampCriterion ||
-		criterionIsTimestampValue(criterion.value)
-	) {
+	} else if (criterion instanceof TimestampCriterion) {
 		valueControl = (
 			<TimestampFilter
 				criterion={criterion as any}
@@ -154,15 +152,16 @@ const GenericCriterionEditor: React.FC<IGenericCriterionEditorProps> = ({
 				onValueChanged={onValueChanged}
 			/>
 		);
-	} else if (
-		criterion instanceof NumberCriterion ||
-		criterionIsNumberValue(criterion.value)
-	) {
+	} else if (criterion instanceof NumberCriterion) {
 		valueControl = (
 			<NumberFilter
 				criterion={criterion as any}
 				onValueChanged={onValueChanged}
 			/>
+		);
+	} else if (criterion instanceof FolderCriterion) {
+		valueControl = (
+			<FolderFilter criterion={criterion as any} setCriterion={setCriterion} />
 		);
 	} else if (
 		Array.isArray(options) &&
@@ -219,12 +218,7 @@ export const CriterionEditor: React.FC<ICriterionEditorProps> = ({
 	// Keep custom-fields usable via generic JSON/text editing for now.
 	if (criterion instanceof CustomFieldsCriterion) {
 		return (
-			<div className="criterion-editor">
-				<GenericCriterionEditor
-					criterion={criterion as unknown as ModifierCriterion<CriterionValue>}
-					setCriterion={setCriterion as any}
-				/>
-			</div>
+			<CustomFieldsFilter criterion={criterion} setCriterion={setCriterion} />
 		);
 	}
 

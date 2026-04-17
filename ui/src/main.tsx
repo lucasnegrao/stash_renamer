@@ -1,7 +1,7 @@
 import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
 import { RenamerResults } from "./views/results";
 import { RenamerSettings } from "./views/settings";
-import { TestFilter } from "./views/TestFilter";
+import { EditorView } from "./views/EditorView";
 import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import {
 	getActiveTabState,
@@ -96,7 +96,7 @@ import {
 					>
 						<Tab eventKey="editor" title="Editor">
 							<div className="pt-10">
-								<TestFilter />
+								<EditorView />
 							</div>
 						</Tab>
 

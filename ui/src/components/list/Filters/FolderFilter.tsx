@@ -1,45 +1,45 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	CriterionModifier,
 	FilterMode,
 	FolderDataFragment,
 	MultiCriterionInput,
-	useFindFolderHierarchyForIDsQuery,
-	useFindFoldersForQueryQuery,
-	useFindRootFoldersForSelectQuery,
 } from "src/core/generated-graphql";
-import {
-	ISidebarSectionProps,
-	SidebarSection,
-} from "src/components/Shared/Sidebar";
-import {
-	faChevronDown,
-	faChevronRight,
-	faMinus,
-	faPlus,
-} from "@fortawesome/free-solid-svg-icons";
-import { ExpandCollapseButton } from "src/components/Shared/CollapseButton";
+
+import { Option, SelectedList } from "./SidebarListFilter";
+
+import { ExpandCollapseButton } from "src/components/shared/CollapseButton";
 import cx from "classnames";
-import { queryFindSubFolders } from "src/core/StashService";
+
 import { keyboardClickHandler } from "src/utils/keyboard";
 import { ListFilterModel } from "src/models/list-filter/filter";
 import {
 	FolderCriterion,
 	FolderCriterionOption,
 } from "src/models/list-filter/criteria/folder";
-import { Option, SelectedList } from "./SidebarListFilter";
-import {
-	defineMessages,
-	FormattedMessage,
-	MessageDescriptor,
-	useIntl,
-} from "react-intl";
-import { Icon } from "src/components/Shared/Icon";
-import { Button, Form } from "react-bootstrap";
+
 import { DepthSelector } from "./SelectableFilter";
-import ClearableInput from "src/components/Shared/ClearableInput";
+import ClearableInput from "src/components/shared/ClearableInput";
 import { useDebouncedState } from "src/hooks/debounce";
 import { ModifierCriterionOption } from "src/models/list-filter/criteria/criterion";
+import { MessageDescriptor } from "react-intl";
+
+const PluginApi = window.PluginApi;
+const React = PluginApi.React;
+const { useCallback, useEffect, useMemo, useState } = React;
+
+const { faChevronDown, faChevronRight, faMinus, faPlus } =
+	PluginApi.libraries.FontAwesomeSolid;
+
+const { queryFindSubFolders } = PluginApi.utils.StashService;
+const { defineMessages, FormattedMessage, useIntl } = PluginApi.libraries.Intl;
+
+const { Icon } = PluginApi.components;
+const { Button, Form } = PluginApi.libraries.Bootstrap;
+const {
+	useFindFolderHierarchyForIDsQuery,
+	useFindFoldersForQueryQuery,
+	useFindRootFoldersForSelectQuery,
+} = PluginApi.GQL;
 
 interface IFolder extends FolderDataFragment {
 	children?: IFolder[];
@@ -599,169 +599,5 @@ export const FolderFilter: React.FC<IInputFilterProps> = ({
 				/>
 			</Form.Group>
 		</div>
-	);
-};
-
-export const SidebarFolderFilter: React.FC<
-	ISidebarSectionProps & {
-		filter: ListFilterModel;
-		setFilter: (f: ListFilterModel) => void;
-		criterionOption?: ModifierCriterionOption;
-	}
-> = (props) => {
-	const intl = useIntl();
-	const [skip, setSkip] = useState(true);
-	const [query, setQuery] = useState("");
-	const [displayQuery, onQueryChange] = useDebouncedState(query, setQuery, 250);
-
-	function onOpen() {
-		setSkip(false);
-		props.onOpen?.();
-	}
-
-	const option = props.criterionOption ?? FolderCriterionOption;
-	const { filter, setFilter } = props;
-
-	const criterion = useMemo(() => {
-		const ret = filter.criteria.find(
-			(c) => c.criterionOption.type === option.type,
-		);
-		if (ret) return ret as FolderCriterion;
-
-		const newCriterion = filter.makeCriterion(option.type) as FolderCriterion;
-		return newCriterion;
-	}, [option.type, filter]);
-
-	const subDirsSelected = criterion.value?.depth === -1;
-
-	// if there are multiple values or excluded values, then we show none of the
-	// current values
-	const multipleSelected =
-		criterion.value.items.length > 1 || criterion.value.excluded.length > 0;
-
-	const { folderMap, onToggleExpanded } = useFolderMap({
-		query,
-		skip,
-		initialSelected: criterion.value.items.map((i) => i.id),
-		mode: filter.mode,
-	});
-
-	function onSelect(folder: IFolder) {
-		// maintain sub-folder select if present
-		const depth = subDirsSelected ? -1 : 0;
-
-		const c = criterion.clone() as FolderCriterion;
-		c.value = {
-			items: [{ id: folder.id, label: folder.path }],
-			depth,
-			excluded: [],
-		};
-
-		const newCriteria = props.filter.criteria.filter(
-			(cc) => cc.criterionOption.type !== option.type,
-		);
-
-		if (c.isValid()) newCriteria.push(c);
-
-		setFilter(props.filter.setCriteria(newCriteria));
-	}
-
-	function onSelectSubfolders() {
-		const c = criterion.clone() as FolderCriterion;
-		c.value = {
-			items: c.value?.items ?? [],
-			depth: -1,
-			excluded: c.value?.excluded ?? [],
-		};
-
-		setFilter(props.filter.replaceCriteria(option.type, [c]));
-	}
-
-	const onUnselect = useCallback(
-		(i: Option) => {
-			if (i.className === "modifier-object") {
-				// subfolders option
-				const c = criterion.clone() as FolderCriterion;
-				c.value = {
-					items: c.value?.items ?? [],
-					depth: 0,
-					excluded: c.value?.excluded ?? [],
-				};
-
-				setFilter(props.filter.replaceCriteria(option.type, [c]));
-				return;
-			}
-
-			setFilter(props.filter.removeCriterion(option.type));
-		},
-		[props.filter, setFilter, option.type, criterion],
-	);
-
-	function onEnter() {
-		if (!query) return;
-
-		// if there is a single folder that matches the query, select it
-		const matchingFolders = getMatchingFolders(folderMap, query);
-		if (matchingFolders.length === 1) {
-			onSelect(matchingFolders[0]);
-		}
-	}
-
-	const selectedList = useMemo(() => {
-		if (multipleSelected) {
-			return null;
-		}
-
-		const selected: Option[] =
-			criterion.value?.items.map((item) => ({
-				id: item.id,
-				label: item.label,
-			})) ?? [];
-
-		if (subDirsSelected) {
-			selected.push({
-				id: "subfolders",
-				label: "(" + intl.formatMessage({ id: "sub_folders" }) + ")",
-				className: "modifier-object",
-			});
-		}
-
-		return <SelectedList items={selected} onUnselect={onUnselect} />;
-	}, [intl, multipleSelected, subDirsSelected, criterion, onUnselect]);
-
-	const modifierItem = criterion.value.items.length > 0 &&
-		!multipleSelected &&
-		!subDirsSelected && (
-			<li className="unselected-object modifier-object">
-				<a onClick={onSelectSubfolders}>
-					<span>
-						<Icon className={`fa-fw include-button`} icon={faPlus} />
-						(<FormattedMessage id="sub_folders" />)
-					</span>
-				</a>
-			</li>
-		);
-
-	return (
-		<SidebarSection
-			{...props}
-			outsideCollapse={selectedList}
-			onOpen={onOpen}
-			className="sidebar-list-filter sidebar-folder-filter"
-		>
-			<ClearableInput
-				value={displayQuery}
-				setValue={(v) => onQueryChange(v)}
-				placeholder={`${intl.formatMessage({ id: "actions.search" })}…`}
-				onEnter={onEnter}
-			/>
-
-			<FolderSelector
-				folderMap={folderMap}
-				onToggleExpanded={onToggleExpanded}
-				preListContent={modifierItem}
-				onSelect={(f) => onSelect(f)}
-			/>
-		</SidebarSection>
 	);
 };

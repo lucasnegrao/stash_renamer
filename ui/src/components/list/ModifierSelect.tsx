@@ -46,3 +46,25 @@ export const ModifierSelectorButtons: React.FC<IModifierSelect> = ({
 		</Form.Group>
 	);
 };
+export const ModifierSelect: React.FC<IModifierSelect> = ({
+	options = defaultOptions,
+	value,
+	onChanged,
+}) => {
+	const intl = useIntl();
+
+	return (
+		<Form.Control
+			as="select"
+			onChange={(e) => onChanged(e.target.value as CriterionModifier)}
+			value={value}
+			className="btn-secondary modifier-selector"
+		>
+			{options.map((m) => (
+				<option key={m} value={m}>
+					{ModifierCriterion.getModifierLabel(intl, m)}
+				</option>
+			))}
+		</Form.Control>
+	);
+};

@@ -18,6 +18,7 @@ export const DateFilter: React.FC<IDateFilterProps> = ({
 }) => {
 	const intl = useIntl();
 	const value = criterion.value || { value: "", value2: "" };
+	const DateInput = PluginApi.components.DateInput;
 
 	function onChanged(nextRaw: string, key: "value" | "value2") {
 		onValueChanged({ ...value, [key]: nextRaw });
@@ -30,12 +31,10 @@ export const DateFilter: React.FC<IDateFilterProps> = ({
 	) {
 		return (
 			<Form.Group>
-				<Form.Control
-					className="btn-secondary"
-					type="date"
-					onChange={(e: any) => onChanged(String(e.target.value || ""), key)}
-					value={current ?? ""}
-					placeholder={placeholder}
+				<DateInput
+					value={value?.value ?? ""}
+					onValueChange={(v) => onChanged(v, "value")}
+					placeholder={intl.formatMessage({ id: "criterion.value" })}
 				/>
 			</Form.Group>
 		);

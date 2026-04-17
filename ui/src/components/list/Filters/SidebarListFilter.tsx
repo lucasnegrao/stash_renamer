@@ -1,22 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "react-bootstrap";
-import { Icon } from "src/components/Shared/Icon";
-import {
-	faCheckCircle,
-	faMinus,
-	faPlus,
-	faTimesCircle,
-} from "@fortawesome/free-solid-svg-icons";
-import { faTimesCircle as faTimesCircleRegular } from "@fortawesome/free-regular-svg-icons";
-import { ClearableInput } from "src/components/Shared/ClearableInput";
+import { ClearableInput } from "src/components/shared/ClearableInput";
 import { useIntl } from "react-intl";
 import { keyboardClickHandler } from "src/utils/keyboard";
 import { useDebounce } from "src/hooks/debounce";
 import useFocus from "src/utils/focus";
 import cx from "classnames";
 import ScreenUtils from "src/utils/screen";
-import { SidebarSection } from "src/components/Shared/Sidebar";
-import { TruncatedInlineText } from "src/components/Shared/TruncatedText";
+
+const PluginApi = window.PluginApi;
+const React = PluginApi.React;
+const { useCallback, useEffect, useMemo, useState } = React;
+const { Button } = PluginApi.libraries.Bootstrap;
+const { Icon } = PluginApi.components;
+const { faCheckCircle, faMinus, faPlus, faTimesCircle } =
+	PluginApi.libraries.FontAwesomeSolid;
+const { faTimesCircle: faTimesCircleRegular } =
+	PluginApi.libraries.FontAwesomeRegular;
 
 interface ISelectedItem {
 	className?: string;
@@ -73,7 +71,7 @@ const SelectedItem: React.FC<ISelectedItem> = ({
 			>
 				<div className="label-group">
 					<Icon className={`fa-fw ${iconClassName}`} icon={icon} />
-					<TruncatedInlineText className={spanClassName} text={label} />
+					<p className={spanClassName}>{label}</p>
 				</div>
 			</a>
 		</li>
@@ -119,10 +117,7 @@ const CandidateItem: React.FC<{
 			>
 				<div className="label-group">
 					{includeIcon}
-					<TruncatedInlineText
-						className="unselected-object-label"
-						text={label}
-					/>
+					<p className="unselected-object-label">{label}</p>
 				</div>
 				<div>
 					{/* TODO item count */}
@@ -265,125 +260,125 @@ export const CandidateList: React.FC<
 	);
 };
 
-export const SidebarListFilter: React.FC<{
-	title: React.ReactNode;
-	selected: Option[];
-	excluded?: Option[];
-	candidates: Option[];
-	modifierCandidates?: Option[];
-	singleValue?: boolean;
-	onSelect: (item: Option, exclude: boolean) => void;
-	onUnselect: (item: Option, exclude: boolean) => void;
-	canExclude?: boolean;
-	query?: string;
-	setQuery?: (query: string) => void;
-	preSelected?: React.ReactNode;
-	postSelected?: React.ReactNode;
-	preCandidates?: React.ReactNode;
-	postCandidates?: React.ReactNode;
-	onOpen?: () => void;
-	// used to store open/closed state in SidebarStateContext
-	sectionID?: string;
-}> = ({
-	title,
-	selected,
-	excluded,
-	candidates,
-	modifierCandidates,
-	onSelect,
-	onUnselect,
-	canExclude,
-	query,
-	setQuery,
-	singleValue = false,
-	preCandidates,
-	postCandidates,
-	preSelected,
-	postSelected,
-	onOpen,
-	sectionID,
-}) => {
-	// TODO - sort items?
+// export const SidebarListFilter: React.FC<{
+// 	title: React.ReactNode;
+// 	selected: Option[];
+// 	excluded?: Option[];
+// 	candidates: Option[];
+// 	modifierCandidates?: Option[];
+// 	singleValue?: boolean;
+// 	onSelect: (item: Option, exclude: boolean) => void;
+// 	onUnselect: (item: Option, exclude: boolean) => void;
+// 	canExclude?: boolean;
+// 	query?: string;
+// 	setQuery?: (query: string) => void;
+// 	preSelected?: React.ReactNode;
+// 	postSelected?: React.ReactNode;
+// 	preCandidates?: React.ReactNode;
+// 	postCandidates?: React.ReactNode;
+// 	onOpen?: () => void;
+// 	// used to store open/closed state in SidebarStateContext
+// 	sectionID?: string;
+// }> = ({
+// 	title,
+// 	selected,
+// 	excluded,
+// 	candidates,
+// 	modifierCandidates,
+// 	onSelect,
+// 	onUnselect,
+// 	canExclude,
+// 	query,
+// 	setQuery,
+// 	singleValue = false,
+// 	preCandidates,
+// 	postCandidates,
+// 	preSelected,
+// 	postSelected,
+// 	onOpen,
+// 	sectionID,
+// }) => {
+// 	// TODO - sort items?
 
-	const inputFocus = useFocus();
-	const [, setInputFocus] = inputFocus;
+// 	const inputFocus = useFocus();
+// 	const [, setInputFocus] = inputFocus;
 
-	function unselectHook(item: Option, exclude: boolean) {
-		onUnselect(item, exclude);
+// 	function unselectHook(item: Option, exclude: boolean) {
+// 		onUnselect(item, exclude);
 
-		// focus the input box
-		// don't do this on touch devices, as it's annoying
-		if (!ScreenUtils.isTouch()) {
-			setInputFocus();
-		}
-	}
+// 		// focus the input box
+// 		// don't do this on touch devices, as it's annoying
+// 		if (!ScreenUtils.isTouch()) {
+// 			setInputFocus();
+// 		}
+// 	}
 
-	function selectHook(item: Option, exclude: boolean) {
-		onSelect(item, exclude);
+// 	function selectHook(item: Option, exclude: boolean) {
+// 		onSelect(item, exclude);
 
-		// reset filter query after selecting
-		setQuery?.("");
+// 		// reset filter query after selecting
+// 		setQuery?.("");
 
-		// focus the input box
-		// don't do this on touch devices, as it's annoying
-		if (!ScreenUtils.isTouch()) {
-			setInputFocus();
-		}
-	}
+// 		// focus the input box
+// 		// don't do this on touch devices, as it's annoying
+// 		if (!ScreenUtils.isTouch()) {
+// 			setInputFocus();
+// 		}
+// 	}
 
-	function onEnter() {
-		if (candidates && candidates.length === 1) {
-			selectHook(candidates[0], false);
-		}
-	}
+// 	function onEnter() {
+// 		if (candidates && candidates.length === 1) {
+// 			selectHook(candidates[0], false);
+// 		}
+// 	}
 
-	const items = useMemo(() => {
-		if (!modifierCandidates) {
-			return candidates;
-		}
+// 	const items = useMemo(() => {
+// 		if (!modifierCandidates) {
+// 			return candidates;
+// 		}
 
-		return [...modifierCandidates, ...candidates];
-	}, [candidates, modifierCandidates]);
+// 		return [...modifierCandidates, ...candidates];
+// 	}, [candidates, modifierCandidates]);
 
-	return (
-		<SidebarSection
-			className="sidebar-list-filter"
-			text={title}
-			sectionID={sectionID}
-			outsideCollapse={
-				<>
-					{preSelected ? <div className="extra">{preSelected}</div> : null}
-					<SelectedList
-						items={selected}
-						onUnselect={(i) => unselectHook(i, false)}
-					/>
-					{excluded && (
-						<SelectedList
-							items={excluded}
-							onUnselect={(i) => unselectHook(i, true)}
-							excluded
-						/>
-					)}
-					{postSelected ? <div className="extra">{postSelected}</div> : null}
-				</>
-			}
-			onOpen={onOpen}
-		>
-			{preCandidates ? <div className="extra">{preCandidates}</div> : null}
-			<CandidateList
-				items={items}
-				onSelect={selectHook}
-				canExclude={canExclude}
-				inputFocus={inputFocus}
-				query={query}
-				setQuery={setQuery}
-				singleValue={singleValue}
-				onEnter={onEnter}
-			/>
-			{postCandidates ? <div className="extra">{postCandidates}</div> : null}
-		</SidebarSection>
-	);
-};
+// 	return (
+// 		<SidebarSection
+// 			className="sidebar-list-filter"
+// 			text={title}
+// 			sectionID={sectionID}
+// 			outsideCollapse={
+// 				<>
+// 					{preSelected ? <div className="extra">{preSelected}</div> : null}
+// 					<SelectedList
+// 						items={selected}
+// 						onUnselect={(i) => unselectHook(i, false)}
+// 					/>
+// 					{excluded && (
+// 						<SelectedList
+// 							items={excluded}
+// 							onUnselect={(i) => unselectHook(i, true)}
+// 							excluded
+// 						/>
+// 					)}
+// 					{postSelected ? <div className="extra">{postSelected}</div> : null}
+// 				</>
+// 			}
+// 			onOpen={onOpen}
+// 		>
+// 			{preCandidates ? <div className="extra">{preCandidates}</div> : null}
+// 			<CandidateList
+// 				items={items}
+// 				onSelect={selectHook}
+// 				canExclude={canExclude}
+// 				inputFocus={inputFocus}
+// 				query={query}
+// 				setQuery={setQuery}
+// 				singleValue={singleValue}
+// 				onEnter={onEnter}
+// 			/>
+// 			{postCandidates ? <div className="extra">{postCandidates}</div> : null}
+// 		</SidebarSection>
+// 	);
+// };
 
 export function useStaticResults<T>(r: T) {
 	return () => ({ results: r, loading: false });

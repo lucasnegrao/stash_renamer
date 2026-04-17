@@ -1,7 +1,7 @@
 import { CriterionModifier } from "src/core/generated-graphql";
 import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
 import { INumberValue } from "src/models/list-filter/types";
-
+import { DurationInput } from "src/components/shared/DurationInput";
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { Form } = PluginApi.libraries.Bootstrap;
@@ -34,16 +34,11 @@ export const DurationFilter: React.FC<IDurationFilterProps> = ({
 	) {
 		return (
 			<Form.Group>
-				<Form.Control
-					className="btn-secondary"
-					type="number"
-					min={0}
-					step={1}
-					onChange={(e: any) => onChanged(String(e.target.value || ""), key)}
-					value={current ?? ""}
+				<DurationInput
+					value={criterion.value?.value}
+					setValue={(v) => onChanged(v, "value")}
 					placeholder={placeholder}
 				/>
-				<small className="text-muted">seconds</small>
 			</Form.Group>
 		);
 	}

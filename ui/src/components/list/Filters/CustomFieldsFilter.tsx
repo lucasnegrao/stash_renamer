@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
 import { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
-import { Button, Col, Form, Row } from "react-bootstrap";
 import {
 	CriterionModifier,
 	CustomFieldCriterionInput,
 } from "src/core/generated-graphql";
 import { cloneDeep } from "@apollo/client/utilities";
 import { ModifierSelect } from "../ModifierSelect";
-import { useIntl } from "react-intl";
-import { Icon } from "src/components/Shared/Icon";
-import { faCheck, faPencil, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FilterTag } from "../FilterTags";
 import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
+
+const PluginApi = window.PluginApi;
+const React = PluginApi.React;
+const { useEffect, useMemo, useState } = React;
+
+const { faCheck, faPencil, faTimes } = PluginApi.libraries.FontAwesomeSolid;
+
+const { useIntl } = PluginApi.libraries.Intl;
+const { Icon } = PluginApi.components;
+const { Button, Form, Col, Row } = PluginApi.libraries.Bootstrap;
 
 interface ICustomFieldCriterionEditor {
 	criterion?: CustomFieldCriterionInput;
