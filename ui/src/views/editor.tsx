@@ -139,7 +139,7 @@ export const RenamerEditor: React.FC = () => {
 								e.preventDefault()
 							}
 							onDrop={handleDropOnInput("filename")}
-							placeholder="$scene.studio.name - $scene.date - $scene.title"
+							placeholder="{{ scene.studio.name }} - {{ scene.date }} - {{ scene.title }}"
 						/>
 						<InputGroup.Text className="clearable-text-field">
 							File Template
@@ -150,7 +150,7 @@ export const RenamerEditor: React.FC = () => {
 							ref={pathTemplateInputRef}
 							type="text"
 							disabled={isActionBusy}
-							placeholder="e.g., /Library/$scene.studio.name or $up/Archive/$scene.studio.name"
+							placeholder="e.g., /Library/{{ scene.studio.name }} or ../Archive/{{ scene.studio.name }}"
 							value={pathTemplate}
 							onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
 								setPathTemplate(e.target.value)

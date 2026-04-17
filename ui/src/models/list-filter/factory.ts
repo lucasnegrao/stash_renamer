@@ -7,35 +7,36 @@ import { SceneMarkerListFilterOptions } from "./scene-markers";
 import { SceneListFilterOptions } from "./scenes";
 import { StudioListFilterOptions } from "./studios";
 import { TagListFilterOptions } from "./tags";
-enum FilterMode {
-	Scenes = "Scenes",
-	Performers = "Performers",
-	Studios = "Studios",
-	Galleries = "Galleries",
-	SceneMarkers = "SceneMarkers",
-	Movies = "Movies",
-	Groups = "Groups",
-	Tags = "Tags",
-	Images = "Images",
+import { FilterMode } from "src/core/generated-graphql";
+
+function normalizeMode(mode: unknown): string {
+	return String(mode || "")
+		.trim()
+		.toUpperCase()
+		.replace(/[\s-]+/g, "_");
 }
-export function getFilterOptions(mode: FilterMode): ListFilterOptions {
-	switch (mode) {
-		case FilterMode.Scenes:
+
+export function getFilterOptions(mode: FilterMode | string): ListFilterOptions {
+	switch (normalizeMode(mode)) {
+		case "SCENES":
 			return SceneListFilterOptions;
-		case FilterMode.Performers:
+		case "PERFORMERS":
 			return PerformerListFilterOptions;
-		case FilterMode.Studios:
+		case "STUDIOS":
 			return StudioListFilterOptions;
-		case FilterMode.Galleries:
+		case "GALLERIES":
 			return GalleryListFilterOptions;
-		case FilterMode.SceneMarkers:
+		case "SCENE_MARKERS":
+		case "SCENEMARKERS":
 			return SceneMarkerListFilterOptions;
-		case FilterMode.Movies:
-		case FilterMode.Groups:
+		case "MOVIES":
+		case "GROUPS":
 			return GroupListFilterOptions;
-		case FilterMode.Tags:
+		case "TAGS":
 			return TagListFilterOptions;
-		case FilterMode.Images:
+		case "IMAGES":
 			return ImageListFilterOptions;
+		default:
+			return SceneListFilterOptions;
 	}
 }

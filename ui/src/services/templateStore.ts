@@ -34,7 +34,7 @@ export async function saveTemplateAs(args: {
 	name: string;
 	filenameTemplate: string;
 	pathTemplate: string;
-	filter?: unknown;
+	criteria?: unknown[];
 }): Promise<IRenamerTemplate | null> {
 	return saveTemplateToDatabase(args);
 }
@@ -44,7 +44,7 @@ export async function saveExistingTemplate(args: {
 	name: string;
 	filenameTemplate: string;
 	pathTemplate: string;
-	filter?: unknown;
+	criteria?: unknown[];
 }): Promise<IRenamerTemplate | null> {
 	return updateTemplateInDatabase(args);
 }

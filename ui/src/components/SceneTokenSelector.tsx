@@ -13,6 +13,8 @@ interface ISceneTokenSelectorProps {
 	onInsertToken?: (token: string) => void;
 }
 
+const INDENT_PX = 35;
+
 const LeafTokenNode: React.FC<{
 	node: ITokenTreeNode;
 	onDragStartToken: (token: string) => (event: any) => void;
@@ -23,51 +25,24 @@ const LeafTokenNode: React.FC<{
 			draggable
 			onDragStart={onDragStartToken(node.token)}
 			style={{ cursor: "grab" }}
+			onDoubleClick={() => (onInsertToken ? onInsertToken(node.token) : null)}
 		>
 			{node.token}
 		</TagItem>
-		{onInsertToken ? (
-			<Button
-				variant="link"
-				size="sm"
-				onClick={() => onInsertToken(node.token)}
-			>
-				insert
-			</Button>
-		) : null}
 	</div>
 );
 
 const CollapsibleTokenNode: React.FC<{
 	node: ITokenTreeNode;
+	depth?: number;
 	onDragStartToken: (token: string) => (event: any) => void;
 	onInsertToken?: (token: string) => void;
-}> = ({ node, onDragStartToken, onInsertToken }) => {
-	const labelRef = React.useRef<HTMLSpanElement | null>(null);
-	const childContainerRef = React.useRef<HTMLDivElement | null>(null);
-	const [childPaddingLeft, setChildPaddingLeft] = React.useState(2);
-
-	React.useEffect(() => {
-		const recalc = () => {
-			const labelEl = labelRef.current;
-			const childEl = childContainerRef.current;
-			if (!labelEl || !childEl) return;
-			const labelLeft = labelEl.getBoundingClientRect().left;
-			const childLeft = childEl.getBoundingClientRect().left;
-			const delta = Math.max(0, Math.round(labelLeft - childLeft));
-			setChildPaddingLeft(delta);
-		};
-
-		recalc();
-		window.addEventListener("resize", recalc);
-		return () => window.removeEventListener("resize", recalc);
-	}, []);
-
+}> = ({ node, depth = 0, onDragStartToken, onInsertToken }) => {
 	return (
-		<CollapseButton
-			className="mt-1"
-			text={
-				<span ref={labelRef}>
+		<div style={{ marginLeft: depth * INDENT_PX }}>
+			<CollapseButton
+				className="mt-1"
+				text={
 					<TagItem
 						draggable
 						onDragStart={onDragStartToken(node.token)}
@@ -75,33 +50,32 @@ const CollapsibleTokenNode: React.FC<{
 					>
 						{node.token}
 					</TagItem>
-				</span>
-			}
-		>
-			<div
-				ref={childContainerRef}
-				className="mt-2"
-				style={{ paddingLeft: `${childPaddingLeft}px` }}
+				}
 			>
-				{node.children?.map((child) => (
-					<div key={child.token} className="mb-1">
-						{Array.isArray(child.children) && child.children.length > 0 ? (
-							<CollapsibleTokenNode
-								node={child}
-								onDragStartToken={onDragStartToken}
-								onInsertToken={onInsertToken}
-							/>
-						) : (
-							<LeafTokenNode
-								node={child}
-								onDragStartToken={onDragStartToken}
-								onInsertToken={onInsertToken}
-							/>
-						)}
-					</div>
-				))}
-			</div>
-		</CollapseButton>
+				<div className="mt-2">
+					{node.children?.map((child) => (
+						<div key={child.token} className="mb-1">
+							{Array.isArray(child.children) && child.children.length > 0 ? (
+								<CollapsibleTokenNode
+									node={child}
+									depth={depth + 1}
+									onDragStartToken={onDragStartToken}
+									onInsertToken={onInsertToken}
+								/>
+							) : (
+								<div style={{ marginLeft: INDENT_PX }}>
+									<LeafTokenNode
+										node={child}
+										onDragStartToken={onDragStartToken}
+										onInsertToken={onInsertToken}
+									/>
+								</div>
+							)}
+						</div>
+					))}
+				</div>
+			</CollapseButton>
+		</div>
 	);
 };
 
@@ -118,11 +92,7 @@ export const SceneTokenSelector: React.FC<ISceneTokenSelectorProps> = ({
 
 	return (
 		<>
-			<CollapseButton
-				className="scene-token-root"
-				text="Template Tokens"
-				open={true}
-			>
+			<div className="scene-token-root">
 				<div className="card-body">
 					{tree.length === 0 ? (
 						<div className="text-muted">No scene tokens loaded</div>
@@ -132,6 +102,7 @@ export const SceneTokenSelector: React.FC<ISceneTokenSelectorProps> = ({
 								{Array.isArray(node.children) && node.children.length > 0 ? (
 									<CollapsibleTokenNode
 										node={node}
+										depth={0}
 										onDragStartToken={handleDragStart}
 										onInsertToken={onInsertToken}
 									/>
@@ -146,7 +117,7 @@ export const SceneTokenSelector: React.FC<ISceneTokenSelectorProps> = ({
 						))
 					)}
 				</div>
-			</CollapseButton>
+			</div>
 			<small className="text-muted d-block mt-2">
 				Drag tokens into filename/path inputs or click insert.
 			</small>

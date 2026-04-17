@@ -26,6 +26,8 @@ interface ITemplateManagerBarProps {
 	onSaveTemplate: () => void;
 	onSaveAsTemplate: (name: string) => Promise<void>;
 	onReloadTemplate: () => void;
+	showCreatedAtInLabel?: boolean;
+	className?: string;
 }
 
 export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
@@ -40,6 +42,8 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 	onSaveTemplate,
 	onSaveAsTemplate,
 	onReloadTemplate,
+	showCreatedAtInLabel = true,
+	className,
 }) => {
 	const [showSaveAsModal, setShowSaveAsModal] = React.useState(false);
 	const [showReloadConfirm, setShowReloadConfirm] = React.useState(false);
@@ -48,6 +52,17 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 	const selectedTemplate = templates.find(
 		(row) => String(row.id) === String(selectedTemplateId),
 	);
+
+	const formatTemplateLabel = (t: IRenamerTemplate) => {
+		const dirty = isSelectedTemplateDirty ? "*" : "";
+		if (!showCreatedAtInLabel) return `${t.name}${dirty}`;
+		return `${t.name}${dirty} (${new Date(t.created_at).toLocaleString()})`;
+	};
+
+	const formatDropdownItemLabel = (t: IRenamerTemplate) => {
+		if (!showCreatedAtInLabel) return String(t.name || "");
+		return `${t.name} (${new Date(t.created_at).toLocaleString()})`;
+	};
 
 	return (
 		<>
@@ -100,7 +115,9 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 					onSaveTemplate();
 				}}
 			/>
-			<InputGroup className="mb-3 justify-content-end align-items-center flex-grow-1">
+			<InputGroup
+				className={`${className || "mb-3"} justify-content-end align-items-center flex-grow-1`}
+			>
 				<Dropdown as={ButtonGroup}>
 					<Button
 						className="minimal"
@@ -169,7 +186,7 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 						disabled={isActionBusy || isSavingTemplate || isDeletingTemplate}
 					>
 						{selectedTemplate
-							? `${selectedTemplate.name}${isSelectedTemplateDirty ? "*" : ""} (${new Date(selectedTemplate.created_at).toLocaleString()})`
+							? formatTemplateLabel(selectedTemplate)
 							: "Select saved template..."}
 					</Dropdown.Toggle>
 					<Dropdown.Menu
@@ -190,7 +207,7 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 										onSelectTemplate(selectedId);
 									}}
 								>
-									{`${t.name} (${new Date(t.created_at).toLocaleString()})`}
+									{formatDropdownItemLabel(t)}
 								</Dropdown.Item>
 							))
 						)}

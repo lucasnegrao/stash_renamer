@@ -28,6 +28,9 @@ interface IUseEditorOperationsArgs {
 	setLivePreview: (value: boolean) => void;
 	sceneRuntimeToken: number;
 	setStatus: (value: string) => void;
+	onDryRunCompleted?: (rows: IScenePreviewResult[]) => void;
+	getDryRunFindFilter?: () => any;
+	includeWarnErrorInDryRun?: boolean;
 }
 
 export function useEditorOperations({
@@ -39,6 +42,9 @@ export function useEditorOperations({
 	setLivePreview,
 	sceneRuntimeToken,
 	setStatus,
+	onDryRunCompleted,
+	getDryRunFindFilter,
+	includeWarnErrorInDryRun,
 }: IUseEditorOperationsArgs) {
 	const [isActionBusy, setIsActionBusy] = React.useState(false);
 	const [activeAction, setActiveAction] = React.useState<
@@ -153,6 +159,11 @@ export function useEditorOperations({
 					pathTemplate,
 					criteria: getCriteriaState(),
 					excludedSceneIds: [],
+					findFilter:
+						typeof getDryRunFindFilter === "function"
+							? getDryRunFindFilter()
+							: undefined,
+					includeWarnError: Boolean(includeWarnErrorInDryRun),
 				});
 				const next = { ...getScenePreviewByIdState() } as Record<
 					string,
@@ -185,6 +196,9 @@ export function useEditorOperations({
 				});
 
 				setScenePreviewByIdState(next);
+				if (onDryRunCompleted) {
+					onDryRunCompleted(previewRows || []);
+				}
 				setStatus(`Dry run ready for ${previewRows.length} scene(s)`);
 				setIsDryRunReady(true);
 				return;

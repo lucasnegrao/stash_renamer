@@ -1,5 +1,6 @@
 import {
 	applyFilterToSceneList,
+	getCriteriaState,
 	getFilterState,
 	hasSceneListSetFilterState,
 	setFilterState,
@@ -119,7 +120,7 @@ export function useEditorTemplateCrud({
 				name: trimmedName,
 				filenameTemplate: template,
 				pathTemplate,
-				filter: getFilterState(),
+				criteria: getCriteriaState(),
 			});
 			await loadSavedTemplates(false, String(saved?.id || ""));
 			if (saved?.id) setSelectedSavedTemplateId(String(saved.id));
@@ -146,7 +147,7 @@ export function useEditorTemplateCrud({
 				name: String(selected.name || ""),
 				filenameTemplate: template,
 				pathTemplate,
-				filter: getFilterState(),
+				criteria: getCriteriaState(),
 			});
 			await loadSavedTemplates(false, String(updated?.id || selected.id));
 			setStatus(

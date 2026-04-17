@@ -161,13 +161,13 @@ class FileMover:
         name: str,
         filename_template: str,
         path_template: Optional[str],
-        filter_json: Optional[str] = None,
+        criteria_json: Optional[str] = None,
     ) -> Dict[str, Any]:
         return self._store.save_template(
             name=name,
             filename_template=filename_template,
             path_template=path_template,
-            filter_json=filter_json,
+            criteria_json=criteria_json,
         )
 
     def update_template(
@@ -176,14 +176,14 @@ class FileMover:
         name: str,
         filename_template: str,
         path_template: Optional[str],
-        filter_json: Optional[str] = None,
+        criteria_json: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         return self._store.update_template(
             template_id=template_id,
             name=name,
             filename_template=filename_template,
             path_template=path_template,
-            filter_json=filter_json,
+            criteria_json=criteria_json,
         )
 
     def delete_template(self, template_id: str) -> bool:

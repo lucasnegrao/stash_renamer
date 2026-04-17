@@ -13,6 +13,7 @@ type TResultFocusListener = (payload: {
 	token: number;
 }) => void;
 type TSceneRuntimeListener = (payload: { token: number }) => void;
+type TScenePreviewListener = (payload: { token: number }) => void;
 type TSetFilterFn = (value: any | ((prevState: any) => any)) => void;
 
 let filterState: any = null;
@@ -26,6 +27,8 @@ let resultFocusBatchId: string | null = null;
 let resultFocusListeners: TResultFocusListener[] = [];
 let sceneRuntimeToken = 0;
 let sceneRuntimeListeners: TSceneRuntimeListener[] = [];
+let scenePreviewToken = 0;
+let scenePreviewListeners: TScenePreviewListener[] = [];
 let lastSceneRuntimeSignature = "";
 let sceneListSetFilterState: TSetFilterFn | null = null;
 let lastAppliedFilterSignature = "";
@@ -129,6 +132,9 @@ export function getFilterState(): any | null {
 
 export function setFilterState(nextFilter: any): void {
 	filterState = toSerializableFilter(nextFilter);
+	sceneRuntimeToken += 1;
+	const payload = { token: sceneRuntimeToken };
+	sceneRuntimeListeners.forEach((cb) => cb(payload));
 }
 
 export function hasSceneListSetFilterState(): boolean {
@@ -232,6 +238,9 @@ export function setScenePreviewByIdState(
 	next: Record<string, IScenePreviewEntry>,
 ): void {
 	scenePreviewByIdState = next;
+	scenePreviewToken += 1;
+	const payload = { token: scenePreviewToken };
+	scenePreviewListeners.forEach((cb) => cb(payload));
 }
 
 export function resetRenamerRuntimeState(): void {
@@ -245,6 +254,7 @@ export function resetRenamerRuntimeState(): void {
 	resultFocusToken = 0;
 	resultFocusBatchId = null;
 	sceneRuntimeToken = 0;
+	scenePreviewToken = 0;
 	lastSceneRuntimeSignature = "";
 }
 
@@ -284,5 +294,14 @@ export function subscribeSceneRuntimeState(
 	sceneRuntimeListeners.push(cb);
 	return () => {
 		sceneRuntimeListeners = sceneRuntimeListeners.filter((x) => x !== cb);
+	};
+}
+
+export function subscribeScenePreviewState(
+	cb: TScenePreviewListener,
+): () => void {
+	scenePreviewListeners.push(cb);
+	return () => {
+		scenePreviewListeners = scenePreviewListeners.filter((x) => x !== cb);
 	};
 }

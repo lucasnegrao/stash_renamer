@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 import backend.services.stash_log as log
 
+
 def read_json_input() -> Optional[Dict[str, Any]]:
     raw = sys.stdin.read()
     if not raw:
@@ -60,8 +61,10 @@ def normalize_input_args(raw_args: Any) -> Dict[str, Any]:
     raise Exception("Expected input args to be a map/object or PluginArgInput list")
 
 
-def log_options_sources(options: Dict[str, Any], source_map: Dict[str, str], args: Dict[str, Any]) -> None:
-    
+def log_options_sources(
+    options: Dict[str, Any], source_map: Dict[str, str], args: Dict[str, Any]
+) -> None:
+
     log.LogInfo(f"[Scene Renamer][Options] raw args keys={sorted(list(args.keys()))}")
     for key in sorted(options.keys()):
         source = source_map.get(key, "derived")

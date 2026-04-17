@@ -65,6 +65,13 @@ export interface ITaskJob {
 	subTasks?: string[] | null;
 }
 
+export interface IFindScenesResult {
+	count: number;
+	filesize: number;
+	duration: number;
+	scenes: any[];
+}
+
 interface IGraphQLErrorLike {
 	message?: string;
 }
@@ -304,6 +311,8 @@ export async function runDryRunForFilteredScenes(args: {
 	pathTemplate: string;
 	criteria: any[];
 	excludedSceneIds?: string[];
+	findFilter?: any;
+	includeWarnError?: boolean;
 }): Promise<IScenePreviewResult[]> {
 	const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
     runPluginOperation(plugin_id: $plugin_id, args: $args)
@@ -319,14 +328,149 @@ export async function runDryRunForFilteredScenes(args: {
 			excluded_scene_ids: Array.isArray(args.excludedSceneIds)
 				? args.excludedSceneIds
 				: [],
+			find_filter: args.findFilter ?? null,
+			include_warn_error: Boolean(args.includeWarnError),
 		},
 	};
+	console.debug("[sceneRenamerApi] runDryRunForFilteredScenes request", {
+		criteriaLen: Array.isArray(args.criteria) ? args.criteria.length : 0,
+		excludedLen: Array.isArray(args.excludedSceneIds)
+			? args.excludedSceneIds.length
+			: 0,
+		findFilter: args.findFilter ?? null,
+		includeWarnError: Boolean(args.includeWarnError),
+	});
 	const result = await postGraphQL<any>(query, variables);
 	const payload = result?.data?.runPluginOperation;
 	const output = payload?.output || payload || {};
 	const operations = output?.operations;
+	console.debug("[sceneRenamerApi] runDryRunForFilteredScenes response", {
+		rawOperationsLen: Array.isArray(operations) ? operations.length : 0,
+		sample: Array.isArray(operations)
+			? operations.slice(0, 8).map((row: any) => ({
+					scene_id: row?.scene_id,
+					status: row?.status,
+					log: row?.log,
+					error: row?.error,
+				}))
+			: [],
+	});
 	if (!Array.isArray(operations)) return [];
 	return operations as IScenePreviewResult[];
+}
+
+export async function queryFindScenesByIds(args: {
+	filter?: any;
+	sceneFilter?: any;
+	ids: string[];
+}): Promise<IFindScenesResult> {
+	const normalizedIds = (args.ids || [])
+		.map((id) => String(id || "").trim())
+		.filter((id) => Boolean(id));
+	if (normalizedIds.length === 0) {
+		console.debug("[sceneRenamerApi] queryFindScenesByIds skipped: empty ids");
+		return { count: 0, filesize: 0, duration: 0, scenes: [] };
+	}
+	console.debug("[sceneRenamerApi] queryFindScenesByIds request", {
+		idsCount: normalizedIds.length,
+		idsSample: normalizedIds.slice(0, 10),
+		filter: args.filter ?? null,
+		sceneFilter: args.sceneFilter ?? null,
+	});
+
+	const query = `query FindScenesByIds($filter: FindFilterType, $scene_filter: SceneFilterType, $ids: [ID!]) {
+  findScenes(filter: $filter, scene_filter: $scene_filter, ids: $ids) {
+    count
+    filesize
+    duration
+    scenes {
+      id
+      title
+      code
+      details
+      director
+      urls
+      date
+      rating100
+      o_counter
+      organized
+      interactive
+      interactive_speed
+      resume_time
+      play_duration
+      play_count
+      files {
+        id
+        path
+        size
+        mod_time
+        duration
+        video_codec
+        audio_codec
+        width
+        height
+        frame_rate
+        bit_rate
+        fingerprints { type value }
+      }
+      paths {
+        screenshot
+        preview
+        stream
+        webp
+        vtt
+        sprite
+        funscript
+        interactive_heatmap
+        caption
+      }
+      scene_markers {
+        id
+        title
+        seconds
+        primary_tag { id name }
+      }
+      galleries {
+        id
+        title
+        files { path }
+        folder { path }
+      }
+      studio { id name image_path }
+      groups {
+        scene_index
+        group { id name front_image_path }
+      }
+      tags { id name }
+      performers {
+        id
+        name
+        disambiguation
+        gender
+        favorite
+        image_path
+      }
+      stash_ids { endpoint stash_id updated_at }
+    }
+  }
+}`;
+
+	const result = await postGraphQL<any>(query, {
+		filter: args.filter ?? null,
+		scene_filter: args.sceneFilter ?? null,
+		ids: normalizedIds,
+	});
+	const row = result?.data?.findScenes || {};
+	console.debug("[sceneRenamerApi] queryFindScenesByIds response", {
+		rawCount: Number(row?.count || 0),
+		rawScenesLen: Array.isArray(row?.scenes) ? row.scenes.length : 0,
+	});
+	return {
+		count: Number(row?.count || 0),
+		filesize: Number(row?.filesize || 0),
+		duration: Number(row?.duration || 0),
+		scenes: Array.isArray(row?.scenes) ? row.scenes : [],
+	};
 }
 
 export async function fetchOperationBatches(): Promise<IOperationBatch[]> {
@@ -465,7 +609,7 @@ export async function saveTemplateToDatabase(args: {
 	name: string;
 	filenameTemplate: string;
 	pathTemplate: string;
-	filter?: any;
+	criteria?: any[];
 }): Promise<IRenamerTemplate | null> {
 	const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
     runPluginOperation(plugin_id: $plugin_id, args: $args)
@@ -478,7 +622,7 @@ export async function saveTemplateToDatabase(args: {
 			template_name: args.name,
 			filename_template: args.filenameTemplate,
 			path_template: args.pathTemplate,
-			filter: args.filter ?? null,
+			criteria: Array.isArray(args.criteria) ? args.criteria : [],
 		},
 	};
 	const result = await postGraphQL<any>(query, variables);
@@ -494,7 +638,7 @@ export async function updateTemplateInDatabase(args: {
 	name: string;
 	filenameTemplate: string;
 	pathTemplate: string;
-	filter?: any;
+	criteria?: any[];
 }): Promise<IRenamerTemplate | null> {
 	const query = `mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
     runPluginOperation(plugin_id: $plugin_id, args: $args)
@@ -508,7 +652,7 @@ export async function updateTemplateInDatabase(args: {
 			template_name: args.name,
 			filename_template: args.filenameTemplate,
 			path_template: args.pathTemplate,
-			filter: args.filter ?? null,
+			criteria: Array.isArray(args.criteria) ? args.criteria : [],
 		},
 	};
 	const result = await postGraphQL<any>(query, variables);
@@ -621,19 +765,28 @@ export function extractSceneTokenTree(catalog: any): ITokenTreeNode[] {
 	const treeFromOutput: ITokenTreeNode[] = Array.isArray(catalog?.scene_tree)
 		? catalog.scene_tree
 		: [];
+
+	const isSceneToken = (token: string) => {
+		const raw = String(token || "").trim();
+		if (!raw) return false;
+		if (raw.startsWith("$scene.")) return true;
+		// Liquid variable expression form: {{ scene.foo }}
+		return /^\{\{\s*scene(?:[.\[]|$)/.test(raw);
+	};
+
 	const virtualTokens: string[] = Array.isArray(catalog?.virtual_selectors)
 		? catalog.virtual_selectors
 				.map((v: any) => String(v?.selector || ""))
-				.filter((s: string) => s.startsWith("$scene."))
+				.filter((s: string) => isSceneToken(s))
 		: [];
 	const virtualNodes: ITokenTreeNode[] = virtualTokens.map((token) => ({
-		name: token.replace("$scene.", ""),
+		name: token,
 		token,
 		children: [],
 	}));
 
-	return [...treeFromOutput, ...virtualNodes].filter(
-		(n: any) =>
-			n && typeof n.token === "string" && n.token.startsWith("$scene."),
-	);
+	return [...treeFromOutput, ...virtualNodes].filter((n: any) => {
+		if (!n || typeof n.token !== "string") return false;
+		return isSceneToken(n.token);
+	});
 }

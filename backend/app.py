@@ -2,7 +2,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 from backend.filter.criteria import build_scene_filter, combine_scene_filters
-from backend.filter.scenes import exclude_scenes_by_ids, fetch_scenes_by_filters
+from backend.filter.scenes import (
+    exclude_scenes_by_ids,
+    fetch_scenes_by_filters,
+)
 from backend.renamer.engine import RenamerEngine
 from backend.services.file_mover import FileMover
 from backend.services.graphql import GraphQLConfig, GraphQLService
@@ -43,11 +46,10 @@ def _to_bool(value: Any) -> bool:
     return str(value).strip().lower() in ("true", "1", "yes", "on")
 
 
-def _criteria_from_filter_object(filter_obj: Any) -> List[dict]:
-    if not isinstance(filter_obj, dict):
+def _criteria_from_template_payload(payload: Any) -> List[dict]:
+    if payload is None:
         return []
-    criteria = filter_obj.get("criteria")
-    return _ensure_list_of_dicts(criteria, "filter.criteria")
+    return _ensure_list_of_dicts(payload, "template.criteria")
 
 
 def run(options: dict, collect_operations: bool = False):
@@ -146,12 +148,12 @@ def run(options: dict, collect_operations: bool = False):
             template_name = str(options.get("template_name") or "").strip()
             filename_tpl = str(options.get("filename_template") or "").strip()
             path_tpl = str(options.get("path_template") or "")
-            filter_json = ""
-            if options.get("filter") is not None:
-                try:
-                    filter_json = json.dumps(options.get("filter"), ensure_ascii=False)
-                except Exception as e:
-                    raise ValueError(f"Invalid filter payload: {e}")
+            criteria_json = ""
+            criteria_payload = _criteria_from_template_payload(options.get("criteria"))
+            try:
+                criteria_json = json.dumps(criteria_payload, ensure_ascii=False)
+            except Exception as e:
+                raise ValueError(f"Invalid criteria payload: {e}")
             if not template_name:
                 raise ValueError("template_name is required for save_template")
             if not filename_tpl:
@@ -161,7 +163,7 @@ def run(options: dict, collect_operations: bool = False):
                     name=template_name,
                     filename_template=filename_tpl,
                     path_template=path_tpl,
-                    filter_json=filter_json,
+                    criteria_json=criteria_json,
                 )
             }
 
@@ -170,12 +172,12 @@ def run(options: dict, collect_operations: bool = False):
             template_name = str(options.get("template_name") or "").strip()
             filename_tpl = str(options.get("filename_template") or "").strip()
             path_tpl = str(options.get("path_template") or "")
-            filter_json = ""
-            if options.get("filter") is not None:
-                try:
-                    filter_json = json.dumps(options.get("filter"), ensure_ascii=False)
-                except Exception as e:
-                    raise ValueError(f"Invalid filter payload: {e}")
+            criteria_json = ""
+            criteria_payload = _criteria_from_template_payload(options.get("criteria"))
+            try:
+                criteria_json = json.dumps(criteria_payload, ensure_ascii=False)
+            except Exception as e:
+                raise ValueError(f"Invalid criteria payload: {e}")
             if not template_id:
                 raise ValueError("template_id is required for update_template")
             if not template_name:
@@ -187,7 +189,7 @@ def run(options: dict, collect_operations: bool = False):
                 name=template_name,
                 filename_template=filename_tpl,
                 path_template=path_tpl,
-                filter_json=filter_json,
+                criteria_json=criteria_json,
             )
             if not updated:
                 raise ValueError(f"Template not found: {template_id}")
@@ -251,7 +253,7 @@ def run(options: dict, collect_operations: bool = False):
                 if not template_id or not filename_template:
                     continue
 
-                parsed_filter: Dict[str, Any] = {}
+                parsed_criteria: List[dict] = []
                 raw_filter_json = str(row.get("filter_json") or "").strip()
                 if debug_mode:
                     logger.log(
@@ -259,10 +261,11 @@ def run(options: dict, collect_operations: bool = False):
                     )
                 if raw_filter_json:
                     try:
-                        parsed_filter = json.loads(raw_filter_json)
+                        raw_payload = json.loads(raw_filter_json)
+                        parsed_criteria = _criteria_from_template_payload(raw_payload)
                     except Exception:
-                        parsed_filter = {}
-                criteria_opt = _criteria_from_filter_object(parsed_filter)
+                        parsed_criteria = []
+                criteria_opt = parsed_criteria
                 if debug_mode:
                     logger.log(
                         "[DEBUG] Hook template "
@@ -365,8 +368,6 @@ def run(options: dict, collect_operations: bool = False):
 
             ids = _ensure_list_of_strings(options.get("ids"), "ids")
             criteria_opt = _ensure_list_of_dicts(options.get("criteria"), "criteria")
-            if not ids and len(criteria_opt) == 0:
-                raise ValueError("Provide at least one scene selector: 'criteria' or 'ids'")
 
             excluded_scene_ids = _ensure_list_of_strings(
                 options.get("excluded_scene_ids"),
@@ -376,6 +377,12 @@ def run(options: dict, collect_operations: bool = False):
             find_filter = options.get("find_filter")
             if find_filter is not None and not isinstance(find_filter, dict):
                 raise ValueError("'find_filter' must be an object/dict")
+            include_warn_error = _to_bool(options.get("include_warn_error", False))
+
+            if isinstance(find_filter, dict):
+                find_filter = dict(find_filter)
+                find_filter["page"] = 1
+                find_filter["per_page"] = 250
 
             scene_filter = build_scene_filter(
                 None,
@@ -419,6 +426,19 @@ def run(options: dict, collect_operations: bool = False):
                     batch_id=None,
                 )
                 all_operations: List[dict] = ops or []
+                if not include_warn_error:
+                    filtered_operations: List[dict] = []
+                    for row in all_operations:
+                        if not isinstance(row, dict):
+                            continue
+                        status = str(row.get("status") or "").strip().lower()
+                        if status in ("warn", "warning", "error", "fail", "skipped"):
+                            continue
+                        message = str(row.get("log") or row.get("error") or "").strip().lower()
+                        if "no change (same path and filename)" in message:
+                            continue
+                        filtered_operations.append(row)
+                    all_operations = filtered_operations
                 if collect_operations:
                     return {"operations": all_operations}
                 return None

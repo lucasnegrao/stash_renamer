@@ -16,7 +16,8 @@ const React = PluginApi.React;
 const TEMPLATE_STORAGE_KEY = "editor:filename_template";
 const PATH_TEMPLATE_STORAGE_KEY = "editor:path_template";
 const FILTER_STORAGE_KEY = "editor:scene_filter";
-const DEFAULT_TEMPLATE = "$scene.studio.name - $scene.date - $scene.title";
+const DEFAULT_TEMPLATE =
+	"{{ scene.studio.name }} - {{ scene.date }} - {{ scene.title }}";
 
 export function useEditorTemplateFields() {
 	const [template, setTemplate] = React.useState(() =>

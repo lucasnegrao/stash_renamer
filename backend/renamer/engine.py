@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from backend.filter.scenes import (
@@ -31,9 +32,22 @@ class RenamerEngine:
             query=template,
             tag_context=tag_context,
             tag_render=lambda tpl, ctx: self.tagger.render(tpl, ctx),
-            extract_exprs=lambda tpl: self.tagger.extract_expressions(tpl),
-            resolve_expr=lambda expr, ctx: self.tagger.resolve_expression(expr, ctx),
         )
+
+    def _build_tag_context(self, scene: Dict[str, Any], performer_list: List[dict], group_list: List[dict]) -> Dict[str, object]:
+        scene_ctx = dict(scene or {})
+        date_val = scene_ctx.get("date")
+        year = ""
+        if date_val is not None:
+            m = re.match(r"\s*(\d{4})", str(date_val))
+            if m:
+                year = m.group(1)
+        scene_ctx["year"] = year
+        return {
+            "scene": scene_ctx,
+            "performer": performer_list,
+            "group": group_list,
+        }
 
     def preview_run(self, filename_template: str, path_template: Optional[str], scene_rows: List[dict]) -> List[dict]:
         normalized = normalize_scenes(scene_rows)
@@ -176,11 +190,7 @@ class RenamerEngine:
                     group_list.append(g.get("group"))
                 elif isinstance(g, dict):
                     group_list.append(g)
-            tag_context: Dict[str, object] = {
-                "scene": scene,
-                "performer": performer_list,
-                "group": group_list,
-            }
+            tag_context = self._build_tag_context(scene, performer_list, group_list)
 
             if self.debug_mode:
                 self.logger.log(f"[DEBUG] Tag context roots: {list(tag_context.keys())}")
@@ -245,9 +255,9 @@ class RenamerEngine:
 
             if self.is_windows and len(new_path) > 240:
                 if scene.get("date"):
-                    reduced_core = self._render_filename("$scene.date - $scene.title", tag_context)
+                    reduced_core = self._render_filename("{{ scene.date }} - {{ scene.title }}", tag_context)
                 else:
-                    reduced_core = self._render_filename("$scene.title", tag_context)
+                    reduced_core = self._render_filename("{{ scene.title }}", tag_context)
                 reduced_core = sanitize_filename(reduced_core)
                 if not reduced_core.strip():
                     op_id = _log_operation_to_db(

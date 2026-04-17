@@ -10,14 +10,18 @@ export function getTemplateById(
 export function parseTemplateFilterJson(filterJson?: string): any | null {
 	if (!filterJson) return null;
 	try {
-		return JSON.parse(String(filterJson));
+		const parsed = JSON.parse(String(filterJson));
+		if (Array.isArray(parsed)) {
+			return { criteria: parsed };
+		}
+		return null;
 	} catch {
 		return null;
 	}
 }
 
-export function normalizeFilterForCompare(source: any): any | null {
-	if (!source || typeof source !== "object") return null;
+export function normalizeCriteriaForCompare(source: any): any[] {
+	if (!source || typeof source !== "object") return [];
 	const criteria = Array.isArray(source?.criteria)
 		? source.criteria
 				.map((criterion: any) => {
@@ -35,10 +39,7 @@ export function normalizeFilterForCompare(source: any): any | null {
 				})
 				.filter((criterion: any) => Boolean(criterion))
 		: [];
-	return {
-		searchTerm: source?.searchTerm ?? "",
-		criteria,
-	};
+	return criteria;
 }
 
 export function isTemplateDirty(args: {
@@ -50,16 +51,15 @@ export function isTemplateDirty(args: {
 	const { selectedTemplate, filenameTemplate, pathTemplate, currentFilter } =
 		args;
 	if (!selectedTemplate) return false;
-	const selectedFilter = normalizeFilterForCompare(
+	const selectedCriteria = normalizeCriteriaForCompare(
 		parseTemplateFilterJson(selectedTemplate.filter_json),
 	);
-	const normalizedCurrentFilter = normalizeFilterForCompare(currentFilter);
+	const currentCriteria = normalizeCriteriaForCompare(currentFilter);
 	return (
 		String(filenameTemplate || "") !==
 			String(selectedTemplate.filename_template || "") ||
 		String(pathTemplate || "") !==
 			String(selectedTemplate.path_template || "") ||
-		JSON.stringify(selectedFilter || {}) !==
-			JSON.stringify(normalizedCurrentFilter || {})
+		JSON.stringify(selectedCriteria) !== JSON.stringify(currentCriteria)
 	);
 }

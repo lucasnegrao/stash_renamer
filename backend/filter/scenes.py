@@ -19,7 +19,9 @@ def extract_scenes_from_data(data: Dict[str, Any], path: Optional[str]) -> List[
         return [s for s in find_scenes["scenes"] if isinstance(s, dict)]
     if isinstance(data.get("scenes"), list):
         return [s for s in data["scenes"] if isinstance(s, dict)]
-    raise ValueError("Could not extract scene list from query result; provide scenes_query_path")
+    raise ValueError(
+        "Could not extract scene list from query result; provide scenes_query_path"
+    )
 
 
 def normalize_scenes(scenes: List[dict]) -> List[dict]:
@@ -28,7 +30,12 @@ def normalize_scenes(scenes: List[dict]) -> List[dict]:
         if not isinstance(scene, dict):
             continue
         files = scene.get("files") or []
-        if not scene.get("path") and isinstance(files, list) and files and isinstance(files[0], dict):
+        if (
+            not scene.get("path")
+            and isinstance(files, list)
+            and files
+            and isinstance(files[0], dict)
+        ):
             scene["path"] = files[0].get("path")
         out.append(scene)
     return out
@@ -38,10 +45,14 @@ def exclude_scenes_by_ids(scenes: List[dict], excluded_ids: List[str]) -> List[d
     excluded_set = {str(x).strip() for x in (excluded_ids or []) if str(x).strip()}
     if not excluded_set:
         return scenes
-    return [s for s in scenes if str((s or {}).get("id") or "").strip() not in excluded_set]
+    return [
+        s for s in scenes if str((s or {}).get("id") or "").strip() not in excluded_set
+    ]
 
 
-def build_field_tree_from_templates(filename_template: str, path_template: Optional[str], tagger) -> Dict[str, Any]:
+def build_field_tree_from_templates(
+    filename_template: str, path_template: Optional[str], tagger
+) -> Dict[str, Any]:
     def add_path(tree: Dict[str, Any], path: List[str]) -> None:
         if not path:
             return
@@ -71,14 +82,32 @@ def build_field_tree_from_templates(filename_template: str, path_template: Optio
                 if attr_path and not tagger.has_root_field("scene", attr_path[0]):
                     continue
                 add_path(tree, attr_path)
+                for leaf in (
+                    tagger.infer_leaf_subfields("scene", attr_path)
+                    if tagger and attr_path
+                    else []
+                ):
+                    add_path(tree, attr_path + [leaf])
             elif root == "performer":
                 if attr_path and not tagger.has_root_field("performer", attr_path[0]):
                     continue
                 add_path(tree, ["performers"] + attr_path)
+                for leaf in (
+                    tagger.infer_leaf_subfields("performer", attr_path)
+                    if tagger and attr_path
+                    else []
+                ):
+                    add_path(tree, ["performers"] + attr_path + [leaf])
             elif root == "group":
                 if attr_path and not tagger.has_root_field("group", attr_path[0]):
                     continue
                 add_path(tree, ["groups", "group"] + attr_path)
+                for leaf in (
+                    tagger.infer_leaf_subfields("group", attr_path)
+                    if tagger and attr_path
+                    else []
+                ):
+                    add_path(tree, ["groups", "group"] + attr_path + [leaf])
 
     groups_node = tree.get("groups")
     if isinstance(groups_node, dict):
@@ -110,7 +139,9 @@ def field_tree_to_selection(tree: Dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def build_find_scenes_query(filename_template: str, path_template: Optional[str], tagger) -> str:
+def build_find_scenes_query(
+    filename_template: str, path_template: Optional[str], tagger
+) -> str:
     tree = build_field_tree_from_templates(filename_template, path_template, tagger)
     selection = field_tree_to_selection(tree)
     return (
@@ -138,7 +169,9 @@ def fetch_scenes_by_filters(
     if page <= 0:
         page = 1
 
-    find_scenes_query = build_find_scenes_query(filename_template, path_template, tagger)
+    find_scenes_query = build_find_scenes_query(
+        filename_template, path_template, tagger
+    )
 
     if ids:
         single_filter = ff.copy()
@@ -248,3 +281,93 @@ def fetch_scene_by_id_for_templates(
         return None
     first = scenes[0]
     return first if isinstance(first, dict) else None
+
+
+def fetch_full_scenes_by_ids(
+    gql_call,
+    ids: List[str],
+) -> List[dict]:
+    normalized_ids = [str(x).strip() for x in (ids or []) if str(x).strip()]
+    if not normalized_ids:
+        return []
+
+    query = """
+query FindScenesByIds($ids: [ID!]) {
+  findScenes(ids: $ids) {
+    scenes {
+      id
+      title
+      code
+      details
+      director
+      urls
+      date
+      rating100
+      o_counter
+      organized
+      interactive
+      interactive_speed
+      resume_time
+      play_duration
+      play_count
+      files {
+        id
+        path
+        size
+        mod_time
+        duration
+        video_codec
+        audio_codec
+        width
+        height
+        frame_rate
+        bit_rate
+        fingerprints { type value }
+      }
+      paths {
+        screenshot
+        preview
+        stream
+        webp
+        vtt
+        sprite
+        funscript
+        interactive_heatmap
+        caption
+      }
+      scene_markers {
+        id
+        title
+        seconds
+        primary_tag { id name }
+      }
+      galleries {
+        id
+        title
+        files { path }
+        folder { path }
+      }
+      studio { id name image_path }
+      groups {
+        scene_index
+        group { id name front_image_path }
+      }
+      tags { id name }
+      performers {
+        id
+        name
+        disambiguation
+        gender
+        favorite
+        image_path
+      }
+      stash_ids { endpoint stash_id updated_at }
+    }
+  }
+}
+"""
+    data = gql_call(query, {"ids": normalized_ids})
+    scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
+    if not isinstance(scenes, list):
+        return []
+    return [s for s in scenes if isinstance(s, dict)]

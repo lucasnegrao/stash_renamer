@@ -1,4 +1,6 @@
-import { useRef, useEffect, useCallback } from "react";
+const PluginApi = window.PluginApi;
+const React = PluginApi.React;
+const { useRef, useEffect, useCallback } = React;
 
 const useFocus = () => {
 	const htmlElRef = useRef<HTMLInputElement | null>(null);

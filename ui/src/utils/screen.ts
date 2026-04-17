@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+const PluginApi = window.PluginApi;
+const React = PluginApi.React;
+const { useEffect, useState } = React;
 
 const isMobile = () =>
 	window.matchMedia("only screen and (max-width: 576px)").matches;

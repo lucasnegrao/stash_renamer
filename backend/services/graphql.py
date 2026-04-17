@@ -19,7 +19,9 @@ class GraphQLService:
         if not self.config.server_url:
             raise RuntimeError("CONFIG.server_url missing")
         if not (self.config.cookie_name and self.config.cookie_value):
-            raise RuntimeError("Cookie auth required: cookie_name and cookie_value must be set")
+            raise RuntimeError(
+                "Cookie auth required: cookie_name and cookie_value must be set"
+            )
 
         headers = {
             "Accept-Encoding": "gzip, deflate, br",

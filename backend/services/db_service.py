@@ -460,7 +460,7 @@ class DBService:
         name: str,
         filename_template: str,
         path_template: Optional[str],
-        filter_json: Optional[str] = None,
+        criteria_json: Optional[str] = None,
     ) -> Dict[str, Any]:
         template_id = str(uuid.uuid4())
         ts = datetime.now(timezone.utc).isoformat()
@@ -476,7 +476,7 @@ class DBService:
                 str(name or "").strip(),
                 str(filename_template or ""),
                 str(path_template or ""),
-                str(filter_json or ""),
+                str(criteria_json or ""),
                 ts,
             ),
         )
@@ -489,7 +489,7 @@ class DBService:
             "name": str(name or "").strip(),
             "filename_template": str(filename_template or ""),
             "path_template": str(path_template or ""),
-            "filter_json": str(filter_json or ""),
+            "filter_json": str(criteria_json or ""),
             "created_at": ts,
         }
 
@@ -499,7 +499,7 @@ class DBService:
         name: str,
         filename_template: str,
         path_template: Optional[str],
-        filter_json: Optional[str] = None,
+        criteria_json: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         conn = self._get_conn()
         conn.execute(
@@ -512,7 +512,7 @@ class DBService:
                 str(name or "").strip(),
                 str(filename_template or ""),
                 str(path_template or ""),
-                str(filter_json or ""),
+                str(criteria_json or ""),
                 str(template_id or ""),
             ),
         )

@@ -2,17 +2,28 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from backend.services.graphql_queries import INTROSPECTION_TYPE_QUERY
+try:
+    from liquid import Environment
+except Exception:  # pragma: no cover - handled at runtime with explicit error
+    Environment = None
 
 
 class GraphQLTagger:
-    """Resolves template tags from introspected GraphQL roots."""
+    """Liquid-backed template engine with GraphQL-aware selector introspection."""
 
-    _TOKEN_RE = re.compile(r"\$([A-Za-z_]\w*(?:\[[^\]]+\]|\.[A-Za-z_]\w*|\.\[[^\]]+\])*)")
+    _IDENT_RE = re.compile(r"[A-Za-z_]\w*(?:\[[^\]]+\]|\.[A-Za-z_]\w*|\.\[[^\]]+\])*")
+    _STRING_RE = re.compile(r"""("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')""")
 
     def __init__(self, gql_call: Callable[[str, Optional[dict]], dict], root_types: Dict[str, str]):
+        if Environment is None:
+            raise RuntimeError(
+                "python-liquid is required. Install dependency: pip install python-liquid"
+            )
         self._gql_call = gql_call
         self._root_types = root_types
         self._fields_by_root: Dict[str, Set[str]] = {}
+        self._type_fields_cache: Dict[str, List[dict]] = {}
+        self._env = Environment()
 
     def introspect(self) -> None:
         fields_by_root: Dict[str, Set[str]] = {}
@@ -45,15 +56,31 @@ class GraphQLTagger:
         return field in known
 
     def render(self, template: str, context: Dict[str, Any]) -> str:
-        def repl(match: re.Match) -> str:
-            expr = match.group(1)
-            value = self._resolve_expr(expr, context)
-            return self._stringify(value)
-
-        return self._TOKEN_RE.sub(repl, template or "")
+        tpl = self._env.from_string(template or "")
+        return str(tpl.render(**(context or {})))
 
     def extract_expressions(self, template: str) -> List[str]:
-        return [m.group(1) for m in self._TOKEN_RE.finditer(template or "")]
+        src = str(template or "")
+        if not src:
+            return []
+
+        # Avoid parsing identifiers inside quoted string literals.
+        scrubbed = self._STRING_RE.sub(" ", src)
+        roots = set(self._root_types.keys())
+        out: List[str] = []
+        seen: Set[str] = set()
+        for m in self._IDENT_RE.finditer(scrubbed):
+            candidate = (m.group(0) or "").strip()
+            if not candidate:
+                continue
+            root, _segments = self._parse_expr(candidate)
+            if not root or root not in roots:
+                continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            out.append(candidate)
+        return out
 
     def parse_expression(self, expr: str) -> Tuple[str, List[Tuple[str, Any]]]:
         return self._parse_expr(expr)
@@ -64,17 +91,6 @@ class GraphQLTagger:
     def _resolve_expr(self, expr: str, context: Dict[str, Any]) -> Any:
         root, segments = self._parse_expr(expr)
         if not root:
-            return ""
-
-        # Special virtual tag: $scene.year -> first 4 digits from $scene.date
-        if root == "scene" and len(segments) == 1 and segments[0][0] == "attr" and segments[0][1] == "year":
-            scene_obj = context.get("scene")
-            if isinstance(scene_obj, dict):
-                date_val = scene_obj.get("date")
-                if date_val is None:
-                    return ""
-                m = re.match(r"\s*(\d{4})", str(date_val))
-                return m.group(1) if m else ""
             return ""
 
         value = context.get(root)
@@ -97,6 +113,7 @@ class GraphQLTagger:
         return value
 
     def _parse_expr(self, expr: str) -> Tuple[str, List[Tuple[str, Any]]]:
+        expr = str(expr or "").strip()
         i = 0
         n = len(expr)
         root_chars: List[str] = []
@@ -255,19 +272,74 @@ class GraphQLTagger:
         }
 
     def _introspect_type_fields(self, type_name: str) -> List[dict]:
+        if type_name in self._type_fields_cache:
+            return self._type_fields_cache[type_name]
         try:
             data = self._gql_call(INTROSPECTION_TYPE_QUERY, {"typeName": type_name})
             type_info = (data or {}).get("__type") or {}
             fields = type_info.get("fields") or []
-            return [f for f in fields if isinstance(f, dict) and f.get("name")]
+            normalized = [f for f in fields if isinstance(f, dict) and f.get("name")]
+            self._type_fields_cache[type_name] = normalized
+            return normalized
         except Exception:
+            self._type_fields_cache[type_name] = []
             return []
+
+    def infer_leaf_subfields(self, root: str, attr_path: List[str]) -> List[str]:
+        """
+        If a template references an object-like field as a leaf (ex: scene.stash_ids),
+        return a dynamic scalar projection so generated GraphQL remains valid.
+        """
+        root_type_name = str(self._root_types.get(root) or "").strip()
+        if not root_type_name or not attr_path:
+            return []
+
+        current_type = root_type_name
+        field_meta: Optional[Dict[str, Any]] = None
+        for part in attr_path:
+            fields = self._introspect_type_fields(current_type)
+            match = None
+            for f in fields:
+                if str(f.get("name") or "") == part:
+                    match = f
+                    break
+            if not isinstance(match, dict):
+                return []
+            field_meta = self._unwrap_gql_type(match.get("type"))
+            if not bool(field_meta.get("is_object_like")):
+                return []
+            next_type = str(field_meta.get("name") or "").strip()
+            if not next_type:
+                return []
+            current_type = next_type
+
+        if not isinstance(field_meta, dict) or not bool(field_meta.get("is_object_like")):
+            return []
+
+        child_fields = self._introspect_type_fields(current_type)
+        scalar_children: List[str] = []
+        for child in child_fields:
+            child_name = str(child.get("name") or "").strip()
+            if not child_name:
+                continue
+            child_meta = self._unwrap_gql_type(child.get("type"))
+            if not bool(child_meta.get("is_object_like")):
+                scalar_children.append(child_name)
+
+        if not scalar_children:
+            return []
+
+        preferred = ["id", "name", "path", "endpoint", "stash_id", "updated_at"]
+        ordered = [x for x in preferred if x in scalar_children]
+        ordered.extend(sorted([x for x in scalar_children if x not in set(ordered)]))
+        # Keep this bounded to avoid huge dynamic selections when not needed.
+        return ordered[:16]
 
     def _build_scene_selector_node(
         self,
         field_name: str,
         field_meta: Dict[str, Any],
-        prefix: str,
+        expr: str,
         nested_type_cache: Dict[str, List[dict]],
         visited_types: List[str],
         depth: int,
@@ -275,7 +347,7 @@ class GraphQLTagger:
     ) -> Dict[str, Any]:
         node: Dict[str, Any] = {
             "name": field_name,
-            "token": prefix,
+            "token": self._to_token(expr),
             "kind": field_meta.get("kind"),
             "is_list": bool(field_meta.get("is_list")),
             "children": [],
@@ -287,7 +359,7 @@ class GraphQLTagger:
             node["children"].append(
                 {
                     "name": "[0]",
-                    "token": f"{prefix}[0]",
+                    "token": self._to_token(f"{expr}[0]"),
                     "kind": field_meta.get("kind"),
                     "is_list": False,
                     "children": [],
@@ -315,15 +387,15 @@ class GraphQLTagger:
             if not sub_name:
                 continue
             sub_meta = self._unwrap_gql_type(sub.get("type"))
-            token = (
-                f"{prefix}[0].{sub_name}"
+            child_expr = (
+                f"{expr}[0].{sub_name}"
                 if node["is_list"]
-                else f"{prefix}.{sub_name}"
+                else f"{expr}.{sub_name}"
             )
             child = self._build_scene_selector_node(
                 sub_name,
                 sub_meta,
-                token,
+                child_expr,
                 nested_type_cache,
                 next_visited,
                 depth + 1,
@@ -345,13 +417,13 @@ class GraphQLTagger:
                 roots.append(
                     {
                         "root": root,
-                        "token": f"${root}",
+                        "token": self._to_token(root),
                         "fields": root_fields,
                         "examples": [
-                            f"${root}.{root_fields[0]}" if root_fields else f"${root}.id",
-                            f"${root}[0].{root_fields[0]}"
+                            self._to_token(f"{root}.{root_fields[0]}") if root_fields else self._to_token(f"{root}.id"),
+                            self._to_token(f"{root}[0].{root_fields[0]}")
                             if root_fields
-                            else f"${root}[0].id",
+                            else self._to_token(f"{root}[0].id"),
                         ],
                     }
                 )
@@ -368,7 +440,7 @@ class GraphQLTagger:
                 node = self._build_scene_selector_node(
                     field_name=field_name,
                     field_meta=type_meta,
-                    prefix=f"$scene.{field_name}",
+                    expr=f"scene.{field_name}",
                     nested_type_cache=nested_type_cache,
                     visited_types=["Scene"],
                     depth=0,
@@ -377,7 +449,7 @@ class GraphQLTagger:
                 seen_scene_tokens.add(node.get("token"))
 
             for root_field in fields_by_root.get("scene", []):
-                token = f"$scene.{root_field}"
+                token = self._to_token(f"scene.{root_field}")
                 if token in seen_scene_tokens:
                     continue
                 scene_tree.append(
@@ -397,9 +469,9 @@ class GraphQLTagger:
                 roots.append(
                     {
                         "root": root,
-                        "token": f"${root}",
+                        "token": self._to_token(root),
                         "fields": [],
-                        "examples": [f"${root}.id", f"${root}[0].id"],
+                        "examples": [self._to_token(f"{root}.id"), self._to_token(f"{root}[0].id")],
                     }
                 )
 
@@ -409,14 +481,17 @@ class GraphQLTagger:
             "scene_tree": scene_tree,
             "virtual_selectors": [
                 {
-                    "selector": "$scene.year",
-                    "description": "Derived from $scene.date (first 4 digits)",
+                    "selector": "{{ scene.year }}",
+                    "description": "Derived from scene.date (first 4 digits)",
                 }
             ],
             "syntax": {
-                "dot": "$scene.title",
-                "index": "$performer[0].name",
-                "nested": "$scene.studio.name",
-                "conditional": "{ $scene.date } - $scene.title",
+                "dot": "{{ scene.title }}",
+                "index": "{{ performer[0].name }}",
+                "nested": "{{ scene.studio.name }}",
+                "conditional": "{% if scene.date %}{{ scene.date }} - {% endif %}{{ scene.title }}",
             },
         }
+
+    def _to_token(self, expr: str) -> str:
+        return "{{ " + str(expr or "").strip() + " }}"

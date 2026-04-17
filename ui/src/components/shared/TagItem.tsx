@@ -6,6 +6,7 @@ type TagItemProps = React.PropsWithChildren<{
 	draggable?: boolean;
 	style?: React.CSSProperties;
 	onDragStart?: (event: any) => void;
+	onDoubleClick?: (event: MouseEvent) => void;
 }>;
 
 export const TagItem: React.FC<TagItemProps> = (props: TagItemProps) => {

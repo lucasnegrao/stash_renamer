@@ -1,22 +1,12 @@
-import { SceneListTreeble } from "./components/SceneListTable";
-import { SceneTokenSelector } from "./components/SceneTokenSelector";
 import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
-import { RenamerEditor } from "./views/editor";
 import { RenamerResults } from "./views/results";
 import { RenamerSettings } from "./views/settings";
+import { TestFilter } from "./views/TestFilter";
 import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import {
-	extractSceneTokenTree,
-	fetchSelectorsCatalogCached,
-	type ITokenTreeNode,
-} from "./services/sceneRenamerApi";
-import {
-	captureSceneListFilterControlsFromProps,
 	getActiveTabState,
-	getScenePreviewByIdState,
 	resetRenamerRuntimeState,
 	setActiveTabState,
-	setSceneListRuntimeFromProps,
 	subscribeActiveTabState,
 } from "./services/renamerRuntimeState";
 
@@ -31,8 +21,6 @@ import {
 		pathname.startsWith("/plugins/stash_renamer/");
 	let currentPath = String(window.location?.pathname || "");
 	let patchesEnabled = isRenamerPath(currentPath);
-	let sceneListOriginalFn: ((props: any) => any) | null = null;
-	let sidebarSectionsOriginalFn: ((props: any) => any) | null = null;
 
 	PluginApi.Event.addEventListener("stash:location", (e: any) => {
 		const nextPath = String(e?.detail?.data?.location?.pathname || "");
@@ -46,117 +34,22 @@ import {
 		}
 	});
 
-	const SidebarSceneTokenSelector: React.FC = () => {
-		const [tree, setTree] = React.useState<ITokenTreeNode[]>([]);
-		const [loading, setLoading] = React.useState(false);
-
-		const reload = async () => {
-			try {
-				setLoading(true);
-				const output = await fetchSelectorsCatalogCached();
-				setTree(extractSceneTokenTree(output));
-			} catch (e) {
-				console.error("[Scene Renamer] Failed to load selectors", e);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		React.useEffect(() => {
-			fetchSelectorsCatalogCached().catch(() => undefined);
-			reload();
-		}, []);
-
-		return (
-			<div className="px-2">
-				<SceneTokenSelector tree={tree} loading={loading} onReload={reload} />
-			</div>
-		);
-	};
-
-	PluginApi.patch.after(
-		"SceneList",
-		(props: any, _original: any, result: any) => {
-			if (!patchesEnabled) return result;
-			setSceneListRuntimeFromProps(props);
-			return result;
-		},
-	);
-
-	PluginApi.patch.after(
-		"FilteredSceneList",
-		(props: any, _original: any, result: any) => {
-			if (!patchesEnabled) return result;
-			const setFilterFromResult =
-				result?.props?.children?.props?.children?.[1]?.props?.children?.props
-					?.children?.[0]?.props?.children?.props?.setFilter;
-			const filterFromResult =
-				result?.props?.children?.props?.children?.[1]?.props?.children?.props
-					?.children?.[0]?.props?.children?.props?.filter;
-
-			console.log(
-				result?.props?.children?.props?.children?.[1]?.props?.children,
-			);
-
-			if (typeof setFilterFromResult === "function") {
-				captureSceneListFilterControlsFromProps({
-					filter: filterFromResult,
-					setFilter: setFilterFromResult,
-				});
-				return result;
-			}
-
-			// Fallback when Stash tree shape changes.
-			captureSceneListFilterControlsFromProps(props);
-			return result;
-		},
-	);
-
-	PluginApi.patch.instead(
-		"SceneList",
-		function (props: any, _arg: any, original: any) {
-			// console.log(props)
-			if (typeof original === "function") {
-				sceneListOriginalFn = original;
-			}
-			if (!patchesEnabled) {
-				const fallback =
-					typeof original === "function" ? original : sceneListOriginalFn;
-				return fallback ? fallback(props) : null;
-			}
-			return (
-				<div
-					className="scene-list-table-root"
-					style={{ width: "100%", maxWidth: "100%", minWidth: 0 }}
-				>
-					<SceneListTreeble
-						{...props}
-						sceneOperationById={getScenePreviewByIdState()}
-					/>
-				</div>
-			);
-		},
-	);
-
-	PluginApi.patch.instead(
-		"FilteredSceneList.SidebarSections",
-		function (props: any, _arg: any, original: any) {
-			if (typeof original === "function") {
-				sidebarSectionsOriginalFn = original;
-			}
-			if (!patchesEnabled) {
-				const fallback =
-					typeof original === "function" ? original : sidebarSectionsOriginalFn;
-				return fallback ? fallback(props) : null;
-			}
-			return [<SidebarSceneTokenSelector />];
-		},
-	);
-
 	const MainPage: React.FC = () => {
 		const [tab, setTab] = React.useState(getActiveTabState());
 		const pageRef = React.useRef<HTMLDivElement | null>(null);
+		const componentsToLoad = [
+			PluginApi.loadableComponents.Scenes,
+			PluginApi.loadableComponents.Scene,
+			PluginApi.loadableComponents.SceneDetailPanel,
+			PluginApi.loadableComponents.SceneList,
+			PluginApi.loadableComponents.SceneQueryModal,
+		];
+		const componentsLoading =
+			PluginApi.hooks.useLoadComponents(componentsToLoad);
 
+		// const { LoadingIndicator } = PluginApi.components;
+
+		// if (componentsLoading) return <LoadingIndicator />;
 		React.useEffect(() => {
 			const unsub = subscribeActiveTabState((nextTab) => setTab(nextTab));
 			return () => unsub();
@@ -203,7 +96,7 @@ import {
 					>
 						<Tab eventKey="editor" title="Editor">
 							<div className="pt-10">
-								<RenamerEditor />
+								<TestFilter />
 							</div>
 						</Tab>
 
