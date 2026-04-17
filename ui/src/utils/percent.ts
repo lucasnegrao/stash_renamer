@@ -1,19 +1,19 @@
 const numberToString = (seconds: number) => {
-  return seconds + "%";
+	return seconds + "%";
 };
 
 const stringToNumber = (v?: string) => {
-  if (!v) {
-    return 0;
-  }
+	if (!v) {
+		return 0;
+	}
 
-  const numStr = v.replace("%", "");
-  return parseInt(numStr, 10);
+	const numStr = v.replace("%", "");
+	return parseInt(numStr, 10);
 };
 
 const PercentUtils = {
-  numberToString,
-  stringToNumber,
+	numberToString,
+	stringToNumber,
 };
 
 export default PercentUtils;

@@ -1,9 +1,9 @@
 import {
-  createMandatoryNumberCriterionOption,
-  createMandatoryStringCriterionOption,
-  createStringCriterionOption,
-  createMandatoryTimestampCriterionOption,
-  createDateCriterionOption,
+	createMandatoryNumberCriterionOption,
+	createMandatoryStringCriterionOption,
+	createStringCriterionOption,
+	createMandatoryTimestampCriterionOption,
+	createDateCriterionOption,
 } from "./criteria/criterion";
 import { PerformerFavoriteCriterionOption } from "./criteria/favorite";
 import { ImageIsMissingCriterionOption } from "./criteria/is-missing";
@@ -15,8 +15,8 @@ import { ResolutionCriterionOption } from "./criteria/resolution";
 import { OrientationCriterionOption } from "./criteria/orientation";
 import { StudiosCriterionOption } from "./criteria/studios";
 import {
-  PerformerTagsCriterionOption,
-  TagsCriterionOption,
+	PerformerTagsCriterionOption,
+	TagsCriterionOption,
 } from "./criteria/tags";
 import { ListFilterOptions, MediaSortByOptions } from "./filter-options";
 import { DisplayMode } from "./types";
@@ -28,62 +28,62 @@ import { FolderCriterionOption } from "./criteria/folder";
 const defaultSortBy = "path";
 
 const sortByOptions = [
-  "filesize",
-  "file_count",
-  "date",
-  "resolution",
-  ...MediaSortByOptions,
+	"filesize",
+	"file_count",
+	"date",
+	"resolution",
+	...MediaSortByOptions,
 ]
-  .map(ListFilterOptions.createSortBy)
-  .concat([
-    {
-      messageID: "o_count",
-      value: "o_counter",
-      sfwMessageID: "o_count_sfw",
-    },
-  ]);
+	.map(ListFilterOptions.createSortBy)
+	.concat([
+		{
+			messageID: "o_count",
+			value: "o_counter",
+			sfwMessageID: "o_count_sfw",
+		},
+	]);
 const displayModeOptions = [DisplayMode.Grid, DisplayMode.Wall];
 
 export const PerformerAgeCriterionOption =
-  createMandatoryNumberCriterionOption("performer_age");
+	createMandatoryNumberCriterionOption("performer_age");
 
 const criterionOptions = [
-  createStringCriterionOption("title"),
-  createStringCriterionOption("code", "scene_code"),
-  createStringCriterionOption("details"),
-  createStringCriterionOption("photographer"),
-  createMandatoryStringCriterionOption("checksum", "media_info.md5"),
-  PhashCriterionOption,
-  PathCriterionOption,
-  FolderCriterionOption,
-  GalleriesCriterionOption,
-  OrganizedCriterionOption,
-  createMandatoryNumberCriterionOption("o_counter", "o_count", {
-    sfwMessageID: "o_count_sfw",
-  }),
-  ResolutionCriterionOption,
-  OrientationCriterionOption,
-  ImageIsMissingCriterionOption,
-  TagsCriterionOption,
-  RatingCriterionOption,
-  createMandatoryNumberCriterionOption("tag_count"),
-  PerformerTagsCriterionOption,
-  PerformersCriterionOption,
-  createMandatoryNumberCriterionOption("performer_count"),
-  PerformerAgeCriterionOption,
-  PerformerFavoriteCriterionOption,
-  // StudioTagsCriterionOption,
-  StudiosCriterionOption,
-  createStringCriterionOption("url"),
-  createDateCriterionOption("date"),
-  createMandatoryNumberCriterionOption("file_count"),
-  createMandatoryTimestampCriterionOption("created_at"),
-  createMandatoryTimestampCriterionOption("updated_at"),
-  CustomFieldsCriterionOption,
+	createStringCriterionOption("title"),
+	createStringCriterionOption("code", "scene_code"),
+	createStringCriterionOption("details"),
+	createStringCriterionOption("photographer"),
+	createMandatoryStringCriterionOption("checksum", "media_info.md5"),
+	PhashCriterionOption,
+	PathCriterionOption,
+	FolderCriterionOption,
+	GalleriesCriterionOption,
+	OrganizedCriterionOption,
+	createMandatoryNumberCriterionOption("o_counter", "o_count", {
+		sfwMessageID: "o_count_sfw",
+	}),
+	ResolutionCriterionOption,
+	OrientationCriterionOption,
+	ImageIsMissingCriterionOption,
+	TagsCriterionOption,
+	RatingCriterionOption,
+	createMandatoryNumberCriterionOption("tag_count"),
+	PerformerTagsCriterionOption,
+	PerformersCriterionOption,
+	createMandatoryNumberCriterionOption("performer_count"),
+	PerformerAgeCriterionOption,
+	PerformerFavoriteCriterionOption,
+	// StudioTagsCriterionOption,
+	StudiosCriterionOption,
+	createStringCriterionOption("url"),
+	createDateCriterionOption("date"),
+	createMandatoryNumberCriterionOption("file_count"),
+	createMandatoryTimestampCriterionOption("created_at"),
+	createMandatoryTimestampCriterionOption("updated_at"),
+	CustomFieldsCriterionOption,
 ];
 export const ImageListFilterOptions = new ListFilterOptions(
-  defaultSortBy,
-  sortByOptions,
-  displayModeOptions,
-  criterionOptions
+	defaultSortBy,
+	sortByOptions,
+	displayModeOptions,
+	criterionOptions,
 );

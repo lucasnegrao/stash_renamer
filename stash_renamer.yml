@@ -5,37 +5,30 @@ url: https://github.com/lucasnegrao/stash_renamer
 ui:
   javascript:
     - "ui/dist/bundle.js"
-settings:
-  template:
-    displayName: Filename Template
-    type: STRING
-    description: "Template for renaming files."
-  scenesPathTemplate:
-    displayName: Scenes path template
-    type: STRING
-    description: "Template for renaming scenes folders."
-  groupsPathTemplate:
-    displayName: Groups path template
-    type: STRING
-    description: "Template for renaming scenes folders."
-  useSamePathForGroups:
-    displayName: Use scenes path template for groups
-    type: BOOLEAN
-    description: "If true, the scenes path template will be used for renaming groups folders instead of the groups path template."
 exec:
   - python3
-  - "{pluginDir}/stash_renamer_plugin.py"
+  - "{pluginDir}/stash_renamer.py"
 interface: raw
 tasks:
   - name: Rename Scenes (Dry Run)
     description: Preview what files would be renamed without making changes
     defaultArgs:
-      mode: dry_run
+      mode: rename
       dry_run: "true"
       debugMode: "false"
   - name: Rename Scenes  
     description: Rename scene files based on configured template
     defaultArgs:
       mode: rename
+      dry_run: "false"
+      debugMode: "false"
+hooks:
+  - name: Rename Scene On Update
+    description: Run configured rename templates after scene updates
+    triggeredBy:
+      - Scene.Update.Post
+    defaultArgs:
+      mode: run_hook
+      hook_type: Scene.Update.Post
       dry_run: "false"
       debugMode: "false"

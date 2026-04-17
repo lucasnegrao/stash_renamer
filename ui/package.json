@@ -1,40 +1,45 @@
 {
-  "name": "renamer-ui-component",
-  "version": "1.0.0",
-  "main": "index.js",
-  "author": "JucaLango",
-  "license": "AGPL-3.0",
-  "scripts": {
-    "tsc": "tsc",
-    "pau": "npx webpack ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/",
-    "compile:ts": "npm run tsc",
-    "compile": "npm run compile:ts && pau",
-    "build": "npm run pau"
-  },
-  "devDependencies": {
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "cpx": "^1.5.0",
-    "sass": "^1.99.0",
-    "ts-loader": "^9.5.7",
-    "typescript": "^6.0.2",
-    "webpack": "^5.106.1",
-    "webpack-cli": "^7.0.2"
-  },
-  "dependencies": {
-    "@apollo/client": "3.8.10",
-    "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "@fortawesome/react-fontawesome": "^3.3.0",
-    "@graphql-codegen/time": "^6.0.0",
-    "@graphql-codegen/typescript-react-apollo": "^4.4.1",
-    "classnames": "^2.5.1",
-    "graphql-codegen-typescript-react-apollo-template": "^0.18.2",
-    "i18n-iso-countries": "^7.14.0",
-    "utilities": "link:@apollo/client/utilities"
-  },
-  "pnpm": {
-    "overrides": {
-      "graphql": "^16.13.2"
-    }
-  }
+	"name": "renamer-ui-component",
+	"version": "1.0.0",
+	"main": "index.js",
+	"author": "JucaLango",
+	"license": "AGPL-3.0",
+	"scripts": {
+		"tsc": "tsc",
+		"pau": "npm rum biome:format ; npx webpack ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/",
+		"compile:ts": "npm run tsc",
+		"compile": "npm run compile:ts && pau",
+		"build": "npm run pau",
+		"biome:check": "biome check",
+		"biome:fix": "biome check --write",
+		"biome:unsafe": "biome check --write --unsafe",
+		"biome:format": "biome format --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.11",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
+		"cpx": "^1.5.0",
+		"sass": "^1.99.0",
+		"ts-loader": "^9.5.7",
+		"typescript": "^6.0.2",
+		"webpack": "^5.106.1",
+		"webpack-cli": "^7.0.2"
+	},
+	"dependencies": {
+		"@apollo/client": "3.8.10",
+		"@fortawesome/free-solid-svg-icons": "^7.2.0",
+		"@fortawesome/react-fontawesome": "^3.3.0",
+		"@graphql-codegen/time": "^6.0.0",
+		"@graphql-codegen/typescript-react-apollo": "^4.4.1",
+		"classnames": "^2.5.1",
+		"graphql-codegen-typescript-react-apollo-template": "^0.18.2",
+		"i18n-iso-countries": "^7.14.0",
+		"utilities": "link:@apollo/client/utilities"
+	},
+	"pnpm": {
+		"overrides": {
+			"graphql": "^16.13.2"
+		}
+	}
 }

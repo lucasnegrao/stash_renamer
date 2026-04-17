@@ -2,12 +2,10 @@ import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
-
-from graphql_queries import FIND_SCENE_FILES_BY_ID_QUERY, MOVE_FILES_MUTATION
+from typing import Any, Dict, List, Optional, Set
 
 
-class OperationLogStore:
+class DBService:
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._conn: Optional[sqlite3.Connection] = None
@@ -66,12 +64,37 @@ class OperationLogStore:
                 name TEXT NOT NULL,
                 filename_template TEXT NOT NULL,
                 path_template TEXT,
+                filter_json TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hook_configs (
+                hook_type TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hook_template_bindings (
+                id TEXT PRIMARY KEY,
+                hook_type TEXT NOT NULL,
+                template_id TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )
             """
         )
         try:
             conn.execute("ALTER TABLE file_operations ADD COLUMN batch_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE rename_templates ADD COLUMN filter_json TEXT")
         except sqlite3.OperationalError:
             pass
         conn.execute(
@@ -88,18 +111,94 @@ class OperationLogStore:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_rename_templates_created ON rename_templates(created_at)"
         )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_hook_template_bindings_unique ON hook_template_bindings(hook_type, template_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hook_template_bindings_order ON hook_template_bindings(hook_type, sort_order)"
+        )
         conn.commit()
 
-    def start_batch(self, mode: str) -> str:
-        batch_id = str(uuid.uuid4())
+    def start_batch(
+        self,
+        mode: str,
+        reuse_latest_for_mode: bool = False,
+        fixed_batch_id: Optional[str] = None,
+    ) -> str:
+        normalized_mode = str(mode or "rename")
         ts = datetime.now(timezone.utc).isoformat()
         conn = self._get_conn()
+
+        if fixed_batch_id:
+            batch_id = str(fixed_batch_id).strip()
+            if not batch_id:
+                raise ValueError("fixed_batch_id cannot be empty")
+            existing = conn.execute(
+                """
+                SELECT id
+                FROM operation_batches
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (batch_id,),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """
+                    UPDATE operation_batches
+                    SET mode = ?, started_at = ?, completed_at = NULL, success = NULL, error = NULL
+                    WHERE id = ?
+                    """,
+                    (normalized_mode, ts, batch_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO operation_batches (id, mode, started_at, completed_at, success, error)
+                    VALUES (?, ?, ?, NULL, NULL, NULL)
+                    """,
+                    (batch_id, normalized_mode, ts),
+                )
+            self._writes_since_commit += 1
+            if self._writes_since_commit >= self._commit_every:
+                conn.commit()
+                self._writes_since_commit = 0
+            return batch_id
+
+        if reuse_latest_for_mode:
+            existing = conn.execute(
+                """
+                SELECT id
+                FROM operation_batches
+                WHERE mode = ?
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                """,
+                (normalized_mode,),
+            ).fetchone()
+            if existing:
+                batch_id = str(existing["id"])
+                conn.execute(
+                    """
+                    UPDATE operation_batches
+                    SET started_at = ?, completed_at = NULL, success = NULL, error = NULL
+                    WHERE id = ?
+                    """,
+                    (ts, batch_id),
+                )
+                self._writes_since_commit += 1
+                if self._writes_since_commit >= self._commit_every:
+                    conn.commit()
+                    self._writes_since_commit = 0
+                return batch_id
+
+        batch_id = str(uuid.uuid4())
         conn.execute(
             """
             INSERT INTO operation_batches (id, mode, started_at, completed_at, success, error)
             VALUES (?, ?, ?, NULL, NULL, NULL)
             """,
-            (batch_id, str(mode or "rename"), ts),
+            (batch_id, normalized_mode, ts),
         )
         self._writes_since_commit += 1
         if self._writes_since_commit >= self._commit_every:
@@ -330,27 +429,54 @@ class OperationLogStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def clear_history(self) -> Dict[str, Any]:
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+
+        operations_row = conn.execute("SELECT COUNT(1) AS count FROM file_operations").fetchone()
+        batches_row = conn.execute("SELECT COUNT(1) AS count FROM operation_batches").fetchone()
+        deleted_operations = int(operations_row["count"]) if operations_row else 0
+        deleted_batches = int(batches_row["count"]) if batches_row else 0
+
+        conn.execute("DELETE FROM file_operations")
+        conn.execute("DELETE FROM operation_batches")
+        conn.commit()
+        self._writes_since_commit = 0
+
+        return {
+            "deleted_operations": deleted_operations,
+            "deleted_batches": deleted_batches,
+        }
+
     def flush(self) -> None:
         if self._conn is None:
             return
         self._conn.commit()
         self._writes_since_commit = 0
 
-    def save_template(self, name: str, filename_template: str, path_template: Optional[str]) -> Dict[str, Any]:
+    def save_template(
+        self,
+        name: str,
+        filename_template: str,
+        path_template: Optional[str],
+        filter_json: Optional[str] = None,
+    ) -> Dict[str, Any]:
         template_id = str(uuid.uuid4())
         ts = datetime.now(timezone.utc).isoformat()
         conn = self._get_conn()
         conn.execute(
             """
             INSERT INTO rename_templates (
-                id, name, filename_template, path_template, created_at
-            ) VALUES (?, ?, ?, ?, ?)
+                id, name, filename_template, path_template, filter_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 template_id,
                 str(name or "").strip(),
                 str(filename_template or ""),
                 str(path_template or ""),
+                str(filter_json or ""),
                 ts,
             ),
         )
@@ -363,6 +489,7 @@ class OperationLogStore:
             "name": str(name or "").strip(),
             "filename_template": str(filename_template or ""),
             "path_template": str(path_template or ""),
+            "filter_json": str(filter_json or ""),
             "created_at": ts,
         }
 
@@ -372,18 +499,20 @@ class OperationLogStore:
         name: str,
         filename_template: str,
         path_template: Optional[str],
+        filter_json: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         conn = self._get_conn()
         conn.execute(
             """
             UPDATE rename_templates
-            SET name = ?, filename_template = ?, path_template = ?
+            SET name = ?, filename_template = ?, path_template = ?, filter_json = ?
             WHERE id = ?
             """,
             (
                 str(name or "").strip(),
                 str(filename_template or ""),
                 str(path_template or ""),
+                str(filter_json or ""),
                 str(template_id or ""),
             ),
         )
@@ -393,7 +522,7 @@ class OperationLogStore:
             self._writes_since_commit = 0
         row = conn.execute(
             """
-            SELECT id, name, filename_template, path_template, created_at
+            SELECT id, name, filename_template, path_template, filter_json, created_at
             FROM rename_templates
             WHERE id = ?
             """,
@@ -403,6 +532,10 @@ class OperationLogStore:
 
     def delete_template(self, template_id: str) -> bool:
         conn = self._get_conn()
+        conn.execute(
+            "DELETE FROM hook_template_bindings WHERE template_id = ?",
+            (str(template_id or ""),),
+        )
         cur = conn.execute(
             "DELETE FROM rename_templates WHERE id = ?",
             (str(template_id or ""),),
@@ -419,12 +552,112 @@ class OperationLogStore:
         self._writes_since_commit = 0
         rows = conn.execute(
             """
-            SELECT id, name, filename_template, path_template, created_at
+            SELECT id, name, filename_template, path_template, filter_json, created_at
             FROM rename_templates
             ORDER BY created_at DESC, id DESC
             """
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_templates_by_ids(self, template_ids: List[str]) -> List[Dict[str, Any]]:
+        ids = [str(x or "").strip() for x in (template_ids or []) if str(x or "").strip()]
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        rows = conn.execute(
+            f"""
+            SELECT id, name, filename_template, path_template, filter_json, created_at
+            FROM rename_templates
+            WHERE id IN ({placeholders})
+            """,
+            ids,
+        ).fetchall()
+        by_id = {str(r["id"]): dict(r) for r in rows}
+        return [by_id[id_value] for id_value in ids if id_value in by_id]
+
+    def get_hook_settings(self, hook_type: str) -> Dict[str, Any]:
+        normalized_hook_type = str(hook_type or "").strip() or "Scene.Update.Post"
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        row = conn.execute(
+            """
+            SELECT hook_type, enabled, updated_at
+            FROM hook_configs
+            WHERE hook_type = ?
+            """,
+            (normalized_hook_type,),
+        ).fetchone()
+        template_rows = conn.execute(
+            """
+            SELECT template_id
+            FROM hook_template_bindings
+            WHERE hook_type = ?
+            ORDER BY sort_order ASC, created_at ASC, id ASC
+            """,
+            (normalized_hook_type,),
+        ).fetchall()
+        return {
+            "hook_type": normalized_hook_type,
+            "enabled": bool(row["enabled"]) if row else False,
+            "updated_at": str(row["updated_at"]) if row and row["updated_at"] else None,
+            "template_ids": [str(r["template_id"]) for r in template_rows],
+        }
+
+    def save_hook_settings(
+        self,
+        hook_type: str,
+        enabled: bool,
+        template_ids: List[str],
+    ) -> Dict[str, Any]:
+        normalized_hook_type = str(hook_type or "").strip() or "Scene.Update.Post"
+        normalized_ids: List[str] = []
+        seen: Set[str] = set()
+        for template_id in (template_ids or []):
+            value = str(template_id or "").strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            normalized_ids.append(value)
+
+        ts = datetime.now(timezone.utc).isoformat()
+        conn = self._get_conn()
+        conn.execute(
+            """
+            INSERT INTO hook_configs (hook_type, enabled, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(hook_type) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at
+            """,
+            (normalized_hook_type, 1 if enabled else 0, ts),
+        )
+        conn.execute(
+            "DELETE FROM hook_template_bindings WHERE hook_type = ?",
+            (normalized_hook_type,),
+        )
+        for index, template_id in enumerate(normalized_ids):
+            conn.execute(
+                """
+                INSERT INTO hook_template_bindings (id, hook_type, template_id, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    normalized_hook_type,
+                    template_id,
+                    int(index),
+                    ts,
+                ),
+            )
+
+        self._writes_since_commit += 1
+        if self._writes_since_commit >= self._commit_every:
+            conn.commit()
+            self._writes_since_commit = 0
+
+        return self.get_hook_settings(normalized_hook_type)
 
     def close(self) -> None:
         if self._conn is None:
@@ -435,206 +668,3 @@ class OperationLogStore:
             self._conn.close()
             self._conn = None
             self._writes_since_commit = 0
-
-
-class FileMover:
-    def __init__(self, gql_call: Callable[[str, Optional[dict]], dict], db_path: str, log_print: Callable[[str], None]):
-        self._gql_call = gql_call
-        self._store = OperationLogStore(db_path)
-        self._log_print = log_print
-
-    def move_files(self, file_ids: List[str], destination_folder: str, destination_basename: Optional[str] = None) -> bool:
-        variables: Dict[str, Any] = {
-            "input": {
-                "ids": file_ids,
-                "destination_folder": destination_folder,
-            }
-        }
-        if destination_basename:
-            variables["input"]["destination_basename"] = destination_basename
-        data = self._gql_call(MOVE_FILES_MUTATION, variables)
-        return bool((data or {}).get("moveFiles"))
-
-    def log_rename(self, scene_id: str, old_path: str, new_path: str) -> str:
-        return self._store.log_operation(
-            operation_type="rename",
-            scene_id=scene_id,
-            old_path=old_path,
-            new_path=new_path,
-            success=True,
-        )
-
-    def start_batch(self, mode: str) -> str:
-        return self._store.start_batch(mode)
-
-    def complete_batch(self, batch_id: str, success: bool, error: Optional[str] = None) -> None:
-        self._store.complete_batch(batch_id=batch_id, success=success, error=error)
-
-    def log_rename_result(
-        self,
-        scene_id: str,
-        old_path: str,
-        new_path: str,
-        batch_id: Optional[str],
-        success: bool,
-        error: Optional[str] = None,
-    ) -> str:
-        return self._store.log_operation(
-            operation_type="rename",
-            batch_id=batch_id,
-            scene_id=scene_id,
-            old_path=old_path,
-            new_path=new_path,
-            success=success,
-            error=error,
-        )
-
-    def log_dry_run_result(
-        self,
-        scene_id: str,
-        old_path: str,
-        new_path: str,
-        batch_id: Optional[str],
-        success: bool,
-        error: Optional[str] = None,
-    ) -> str:
-        return self._store.log_operation(
-            operation_type="dry_run",
-            batch_id=batch_id,
-            scene_id=scene_id,
-            old_path=old_path,
-            new_path=new_path,
-            success=success,
-            error=error,
-        )
-
-    def undo_rename(self, rename_operation_id: str) -> Dict[str, Any]:
-        op = self._store.get_operation(rename_operation_id)
-        if not op:
-            raise ValueError(f"Rename operation not found: {rename_operation_id}")
-        if op.get("operation_type") != "rename":
-            raise ValueError(f"Operation {rename_operation_id} is not a rename operation")
-        if not op.get("success"):
-            raise ValueError(f"Operation {rename_operation_id} was not successful, cannot undo")
-
-        scene_id = str(op.get("scene_id") or "")
-        old_path = str(op.get("old_path") or "")
-        new_path = str(op.get("new_path") or "")
-        if not scene_id or not old_path or not new_path:
-            raise ValueError(f"Operation {rename_operation_id} has incomplete path/scene data")
-
-        data = self._gql_call(FIND_SCENE_FILES_BY_ID_QUERY, {"id": scene_id})
-        scene = (data or {}).get("findScene") or {}
-        files = scene.get("files") or []
-
-        file_id = None
-        current_path = None
-        for f in files:
-            p = (f or {}).get("path")
-            if p == new_path:
-                file_id = (f or {}).get("id")
-                current_path = p
-                break
-
-        if not file_id:
-            raise ValueError(
-                f"Scene {scene_id} no longer has file at expected path for undo: {new_path}"
-            )
-
-        dest_folder = os.path.dirname(old_path)
-        dest_basename = os.path.basename(old_path)
-        success = self.move_files([file_id], dest_folder, dest_basename)
-        if not success:
-            raise RuntimeError("GraphQL moveFiles returned false during undo")
-
-        undo_id = self._store.log_operation(
-            operation_type="undo",
-            batch_id=None,
-            related_operation_id=rename_operation_id,
-            scene_id=scene_id,
-            old_path=current_path or new_path,
-            new_path=old_path,
-            success=True,
-        )
-
-        self._log_print(
-            f"[GQL] Undo completed for rename operation {rename_operation_id} (undo id: {undo_id})"
-        )
-        return {
-            "undo_operation_id": undo_id,
-            "original_operation_id": rename_operation_id,
-            "scene_id": scene_id,
-            "old_path": current_path or new_path,
-            "new_path": old_path,
-            "old_name": os.path.basename(current_path or new_path),
-            "new_name": os.path.basename(old_path),
-        }
-
-    def list_rename_operations(self) -> List[Dict[str, Any]]:
-        return self._store.list_rename_operations()
-
-    def list_operation_batches(self) -> List[Dict[str, Any]]:
-        return self._store.list_operation_batches()
-
-    def list_batch_operations(self, batch_id: str) -> List[Dict[str, Any]]:
-        return self._store.list_batch_operations(batch_id=batch_id)
-
-    def save_template(self, name: str, filename_template: str, path_template: Optional[str]) -> Dict[str, Any]:
-        return self._store.save_template(
-            name=name,
-            filename_template=filename_template,
-            path_template=path_template,
-        )
-
-    def update_template(
-        self,
-        template_id: str,
-        name: str,
-        filename_template: str,
-        path_template: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
-        return self._store.update_template(
-            template_id=template_id,
-            name=name,
-            filename_template=filename_template,
-            path_template=path_template,
-        )
-
-    def delete_template(self, template_id: str) -> bool:
-        return self._store.delete_template(template_id=template_id)
-
-    def list_templates(self) -> List[Dict[str, Any]]:
-        return self._store.list_templates()
-
-    def undo_batch_operation(self, batch_id: str) -> Dict[str, Any]:
-        candidates = self._store.list_batch_undo_candidates(batch_id=batch_id)
-        if not candidates:
-            return {
-                "batch_id": batch_id,
-                "total": 0,
-                "success": 0,
-                "errors": [],
-            }
-        success = 0
-        errors: List[str] = []
-        for row in candidates:
-            op_id = str(row.get("id") or "")
-            if not op_id:
-                continue
-            try:
-                self.undo_rename(op_id)
-                success += 1
-            except Exception as e:
-                errors.append(f"{op_id}: {e}")
-        return {
-            "batch_id": batch_id,
-            "total": len(candidates),
-            "success": success,
-            "errors": errors,
-        }
-
-    def flush(self) -> None:
-        self._store.flush()
-
-    def close(self) -> None:
-        self._store.close()

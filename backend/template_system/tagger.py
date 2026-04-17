@@ -1,7 +1,7 @@
 import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from graphql_queries import INTROSPECTION_TYPE_QUERY
+from backend.services.graphql_queries import INTROSPECTION_TYPE_QUERY
 
 
 class GraphQLTagger:
@@ -229,3 +229,194 @@ class GraphQLTagger:
                 continue
             break
         return current
+
+    def _unwrap_gql_type(self, type_info: Optional[dict]) -> Dict[str, Any]:
+        cur = type_info or {}
+        is_list = False
+        guard = 0
+        while isinstance(cur, dict) and guard < 24:
+            guard += 1
+            kind = cur.get("kind")
+            if kind == "NON_NULL":
+                cur = cur.get("ofType") or {}
+                continue
+            if kind == "LIST":
+                is_list = True
+                cur = cur.get("ofType") or {}
+                continue
+            break
+        kind = (cur or {}).get("kind")
+        name = (cur or {}).get("name")
+        return {
+            "kind": kind,
+            "name": name,
+            "is_list": is_list,
+            "is_object_like": kind in ("OBJECT", "INTERFACE", "UNION"),
+        }
+
+    def _introspect_type_fields(self, type_name: str) -> List[dict]:
+        try:
+            data = self._gql_call(INTROSPECTION_TYPE_QUERY, {"typeName": type_name})
+            type_info = (data or {}).get("__type") or {}
+            fields = type_info.get("fields") or []
+            return [f for f in fields if isinstance(f, dict) and f.get("name")]
+        except Exception:
+            return []
+
+    def _build_scene_selector_node(
+        self,
+        field_name: str,
+        field_meta: Dict[str, Any],
+        prefix: str,
+        nested_type_cache: Dict[str, List[dict]],
+        visited_types: List[str],
+        depth: int,
+        max_depth: int = 3,
+    ) -> Dict[str, Any]:
+        node: Dict[str, Any] = {
+            "name": field_name,
+            "token": prefix,
+            "kind": field_meta.get("kind"),
+            "is_list": bool(field_meta.get("is_list")),
+            "children": [],
+        }
+
+        # For list fields (including scalar lists like [String]),
+        # expose an explicit index token so UI doesn't treat them as single values only.
+        if node["is_list"]:
+            node["children"].append(
+                {
+                    "name": "[0]",
+                    "token": f"{prefix}[0]",
+                    "kind": field_meta.get("kind"),
+                    "is_list": False,
+                    "children": [],
+                }
+            )
+
+        if depth >= max_depth:
+            return node
+
+        nested_type_name = str(field_meta.get("name") or "")
+        is_object_like = bool(field_meta.get("is_object_like"))
+        if not (is_object_like and nested_type_name):
+            return node
+        if nested_type_name in visited_types:
+            return node
+
+        if nested_type_name not in nested_type_cache:
+            nested_type_cache[nested_type_name] = self._introspect_type_fields(
+                nested_type_name
+            )
+
+        next_visited = [*visited_types, nested_type_name]
+        for sub in nested_type_cache[nested_type_name]:
+            sub_name = str(sub.get("name") or "")
+            if not sub_name:
+                continue
+            sub_meta = self._unwrap_gql_type(sub.get("type"))
+            token = (
+                f"{prefix}[0].{sub_name}"
+                if node["is_list"]
+                else f"{prefix}.{sub_name}"
+            )
+            child = self._build_scene_selector_node(
+                sub_name,
+                sub_meta,
+                token,
+                nested_type_cache,
+                next_visited,
+                depth + 1,
+                max_depth=max_depth,
+            )
+            node["children"].append(child)
+
+        return node
+
+    def build_selectors_catalog(self) -> Dict[str, Any]:
+        roots: List[Dict[str, Any]] = []
+        fields_by_root: Dict[str, List[str]] = {}
+        scene_tree: List[Dict[str, Any]] = []
+
+        if self.is_ready():
+            for root in self.available_roots():
+                root_fields = self.available_fields(root)
+                fields_by_root[root] = root_fields
+                roots.append(
+                    {
+                        "root": root,
+                        "token": f"${root}",
+                        "fields": root_fields,
+                        "examples": [
+                            f"${root}.{root_fields[0]}" if root_fields else f"${root}.id",
+                            f"${root}[0].{root_fields[0]}"
+                            if root_fields
+                            else f"${root}[0].id",
+                        ],
+                    }
+                )
+
+            scene_fields = self._introspect_type_fields("Scene")
+            nested_type_cache: Dict[str, List[dict]] = {}
+            seen_scene_tokens = set()
+
+            for field in scene_fields:
+                field_name = str(field.get("name") or "")
+                if not field_name:
+                    continue
+                type_meta = self._unwrap_gql_type(field.get("type"))
+                node = self._build_scene_selector_node(
+                    field_name=field_name,
+                    field_meta=type_meta,
+                    prefix=f"$scene.{field_name}",
+                    nested_type_cache=nested_type_cache,
+                    visited_types=["Scene"],
+                    depth=0,
+                )
+                scene_tree.append(node)
+                seen_scene_tokens.add(node.get("token"))
+
+            for root_field in fields_by_root.get("scene", []):
+                token = f"$scene.{root_field}"
+                if token in seen_scene_tokens:
+                    continue
+                scene_tree.append(
+                    {
+                        "name": root_field,
+                        "token": token,
+                        "kind": None,
+                        "is_list": False,
+                        "children": [],
+                    }
+                )
+                seen_scene_tokens.add(token)
+
+            scene_tree.sort(key=lambda n: str(n.get("token") or ""))
+        else:
+            for root in ["scene", "performer", "group"]:
+                roots.append(
+                    {
+                        "root": root,
+                        "token": f"${root}",
+                        "fields": [],
+                        "examples": [f"${root}.id", f"${root}[0].id"],
+                    }
+                )
+
+        return {
+            "roots": roots,
+            "fields_by_root": fields_by_root,
+            "scene_tree": scene_tree,
+            "virtual_selectors": [
+                {
+                    "selector": "$scene.year",
+                    "description": "Derived from $scene.date (first 4 digits)",
+                }
+            ],
+            "syntax": {
+                "dot": "$scene.title",
+                "index": "$performer[0].name",
+                "nested": "$scene.studio.name",
+                "conditional": "{ $scene.date } - $scene.title",
+            },
+        }
