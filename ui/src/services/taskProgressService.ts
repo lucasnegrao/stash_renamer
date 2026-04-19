@@ -38,6 +38,7 @@ export function trackTaskJob(
 	let stopSocket: (() => void) | null = null;
 	let pollTimer: number | null = null;
 	let resolveDone!: (value: ITaskFinalEvent) => void;
+	let maxProgress = 0;
 
 	const donePromise = new Promise<ITaskFinalEvent>((resolve) => {
 		resolveDone = resolve;
@@ -58,8 +59,15 @@ export function trackTaskJob(
 	};
 
 	const emit = (source: ITaskProgressEvent["source"], job: ITaskJob) => {
-		const status = String(job?.status || "RUNNING");
-		const progress = toPercent(job?.progress);
+		const status = String(job?.status || "Running...");
+		let progress = toPercent(job?.progress);
+
+		if (progress < maxProgress && !isTerminal(status)) {
+			progress = maxProgress;
+		} else {
+			maxProgress = Math.max(maxProgress, progress);
+		}
+
 		const error = job?.error || null;
 		console.log(`[Scene Renamer][TaskProgress][${source}]`, {
 			jobId,
@@ -115,7 +123,7 @@ export function trackTaskJob(
 	})();
 
 	return {
-		stop: () => finish("CANCELLED", "tracking stopped"),
+		stop: () => finish("Cancelled", "tracking stopped"),
 		done: donePromise,
 	};
 }

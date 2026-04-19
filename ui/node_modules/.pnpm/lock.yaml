@@ -17,6 +17,9 @@ importers:
       '@codemirror/autocomplete':
         specifier: ^6.20.1
         version: 6.20.1
+      '@codemirror/commands':
+        specifier: ^6.10.3
+        version: 6.10.3
       '@codemirror/lang-liquid':
         specifier: ^6.3.2
         version: 6.3.2
@@ -38,6 +41,9 @@ importers:
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
+      '@lezer/highlight':
+        specifier: ^1.2.3
+        version: 1.2.3
       '@types/mousetrap':
         specifier: ^1.6.15
         version: 1.6.15

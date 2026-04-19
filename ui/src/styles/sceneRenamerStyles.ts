@@ -52,6 +52,31 @@ export function ensureSceneRenamerStyles(): void {
       padding: 0.4rem 1rem !important;
 
     }
+      .stash-renamer-table {
+      border: unset;
+      }
+            .stash-renamer-table th {
+      align-content: center;
+      }
+      .stash-renamer-table .table-cell-content li,
+            .stash-renamer-table .table-cell-content ul{
+            margin: 0;
+
+      display:block;
+      padding: 0;
+      }
+    .stash-renamer-table td {
+      align-content: center;
+    }
+    .stash-renamer-list-path-badge {
+      font-size: 80%;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      text-align: left;
+      white-space: unset;
+      word-wrap: anywhere;
+    }
 
     .stash-renamer-page .pagination-footer .pagination.btn-group {
     box-shadow: 0 8px 10px 2px rgba(0,0,0,.3);

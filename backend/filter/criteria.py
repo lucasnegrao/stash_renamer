@@ -188,7 +188,9 @@ def criterion_to_scene_condition(criterion: dict) -> Optional[dict]:
     return None
 
 
-def combine_scene_filters(left: Optional[dict], right: Optional[dict]) -> Optional[dict]:
+def combine_scene_filters(
+    left: Optional[dict], right: Optional[dict]
+) -> Optional[dict]:
     if left is None:
         return right
     if right is None:
@@ -198,21 +200,27 @@ def combine_scene_filters(left: Optional[dict], right: Optional[dict]) -> Option
     return out
 
 
-def build_scene_filter(scene_filter: Optional[dict], criteria_opt: Optional[List[Any]], debug_log=None) -> Optional[dict]:
+def build_scene_filter(
+    scene_filter: Optional[dict], criteria_opt: Optional[List[Any]], logger=None
+) -> Optional[dict]:
     if criteria_opt is None:
         return scene_filter
     criteria = normalize_criteria(criteria_opt)
-    if debug_log:
-        debug_log(f"[DEBUG] Received raw criteria={len(criteria_opt)} normalized={len(criteria)}")
-    if criteria_opt and not criteria and debug_log:
-        debug_log("[Warn] Criteria payload was provided but no valid criteria entries were normalized")
+    if logger:
+        logger.debug(
+            f"Received raw criteria={len(criteria_opt)} normalized={len(criteria)}"
+        )
+    if criteria_opt and not criteria and logger:
+        logger.warning(
+            "Criteria payload was provided but no valid criteria entries were normalized"
+        )
 
     criteria_scene_filter: Optional[dict] = None
     for entry in criteria:
         cond = criterion_to_scene_condition(entry)
-        if cond is None and debug_log:
-            debug_log(
-                f"[Warn] Unsupported or invalid criterion dropped: type={entry.get('type')} modifier={entry.get('modifier')}"
+        if cond is None and logger:
+            logger.warning(
+                f"Unsupported or invalid criterion dropped: type={entry.get('type')} modifier={entry.get('modifier')}"
             )
         criteria_scene_filter = combine_scene_filters(criteria_scene_filter, cond)
 
@@ -221,6 +229,6 @@ def build_scene_filter(scene_filter: Optional[dict], criteria_opt: Optional[List
             raise ValueError("'scene_filter' must be an object/dict")
         scene_filter = combine_scene_filters(scene_filter, criteria_scene_filter)
 
-    if debug_log:
-        debug_log("[DEBUG] Criteria normalized and attached to scene_filter")
+    if logger:
+        logger.debug("Criteria normalized and attached to scene_filter")
     return scene_filter

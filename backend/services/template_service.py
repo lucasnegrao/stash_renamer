@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from backend.services.file_mover import FileMover
 
 
-class TemplateStoreService:
+class TemplateService:
     def __init__(self, mover: FileMover):
         self._mover = mover
 

@@ -1,55 +1,14 @@
-import json
-from typing import Any, Dict, List, Optional
-
-from backend.filter.criteria import build_scene_filter, combine_scene_filters
-from backend.filter.scenes import (
-    exclude_scenes_by_ids,
-    fetch_scenes_by_filters,
-)
+from typing import Any, Dict, Optional
 from backend.renamer.engine import RenamerEngine
 from backend.services.file_mover import FileMover
 from backend.services.graphql import GraphQLConfig, GraphQLService
 from backend.services.logger import LoggerService
-from backend.stores.template_store import TemplateStoreService
-from backend.template_system.tagger import GraphQLTagger
+from backend.services.template_service import TemplateService
+from backend.services.GraphQLTagger import GraphQLTagger
 from backend.services.undo_service import UndoService
-
-HOOK_BATCH_ID = "stash_renamer_hook_batch"
-
-
-def _ensure_list_of_strings(value: Any, field_name: str) -> List[str]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError(f"'{field_name}' must be a list")
-    return [str(x).strip() for x in value if str(x).strip()]
-
-
-def _ensure_list_of_dicts(value: Any, field_name: str) -> List[dict]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError(f"'{field_name}' must be a list")
-    out: List[dict] = []
-    for item in value:
-        if not isinstance(item, dict):
-            raise ValueError(f"'{field_name}' entries must be objects")
-        out.append(item)
-    return out
-
-
-def _to_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-
-def _criteria_from_template_payload(payload: Any) -> List[dict]:
-    if payload is None:
-        return []
-    return _ensure_list_of_dicts(payload, "template.criteria")
+from backend.handlers.context import AppContext
+from backend.handlers.router import ROUTES
+from backend.handlers.utils import to_bool
 
 
 def run(options: dict, collect_operations: bool = False):
@@ -57,17 +16,17 @@ def run(options: dict, collect_operations: bool = False):
     cookie_name = options.get("cookie_name")
     cookie_value = options.get("cookie_value")
     if not server_url or not cookie_name or not cookie_value:
-        raise ValueError("server_url, cookie_name, and cookie_value are required in options")
+        raise ValueError(
+            "server_url, cookie_name, and cookie_value are required in options"
+        )
 
     mode = str(options.get("mode") or "").strip().lower()
     if not mode:
         raise ValueError("mode is required")
-    if mode == "dry_run":
-        raise ValueError("mode='dry_run' is not supported; use mode='rename' with dry_run=true")
 
-    using_log = _to_bool(options.get("using_log", True))
-    dry_run = _to_bool(options.get("dry_run", False))
-    debug_mode = _to_bool(options.get("debug_mode", True))
+    using_log = to_bool(options.get("using_log", True))
+    dry_run = to_bool(options.get("dry_run", False))
+    debug_mode = to_bool(options.get("debug_mode", True))
 
     gql = GraphQLService(
         GraphQLConfig(
@@ -81,7 +40,8 @@ def run(options: dict, collect_operations: bool = False):
     mover = FileMover(
         gql_call=gql.call,
         db_path=str(options.get("operations_db_path") or "rename_operations.db"),
-        log_print=logger.log if using_log else (lambda _msg: None),
+        log_print=logger.debug if using_log else (lambda _msg: None),
+        emit_progress=logger.emit_progress,
     )
 
     tagger = GraphQLTagger(
@@ -90,12 +50,13 @@ def run(options: dict, collect_operations: bool = False):
     )
     try:
         tagger.introspect()
-        if debug_mode:
-            logger.log(f"[DEBUG] Tagger ready with roots: {', '.join(tagger.available_roots())}")
+        logger.debug(f"Tagger ready with roots: {', '.join(tagger.available_roots())}")
     except Exception as e:
-        logger.log(f"[Warn] GraphQL introspection failed, template tags may be incomplete: {e}")
+        logger.warning(
+            f"GraphQL introspection failed, template tags may be incomplete: {e}"
+        )
 
-    templates = TemplateStoreService(mover)
+    templates = TemplateService(mover)
     undo = UndoService(mover)
     engine = RenamerEngine(
         gql_call=gql.call,
@@ -104,364 +65,31 @@ def run(options: dict, collect_operations: bool = False):
         logger=logger,
         dry_run=dry_run,
         debug_mode=debug_mode,
+        options=options,
     )
+
+    ctx = AppContext(
+        gql=gql,
+        logger=logger,
+        mover=mover,
+        tagger=tagger,
+        templates=templates,
+        undo=undo,
+        engine=engine,
+        collect_operations=collect_operations,
+        debug_mode=debug_mode,
+        dry_run=dry_run,
+    )
+
+    handler = ROUTES.get(mode)
+    if not handler:
+        mover.flush()
+        mover.close()
+        raise ValueError(f"Unsupported mode: {mode}")
 
     try:
         logger.emit_progress(0.0)
-
-        if mode == "undo":
-            undo_operation_id = str(options.get("undo_operation_id") or "").strip()
-            if not undo_operation_id:
-                raise ValueError("undo_operation_id is required for mode=undo")
-            undo_result = undo.undo_rename(undo_operation_id)
-            return [undo_result] if collect_operations else None
-
-        if mode == "list_operations":
-            ops = undo.list_operations()
-            return ops if collect_operations else None
-
-        if mode == "list_operation_batches":
-            return {"batches": undo.list_batches()}
-
-        if mode == "list_batch_operations":
-            batch_id = str(options.get("batch_id") or "")
-            if not batch_id:
-                raise ValueError("batch_id is required for list_batch_operations")
-            return {"operations": undo.list_batch_operations(batch_id=batch_id)}
-
-        if mode == "undo_batch_operation":
-            batch_id = str(options.get("batch_id") or "")
-            if not batch_id:
-                raise ValueError("batch_id is required for undo_batch_operation")
-            return undo.undo_batch(batch_id=batch_id)
-
-        if mode == "clear_history":
-            return undo.clear_history()
-
-        if mode == "list_selectors":
-            return tagger.build_selectors_catalog()
-
-        if mode == "list_templates":
-            return {"templates": templates.list_templates()}
-
-        if mode == "save_template":
-            template_name = str(options.get("template_name") or "").strip()
-            filename_tpl = str(options.get("filename_template") or "").strip()
-            path_tpl = str(options.get("path_template") or "")
-            criteria_json = ""
-            criteria_payload = _criteria_from_template_payload(options.get("criteria"))
-            try:
-                criteria_json = json.dumps(criteria_payload, ensure_ascii=False)
-            except Exception as e:
-                raise ValueError(f"Invalid criteria payload: {e}")
-            if not template_name:
-                raise ValueError("template_name is required for save_template")
-            if not filename_tpl:
-                raise ValueError("filename_template is required for save_template")
-            return {
-                "template": templates.save_template(
-                    name=template_name,
-                    filename_template=filename_tpl,
-                    path_template=path_tpl,
-                    criteria_json=criteria_json,
-                )
-            }
-
-        if mode == "update_template":
-            template_id = str(options.get("template_id") or "").strip()
-            template_name = str(options.get("template_name") or "").strip()
-            filename_tpl = str(options.get("filename_template") or "").strip()
-            path_tpl = str(options.get("path_template") or "")
-            criteria_json = ""
-            criteria_payload = _criteria_from_template_payload(options.get("criteria"))
-            try:
-                criteria_json = json.dumps(criteria_payload, ensure_ascii=False)
-            except Exception as e:
-                raise ValueError(f"Invalid criteria payload: {e}")
-            if not template_id:
-                raise ValueError("template_id is required for update_template")
-            if not template_name:
-                raise ValueError("template_name is required for update_template")
-            if not filename_tpl:
-                raise ValueError("filename_template is required for update_template")
-            updated = templates.update_template(
-                template_id=template_id,
-                name=template_name,
-                filename_template=filename_tpl,
-                path_template=path_tpl,
-                criteria_json=criteria_json,
-            )
-            if not updated:
-                raise ValueError(f"Template not found: {template_id}")
-            return {"template": updated}
-
-        if mode == "get_hook_settings":
-            hook_type = str(options.get("hook_type") or "Scene.Update.Post")
-            return {"hook_settings": templates.get_hook_settings(hook_type=hook_type)}
-
-        if mode == "save_hook_settings":
-            hook_type = str(options.get("hook_type") or "Scene.Update.Post")
-            enabled = _to_bool(options.get("enabled", False))
-            template_ids = _ensure_list_of_strings(options.get("template_ids"), "template_ids")
-            saved = templates.save_hook_settings(
-                hook_type=hook_type,
-                enabled=enabled,
-                template_ids=template_ids,
-            )
-            return {"hook_settings": saved}
-
-        if mode == "run_hook":
-            hook_context = options.get("hookContext")
-            if not isinstance(hook_context, dict):
-                raise ValueError("hookContext is required for run_hook")
-
-            hook_type = str(hook_context.get("type") or options.get("hook_type") or "").strip()
-            if not hook_type:
-                raise ValueError("hookContext.type is required for run_hook")
-            object_id = str(hook_context.get("id") or "").strip()
-            if not object_id:
-                raise ValueError("hookContext.id is required for run_hook")
-
-            hook_settings = templates.get_hook_settings(hook_type=hook_type)
-            if not hook_settings.get("enabled"):
-                return {
-                    "hook_type": hook_type,
-                    "scene_id": object_id,
-                    "enabled": False,
-                    "executed": [],
-                }
-
-            template_ids = _ensure_list_of_strings(
-                hook_settings.get("template_ids"),
-                "hook_settings.template_ids",
-            )
-            configured_templates = templates.list_templates_by_ids(template_ids=template_ids)
-            if not configured_templates:
-                return {
-                    "hook_type": hook_type,
-                    "scene_id": object_id,
-                    "enabled": True,
-                    "executed": [],
-                }
-
-            executed: List[Dict[str, Any]] = []
-            for row in configured_templates:
-                template_id = str(row.get("id") or "")
-                template_name = str(row.get("name") or "")
-                filename_template = str(row.get("filename_template") or "").strip()
-                path_template = row.get("path_template") or None
-                if not template_id or not filename_template:
-                    continue
-
-                parsed_criteria: List[dict] = []
-                raw_filter_json = str(row.get("filter_json") or "").strip()
-                if debug_mode:
-                    logger.log(
-                        f"[DEBUG] Hook template '{template_name}' ({template_id}) raw filter_json: {raw_filter_json}"
-                    )
-                if raw_filter_json:
-                    try:
-                        raw_payload = json.loads(raw_filter_json)
-                        parsed_criteria = _criteria_from_template_payload(raw_payload)
-                    except Exception:
-                        parsed_criteria = []
-                criteria_opt = parsed_criteria
-                if debug_mode:
-                    logger.log(
-                        "[DEBUG] Hook template "
-                        f"'{template_name}' ({template_id}) criteria from DB: "
-                        f"{json.dumps(criteria_opt, ensure_ascii=False)}"
-                    )
-                scene_filter = build_scene_filter(
-                    None,
-                    criteria_opt,
-                    debug_log=logger.log if debug_mode else None,
-                )
-                scene_filter_for_object = scene_filter
-                object_id_int: Optional[int] = None
-                try:
-                    object_id_int = int(object_id)
-                except Exception:
-                    object_id_int = None
-
-                if object_id_int is not None:
-                    id_filter = {"id": {"modifier": "EQUALS", "value": object_id_int}}
-                    scene_filter_for_object = combine_scene_filters(
-                        scene_filter_for_object,
-                        id_filter,
-                    )
-                    if debug_mode:
-                        logger.log(
-                            "[DEBUG] Hook template "
-                            f"'{template_name}' ({template_id}) combined scene_filter+id: "
-                            f"{json.dumps(scene_filter_for_object, ensure_ascii=False)}"
-                        )
-                elif debug_mode:
-                    logger.log(
-                        f"[Warn] Hook object_id '{object_id}' is not numeric; falling back to ids argument matching"
-                    )
-
-                scenes = fetch_scenes_by_filters(
-                    gql_call=gql.call,
-                    tagger=tagger,
-                    scene_filter=scene_filter_for_object,
-                    ids=None if object_id_int is not None else [object_id],
-                    find_filter=None,
-                    filename_template=filename_template,
-                    path_template=path_template,
-                )
-                if len(scenes) == 0:
-                    executed.append(
-                        {
-                            "template_id": template_id,
-                            "template_name": str(row.get("name") or ""),
-                            "matched": False,
-                            "operations": [],
-                        }
-                    )
-                    continue
-
-                batch_id = mover.start_batch(
-                    mode="hook",
-                    fixed_batch_id=HOOK_BATCH_ID,
-                )
-                try:
-                    ops = engine.edit_run(
-                        filename_template=filename_template,
-                        path_template=path_template,
-                        scenes=scenes,
-                        collect_operations=collect_operations,
-                        batch_id=batch_id,
-                    )
-                    mover.complete_batch(batch_id=batch_id, success=True, error=None)
-                    executed.append(
-                        {
-                            "template_id": template_id,
-                            "template_name": str(row.get("name") or ""),
-                            "matched": True,
-                            "batch_id": batch_id,
-                            "operations": ops or [],
-                        }
-                    )
-                except Exception as e:
-                    mover.complete_batch(batch_id=batch_id, success=False, error=str(e))
-                    raise
-
-            return {
-                "hook_type": hook_type,
-                "scene_id": object_id,
-                "enabled": True,
-                "executed": executed,
-            }
-
-        if mode == "delete_template":
-            template_id = str(options.get("template_id") or "").strip()
-            if not template_id:
-                raise ValueError("template_id is required for delete_template")
-            return {"deleted": bool(templates.delete_template(template_id)), "template_id": template_id}
-
-        if mode in ("rename", "preview_dry_run"):
-            filename_template = str(options.get("filename_template") or "").strip()
-            if not filename_template:
-                raise ValueError("filename_template is required")
-            path_template = options.get("path_template") or None
-
-            ids = _ensure_list_of_strings(options.get("ids"), "ids")
-            criteria_opt = _ensure_list_of_dicts(options.get("criteria"), "criteria")
-
-            excluded_scene_ids = _ensure_list_of_strings(
-                options.get("excluded_scene_ids"),
-                "excluded_scene_ids",
-            )
-
-            find_filter = options.get("find_filter")
-            if find_filter is not None and not isinstance(find_filter, dict):
-                raise ValueError("'find_filter' must be an object/dict")
-            include_warn_error = _to_bool(options.get("include_warn_error", False))
-
-            if isinstance(find_filter, dict):
-                find_filter = dict(find_filter)
-                find_filter["page"] = 1
-                find_filter["per_page"] = 250
-
-            scene_filter = build_scene_filter(
-                None,
-                criteria_opt,
-                debug_log=logger.log if debug_mode else None,
-            )
-
-            scenes = fetch_scenes_by_filters(
-                gql_call=gql.call,
-                tagger=tagger,
-                scene_filter=scene_filter,
-                ids=ids or None,
-                find_filter=find_filter,
-                filename_template=filename_template,
-                path_template=path_template,
-            )
-
-            if excluded_scene_ids:
-                before = len(scenes)
-                scenes = exclude_scenes_by_ids(scenes, excluded_scene_ids)
-                removed = before - len(scenes)
-                if debug_mode:
-                    logger.log(
-                        f"[DEBUG] Excluded {removed} scene(s) by selected IDs; remaining {len(scenes)}"
-                    )
-
-            if mode == "preview_dry_run":
-                operations = engine.preview_run(
-                    filename_template=filename_template,
-                    path_template=path_template,
-                    scene_rows=scenes,
-                )
-                return {"operations": operations}
-
-            if dry_run:
-                ops = engine.edit_run(
-                    filename_template=filename_template,
-                    path_template=path_template,
-                    scenes=scenes,
-                    collect_operations=collect_operations,
-                    batch_id=None,
-                )
-                all_operations: List[dict] = ops or []
-                if not include_warn_error:
-                    filtered_operations: List[dict] = []
-                    for row in all_operations:
-                        if not isinstance(row, dict):
-                            continue
-                        status = str(row.get("status") or "").strip().lower()
-                        if status in ("warn", "warning", "error", "fail", "skipped"):
-                            continue
-                        message = str(row.get("log") or row.get("error") or "").strip().lower()
-                        if "no change (same path and filename)" in message:
-                            continue
-                        filtered_operations.append(row)
-                    all_operations = filtered_operations
-                if collect_operations:
-                    return {"operations": all_operations}
-                return None
-
-            batch_id = mover.start_batch(mode="rename")
-            try:
-                ops = engine.edit_run(
-                    filename_template=filename_template,
-                    path_template=path_template,
-                    scenes=scenes,
-                    collect_operations=collect_operations,
-                    batch_id=batch_id,
-                )
-                mover.complete_batch(batch_id=batch_id, success=True, error=None)
-                all_operations: List[dict] = ops or []
-                if collect_operations:
-                    return {"batch_id": batch_id, "operations": all_operations}
-                return None
-            except Exception as e:
-                mover.complete_batch(batch_id=batch_id, success=False, error=str(e))
-                raise
-
-        raise ValueError(f"Unsupported mode: {mode}")
+        return handler(options, ctx)
     finally:
         mover.flush()
         mover.close()

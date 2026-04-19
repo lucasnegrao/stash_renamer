@@ -44,7 +44,7 @@ export function useEditorTemplateFields() {
 	React.useEffect(() => {
 		const timeout = window.setTimeout(
 			() => setDebouncedTemplate(template),
-			350,
+			2000,
 		);
 		return () => window.clearTimeout(timeout);
 	}, [template]);
@@ -52,7 +52,7 @@ export function useEditorTemplateFields() {
 	React.useEffect(() => {
 		const timeout = window.setTimeout(
 			() => setDebouncedPathTemplate(pathTemplate),
-			350,
+			2000,
 		);
 		return () => window.clearTimeout(timeout);
 	}, [pathTemplate]);
@@ -132,6 +132,11 @@ export function useEditorTemplateFields() {
 			}
 		};
 
+	const syncTemplates = React.useCallback(() => {
+		setDebouncedTemplate(template);
+		setDebouncedPathTemplate(pathTemplate);
+	}, [template, pathTemplate]);
+
 	return {
 		template,
 		setTemplate,
@@ -143,5 +148,6 @@ export function useEditorTemplateFields() {
 		templateInputRef,
 		pathTemplateInputRef,
 		handleDropOnInput,
+		syncTemplates,
 	};
 }

@@ -2,6 +2,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from backend.services.graphql_queries import INTROSPECTION_TYPE_QUERY
+
 try:
     from liquid import Environment
 except Exception:  # pragma: no cover - handled at runtime with explicit error
@@ -14,7 +15,11 @@ class GraphQLTagger:
     _IDENT_RE = re.compile(r"[A-Za-z_]\w*(?:\[[^\]]+\]|\.[A-Za-z_]\w*|\.\[[^\]]+\])*")
     _STRING_RE = re.compile(r"""("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')""")
 
-    def __init__(self, gql_call: Callable[[str, Optional[dict]], dict], root_types: Dict[str, str]):
+    def __init__(
+        self,
+        gql_call: Callable[[str, Optional[dict]], dict],
+        root_types: Dict[str, str],
+    ):
         if Environment is None:
             raise RuntimeError(
                 "python-liquid is required. Install dependency: pip install python-liquid"
@@ -69,6 +74,7 @@ class GraphQLTagger:
         roots = set(self._root_types.keys())
         out: List[str] = []
         seen: Set[str] = set()
+
         for m in self._IDENT_RE.finditer(scrubbed):
             candidate = (m.group(0) or "").strip()
             if not candidate:
@@ -158,7 +164,9 @@ class GraphQLTagger:
             i += 1
         raw = expr[start:i].strip()
         i += 1  # skip closing ]
-        if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+        if (raw.startswith('"') and raw.endswith('"')) or (
+            raw.startswith("'") and raw.endswith("'")
+        ):
             return raw[1:-1], i
         if raw.isdigit():
             return int(raw), i
@@ -168,7 +176,9 @@ class GraphQLTagger:
         if isinstance(value, list):
             out = []
             for item in value:
-                item_u = self._unwrap_single_nested(item) if isinstance(item, dict) else item
+                item_u = (
+                    self._unwrap_single_nested(item) if isinstance(item, dict) else item
+                )
                 if isinstance(item_u, dict) and key in item_u:
                     out.append(item_u.get(key))
                 elif hasattr(item_u, key):
@@ -313,7 +323,9 @@ class GraphQLTagger:
                 return []
             current_type = next_type
 
-        if not isinstance(field_meta, dict) or not bool(field_meta.get("is_object_like")):
+        if not isinstance(field_meta, dict) or not bool(
+            field_meta.get("is_object_like")
+        ):
             return []
 
         child_fields = self._introspect_type_fields(current_type)
@@ -388,9 +400,7 @@ class GraphQLTagger:
                 continue
             sub_meta = self._unwrap_gql_type(sub.get("type"))
             child_expr = (
-                f"{expr}[0].{sub_name}"
-                if node["is_list"]
-                else f"{expr}.{sub_name}"
+                f"{expr}[0].{sub_name}" if node["is_list"] else f"{expr}.{sub_name}"
             )
             child = self._build_scene_selector_node(
                 sub_name,
@@ -420,10 +430,16 @@ class GraphQLTagger:
                         "token": self._to_token(root),
                         "fields": root_fields,
                         "examples": [
-                            self._to_token(f"{root}.{root_fields[0]}") if root_fields else self._to_token(f"{root}.id"),
-                            self._to_token(f"{root}[0].{root_fields[0]}")
-                            if root_fields
-                            else self._to_token(f"{root}[0].id"),
+                            (
+                                self._to_token(f"{root}.{root_fields[0]}")
+                                if root_fields
+                                else self._to_token(f"{root}.id")
+                            ),
+                            (
+                                self._to_token(f"{root}[0].{root_fields[0]}")
+                                if root_fields
+                                else self._to_token(f"{root}[0].id")
+                            ),
                         ],
                     }
                 )
@@ -471,7 +487,10 @@ class GraphQLTagger:
                         "root": root,
                         "token": self._to_token(root),
                         "fields": [],
-                        "examples": [self._to_token(f"{root}.id"), self._to_token(f"{root}[0].id")],
+                        "examples": [
+                            self._to_token(f"{root}.id"),
+                            self._to_token(f"{root}[0].id"),
+                        ],
                     }
                 )
 

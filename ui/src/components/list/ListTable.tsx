@@ -113,8 +113,6 @@ export const ListTable = <T extends { id: string }>(
 	const [draggingColumnValue, setDraggingColumnValue] = useState<string | null>(
 		null,
 	);
-	const wrapperRef = useRef<HTMLDivElement | null>(null);
-	const [containerWidth, setContainerWidth] = useState(0);
 	const resizeRef = useRef<{
 		column: string;
 		startX: number;
@@ -175,10 +173,10 @@ export const ListTable = <T extends { id: string }>(
 			const activeColumn = visibleColumnByValue[active.column];
 			const min = getColumnMinWidth(activeColumn);
 			const nextWidth = Math.max(min, Math.round(active.startWidth + delta));
-			setColumnWidths((prev) => ({
-				...prev,
-				[active.column]: nextWidth,
-			}));
+			setColumnWidths((prev) => {
+				if (prev[active.column] === nextWidth) return prev;
+				return { ...prev, [active.column]: nextWidth };
+			});
 		};
 
 		const onMouseUp = () => {
@@ -244,23 +242,6 @@ export const ListTable = <T extends { id: string }>(
 		});
 	}, [visibleColumns, items]);
 
-	useLayoutEffect(() => {
-		const el = wrapperRef.current;
-		if (!el) return;
-
-		const update = () => setContainerWidth(el.clientWidth || 0);
-		update();
-
-		if (typeof window.ResizeObserver !== "undefined") {
-			const observer = new window.ResizeObserver(update);
-			observer.observe(el);
-			return () => observer.disconnect();
-		}
-
-		window.addEventListener("resize", update);
-		return () => window.removeEventListener("resize", update);
-	}, []);
-
 	const baseColumnWidths = useMemo(() => {
 		const out: Record<string, number> = {};
 		visibleColumns.forEach((column) => {
@@ -269,35 +250,9 @@ export const ListTable = <T extends { id: string }>(
 		return out;
 	}, [visibleColumns, columnWidths]);
 
-	const baseTableWidth = useMemo(
-		() =>
-			SELECT_COL_WIDTH +
-			visibleColumns.reduce(
-				(acc, column) =>
-					acc + (baseColumnWidths[column.value] ?? MIN_COL_WIDTH),
-				0,
-			),
-		[visibleColumns, baseColumnWidths],
-	);
-
 	const effectiveColumnWidths = useMemo(() => {
-		const out = { ...baseColumnWidths };
-		if (visibleColumns.length === 0) return out;
-
-		const minimumFillWidth = containerWidth > 0 ? containerWidth : 0;
-		const missing = Math.max(0, minimumFillWidth - baseTableWidth);
-		if (missing > 0) {
-			const lastColumn = visibleColumns[visibleColumns.length - 1];
-			out[lastColumn.value] =
-				(out[lastColumn.value] ?? MIN_COL_WIDTH) + missing;
-		}
-		return out;
-	}, [baseColumnWidths, visibleColumns, containerWidth, baseTableWidth]);
-
-	const tableWidth = useMemo(
-		() => Math.max(baseTableWidth, containerWidth || 0),
-		[baseTableWidth, containerWidth],
-	);
+		return { ...baseColumnWidths };
+	}, [baseColumnWidths]);
 
 	const renderObjectRow = (item: T, index: number) => {
 		let shiftKey = false;
@@ -339,6 +294,7 @@ export const ListTable = <T extends { id: string }>(
 						className={`${column.value}-data`}
 						style={{
 							width: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
+							minWidth: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
 						}}
 						ref={
 							index === 0
@@ -349,24 +305,23 @@ export const ListTable = <T extends { id: string }>(
 						}
 					>
 						<div
-							className="table-cell-content"
+							className="table-cell-content h-100"
 							style={
 								column.multiline === false
 									? {
-											overflow: "hidden",
-											textOverflow: "ellipsis",
+											overflow: "auto",
 											whiteSpace: "nowrap",
 											minWidth: 0,
 										}
 									: {
-											overflow: "hidden",
-											textOverflow: "ellipsis",
+											overflow: "auto",
 											whiteSpace: "normal",
-											overflowWrap: "anywhere",
+											overflowWrap: "break-word",
 											display: "-webkit-box",
 											WebkitBoxOrient: "vertical",
-											WebkitLineClamp:
-												column.maxLines ?? DEFAULT_MULTILINE_LINES,
+											height: "100%",
+											// WebkitLineClamp:
+											// 	column.maxLines ?? DEFAULT_MULTILINE_LINES,
 											minWidth: 0,
 										}
 							}
@@ -375,6 +330,7 @@ export const ListTable = <T extends { id: string }>(
 						</div>
 					</td>
 				))}
+				<td className="phantom-col"></td>
 			</tr>
 		);
 	};
@@ -410,6 +366,7 @@ export const ListTable = <T extends { id: string }>(
 				}}
 				style={{
 					width: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
+					minWidth: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
 					position: "relative",
 					cursor: columns.includes(column.value) ? "grab" : undefined,
 					opacity:
@@ -436,7 +393,6 @@ export const ListTable = <T extends { id: string }>(
 							height: "100%",
 							cursor: "col-resize",
 							userSelect: "none",
-							borderLeft: "1px solid rgba(255, 255, 255, 0.45)",
 						}}
 					/>
 				)}
@@ -446,13 +402,12 @@ export const ListTable = <T extends { id: string }>(
 
 	return (
 		<div
-			ref={wrapperRef}
-			className={cx("table-list", className)}
 			style={{
 				width: "100%",
 				maxWidth: "100%",
+				height: "100%",
+				overflow: "auto",
 				minWidth: 0,
-				overflowX: "auto",
 			}}
 		>
 			<Table
@@ -460,26 +415,37 @@ export const ListTable = <T extends { id: string }>(
 				bordered
 				style={{
 					tableLayout: "fixed",
-					width: `${tableWidth}px`,
+					width: "max-content",
 					minWidth: "100%",
 				}}
+				className="stash-renamer-table"
 			>
 				<colgroup>
-					<col style={{ width: `${SELECT_COL_WIDTH}px` }} />
+					<col
+						style={{
+							width: `${SELECT_COL_WIDTH}px`,
+							minWidth: `${SELECT_COL_WIDTH}px`,
+						}}
+					/>
 					{visibleColumns.map((column) => (
 						<col
 							key={column.value}
 							style={{
 								width: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
+								minWidth: `${effectiveColumnWidths[column.value] ?? MIN_COL_WIDTH}px`,
 							}}
 						/>
 					))}
+					<col style={{ width: "auto" }} />
 				</colgroup>
 				<thead>
 					<tr>
 						<th
 							className="select-col"
-							style={{ width: `${SELECT_COL_WIDTH}px` }}
+							style={{
+								width: `${SELECT_COL_WIDTH}px`,
+								minWidth: `${SELECT_COL_WIDTH}px`,
+							}}
 						>
 							{renderSelectHeader ? (
 								renderSelectHeader()
@@ -499,6 +465,10 @@ export const ListTable = <T extends { id: string }>(
 						</th>
 
 						{columnHeaders}
+						<th
+							className="phantom-col"
+							style={{ width: "auto", padding: 0, border: "none" }}
+						></th>
 					</tr>
 					<tr>
 						<th className="border-row" colSpan={100}></th>

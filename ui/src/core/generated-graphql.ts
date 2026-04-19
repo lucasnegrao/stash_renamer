@@ -2131,7 +2131,7 @@ export type Job = {
 export enum JobStatus {
 	Cancelled = "CANCELLED",
 	Failed = "FAILED",
-	Finished = "FINISHED",
+	Finished = "",
 	Ready = "READY",
 	Running = "RUNNING",
 	Stopping = "STOPPING",

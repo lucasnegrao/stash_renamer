@@ -1,6 +1,5 @@
 import {
 	applyFilterToSceneList,
-	getCriteriaState,
 	getFilterState,
 	hasSceneListSetFilterState,
 	setFilterState,
@@ -28,6 +27,8 @@ interface IUseEditorTemplateCrudArgs {
 	setTemplate: (value: string) => void;
 	setPathTemplate: (value: string) => void;
 	setStatus: (value: string) => void;
+	currentCriteria: any[];
+	criteriaSignature: string;
 }
 
 export function useEditorTemplateCrud({
@@ -37,6 +38,8 @@ export function useEditorTemplateCrud({
 	setTemplate,
 	setPathTemplate,
 	setStatus,
+	currentCriteria,
+	criteriaSignature,
 }: IUseEditorTemplateCrudArgs) {
 	const [savedTemplates, setSavedTemplates] = React.useState<
 		IRenamerTemplate[]
@@ -95,18 +98,9 @@ export function useEditorTemplateCrud({
 			selectedTemplate,
 			filenameTemplate: template,
 			pathTemplate,
-			currentFilter: getFilterState(),
+			currentFilter: { criteria: currentCriteria },
 		});
-	}, [selectedTemplate, template, pathTemplate, sceneRuntimeToken]);
-
-	const reloadSelectedTemplate = () => {
-		if (!selectedTemplate) {
-			setStatus("Select a saved template first.");
-			return;
-		}
-		applyTemplateById(String(selectedTemplate.id));
-		setStatus(`Reloaded template "${selectedTemplate.name}"`);
-	};
+	}, [selectedTemplate, template, pathTemplate, criteriaSignature]);
 
 	const saveAsCurrentTemplateToDatabase = async (name: string) => {
 		const trimmedName = String(name || "").trim();
@@ -120,7 +114,7 @@ export function useEditorTemplateCrud({
 				name: trimmedName,
 				filenameTemplate: template,
 				pathTemplate,
-				criteria: getCriteriaState(),
+				criteria: currentCriteria,
 			});
 			await loadSavedTemplates(false, String(saved?.id || ""));
 			if (saved?.id) setSelectedSavedTemplateId(String(saved.id));
@@ -147,7 +141,7 @@ export function useEditorTemplateCrud({
 				name: String(selected.name || ""),
 				filenameTemplate: template,
 				pathTemplate,
-				criteria: getCriteriaState(),
+				criteria: currentCriteria,
 			});
 			await loadSavedTemplates(false, String(updated?.id || selected.id));
 			setStatus(
@@ -192,7 +186,6 @@ export function useEditorTemplateCrud({
 		isDeletingTemplate,
 		isSelectedTemplateDirty,
 		applyTemplateById,
-		reloadSelectedTemplate,
 		saveAsCurrentTemplateToDatabase,
 		saveSelectedTemplateToDatabase,
 		deleteSelectedTemplate,

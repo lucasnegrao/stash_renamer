@@ -9,6 +9,7 @@ import { useTableColumns } from "../hooks/useTableColumns";
 
 const PluginApi = window.PluginApi;
 type TSceneOperationStatus = "success" | "fail" | "warn";
+const { Button, Badge } = PluginApi.libraries.Bootstrap;
 
 interface ISceneOperationResult {
 	status?: TSceneOperationStatus | null;
@@ -29,8 +30,15 @@ const Link = PluginApi.libraries.ReactRouterDOM.Link;
 const NavUtils = PluginApi.utils.NavUtils;
 const { FormattedMessage } = PluginApi.libraries.Intl;
 const { Icon } = PluginApi.components;
-const { faCircleCheck, faCircleXmark, faTriangleExclamation } =
-	PluginApi.libraries.FontAwesomeSolid;
+const {
+	faPencil,
+	faCircleCheck,
+	faCircleXmark,
+	faTriangleExclamation,
+	faExchange,
+	faMinusCircle,
+	faPlusCircle,
+} = PluginApi.libraries.FontAwesomeSolid;
 const { useSceneUpdate } = PluginApi.utils.StashService;
 
 const TABLE_NAME = "scenes";
@@ -257,67 +265,28 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 	const PathCell = (scene: ISlimSceneData) => (
 		<>
 			{scene.files.map((file) => (
-				<span>{file.path}</span>
+				<Badge className="stash-renamer-list-path-badge" variant="info">
+					{file.path}
+				</Badge>
 			))}
 		</>
 	);
 
-	const StatusCell = (scene: ISlimSceneData) => {
-		const status = props.sceneOperationById?.[scene.id]?.status;
-		const statusText = props.sceneOperationById?.[scene.id]?.statusText || "";
-		if (!status) return <span>-</span>;
-
-		if (status === "success") {
-			const selected = props.selectedIds.has(scene.id);
-			return (
-				<button
-					type="button"
-					onClick={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						props.onSelectChange(scene.id, !selected, false);
-					}}
-					title={
-						selected
-							? "Excluded (click to include)"
-							: "Included (click to exclude)"
-					}
-					style={{
-						border: "none",
-						background: "transparent",
-						padding: 0,
-						lineHeight: 1,
-						cursor: "pointer",
-					}}
-				>
-					<Icon
-						icon={selected ? faCircleXmark : faCircleCheck}
-						className={selected ? "text-danger" : "text-success"}
-					/>
-				</button>
-			);
-		}
-		if (status === "warn") {
-			return (
-				<span title={statusText || "Warning"}>
-					<Icon icon={faTriangleExclamation} className="text-warning" />
-				</span>
-			);
-		}
+	const NewPathCell = (scene: ISlimSceneData) => {
+		const vari =
+			props.sceneOperationById?.[scene.id]?.status === "fail"
+				? "danger"
+				: props.sceneOperationById?.[scene.id]?.status === "warn"
+					? "warning"
+					: "success";
 		return (
-			<span title={statusText || "Error"}>
-				<Icon icon={faCircleXmark} className="text-danger" />
-			</span>
+			<Badge className="stash-renamer-list-path-badge" variant={vari}>
+				{props.sceneOperationById?.[scene.id]?.status !== "success"
+					? props.sceneOperationById?.[scene.id]?.statusText || "-"
+					: props.sceneOperationById?.[scene.id]?.newPath || "-"}
+			</Badge>
 		);
 	};
-
-	const StatusTextCell = (scene: ISlimSceneData) => (
-		<span>{props.sceneOperationById?.[scene.id]?.statusText || "-"}</span>
-	);
-
-	const NewPathCell = (scene: ISlimSceneData) => (
-		<span>{props.sceneOperationById?.[scene.id]?.newPath || "-"}</span>
-	);
 
 	const SelectStatusCell = (
 		scene: ISlimSceneData,
@@ -354,8 +323,9 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 					}}
 				>
 					<Icon
-						icon={ctx.selected ? faCircleXmark : faCircleCheck}
-						className={ctx.selected ? "text-danger" : "text-success"}
+						size="lg"
+						icon={ctx.selected ? faMinusCircle : faPencil}
+						className={ctx.selected ? "text-info" : "text-success"}
 					/>
 				</button>
 			);
@@ -364,7 +334,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 		if (status === "warn") {
 			return (
 				<span title={statusText || "Warning"}>
-					<Icon icon={faTriangleExclamation} className="text-warning" />
+					<Icon size="lg" icon={faCircleXmark} className="text-warning" />
 				</span>
 			);
 		}
@@ -372,7 +342,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 		if (status === "fail") {
 			return (
 				<span title={statusText || "Error"}>
-					<Icon icon={faCircleXmark} className="text-danger" />
+					<Icon size="lg" icon={faCircleXmark} className="text-danger" />
 				</span>
 			);
 		}
@@ -398,14 +368,14 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 			value: "cover_image",
 			label: intl.formatMessage({ id: "cover_image" }),
 			defaultShow: true,
-			resizable: false,
+			resizable: true,
 			defaultWidth: 204,
 			minWidth: 204,
 			multiline: false,
 			render: CoverImageCell,
 		},
 		{
-			value: "path",
+			value: "Original Path/Filename",
 			label: intl.formatMessage({ id: "path" }),
 			defaultShow: true,
 			defaultWidth: 460,
@@ -416,7 +386,7 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 		},
 		{
 			value: "new_path",
-			label: "New Path",
+			label: "Intended Path/Filename",
 			defaultShow: true,
 			defaultWidth: 420,
 			minWidth: 240,
@@ -544,17 +514,6 @@ export const SceneListTreeble: React.FC<ISceneListTableProps> = (
 			minWidth: 120,
 			multiline: false,
 			render: ResolutionCell,
-		},
-
-		{
-			value: "status_text",
-			label: "Status Text",
-			defaultShow: true,
-			defaultWidth: 240,
-			minWidth: 180,
-			multiline: true,
-			maxLines: 2,
-			render: StatusTextCell,
 		},
 
 		{

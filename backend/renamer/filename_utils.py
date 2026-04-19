@@ -7,12 +7,12 @@ def sanitize_filename(name: str) -> str:
     if not name:
         return ""
     name = "".join(char for char in name if ord(char) >= 32 and ord(char) != 127)
-    name = re.sub(r'[<>:/\\|?*`,]+', '', name)
-    name = re.sub(r'&', 'and', name)
-    name = re.sub(r"(?<=\\w)'(?=\\w)|(?<=\\w)'(?=\\s|$)", '', name)
-    name = re.sub(r'\s{2,}', ' ', name)
-    name = re.sub(r'(?<!\.)\.{3}(?!\.)', '.', name)
-    return name.strip('. ')
+    name = re.sub(r"[<>:/\\|?*`,]+", "", name)
+    name = re.sub(r"&", "and", name)
+    name = re.sub(r"(?<=\\w)'(?=\\w)|(?<=\\w)'(?=\\s|$)", "", name)
+    name = re.sub(r"\s{2,}", " ", name)
+    name = re.sub(r"(?<!\.)\.{3}(?!\.)", ".", name)
+    return name.strip(". ")
 
 
 def sanitize_path_component(seg: str) -> str:
@@ -78,3 +78,21 @@ def make_filename(
     s = re.sub(r"\(\W*\)", "", s)
     s = re.sub(r"\{\W*\}", "", s)
     return re.sub(r"\s{2,}", " ", s).strip()
+
+
+def shorten_filename(name: str, max_len: int) -> str:
+    if len(name) <= max_len:
+        return name
+
+    words = name.split()
+    deduped = []
+    for w in words:
+        if not deduped or deduped[-1].lower() != w.lower():
+            deduped.append(w)
+
+    reduced = " ".join(deduped)
+    if len(reduced) > max_len:
+        reduced = reduced[:max_len]
+
+    reduced = re.sub(r"\s*[-–—_:|,]+\s*$", "", reduced).strip()
+    return reduced

@@ -6,3 +6,4 @@ stash_ui
 stash_ui/*
 .pnpm-store
 __pycache__
+ui/dist

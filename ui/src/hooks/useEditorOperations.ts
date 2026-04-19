@@ -1,6 +1,5 @@
 import {
 	getCriteriaState,
-	getSceneListForPreviewState,
 	getScenePreviewByIdState,
 	getSelectedSceneIdsState,
 	requestResultsFocus,
@@ -10,7 +9,6 @@ import {
 import {
 	fetchOperationBatches,
 	type IScenePreviewResult,
-	previewRenameScenes,
 	queueRenameTask,
 	runDryRunForFilteredScenes,
 } from "../services/sceneRenamerApi";
@@ -24,13 +22,13 @@ interface IUseEditorOperationsArgs {
 	pathTemplate: string;
 	debouncedTemplate: string;
 	debouncedPathTemplate: string;
-	livePreview: boolean;
-	setLivePreview: (value: boolean) => void;
 	sceneRuntimeToken: number;
 	setStatus: (value: string) => void;
 	onDryRunCompleted?: (rows: IScenePreviewResult[]) => void;
 	getDryRunFindFilter?: () => any;
+	getDryRunCriteria?: () => any;
 	includeWarnErrorInDryRun?: boolean;
+	renameTargetIds?: string[];
 }
 
 export function useEditorOperations({
@@ -38,13 +36,13 @@ export function useEditorOperations({
 	pathTemplate,
 	debouncedTemplate,
 	debouncedPathTemplate,
-	livePreview,
-	setLivePreview,
 	sceneRuntimeToken,
 	setStatus,
 	onDryRunCompleted,
 	getDryRunFindFilter,
+	getDryRunCriteria,
 	includeWarnErrorInDryRun,
+	renameTargetIds,
 }: IUseEditorOperationsArgs) {
 	const [isActionBusy, setIsActionBusy] = React.useState(false);
 	const [activeAction, setActiveAction] = React.useState<
@@ -53,8 +51,6 @@ export function useEditorOperations({
 	const [isDryRunReady, setIsDryRunReady] = React.useState(false);
 	const [taskProgress, setTaskProgress] = React.useState(0);
 	const [taskProgressText, setTaskProgressText] = React.useState("");
-	const [previewBusyCount, setPreviewBusyCount] = React.useState(0);
-	const previewRequestRef = React.useRef(0);
 	const activeTaskCleanupRef = React.useRef<(() => void) | null>(null);
 
 	const getExcludedSceneIds = () => Array.from(getSelectedSceneIdsState());
@@ -90,60 +86,10 @@ export function useEditorOperations({
 		return `${normalizedDir}${sep}${normalizedFile}`;
 	};
 
-	const runPreview = async (
-		templateValue: string,
-		pathTemplateValue: string,
-		showProgress = true,
+	const submitRenameTask = async (
+		dryRun = false,
+		renameTargetIds?: string[],
 	) => {
-		const requestId = ++previewRequestRef.current;
-		setPreviewBusyCount((count: number) => count + 1);
-		try {
-			if (showProgress) setStatus("Generating preview...");
-			const previewRows = await previewRenameScenes({
-				template: templateValue,
-				pathTemplate: pathTemplateValue,
-				scenes: getSceneListForPreviewState(),
-			});
-			if (requestId !== previewRequestRef.current) return;
-
-			const next: Record<
-				string,
-				{
-					status: "success" | "warn" | "fail";
-					statusText: string;
-					newPath: string;
-				}
-			> = {};
-			(previewRows || []).forEach((row: IScenePreviewResult) => {
-				const id = String(row?.scene_id || "");
-				if (!id) return;
-				const rawStatus = String(row?.status || "").toLowerCase();
-				const mappedStatus =
-					rawStatus === "success"
-						? "success"
-						: rawStatus === "warn" || rawStatus === "warning"
-							? "warn"
-							: "fail";
-				next[id] = {
-					status: mappedStatus,
-					statusText: String(row?.log || row?.error || ""),
-					newPath: joinPath(row?.new_path, row?.new_filename || row?.new_name),
-				};
-			});
-
-			setScenePreviewByIdState(next);
-			setStatus(
-				`Preview ready for ${previewRows.length} scene(s) at ${new Date().toLocaleTimeString()}`,
-			);
-		} catch (e: unknown) {
-			if (requestId !== previewRequestRef.current) return;
-			setStatus(`Error: ${toErrorMessage(e)}`);
-		} finally {
-			setPreviewBusyCount((count: number) => Math.max(0, count - 1));
-		}
-	};
-
-	const submitRenameTask = async (dryRun = false) => {
 		if (activeTaskCleanupRef.current) {
 			activeTaskCleanupRef.current();
 			activeTaskCleanupRef.current = null;
@@ -152,12 +98,14 @@ export function useEditorOperations({
 		setActiveAction(dryRun ? "dry_run" : "rename");
 		try {
 			if (dryRun) {
-				if (livePreview) setLivePreview(false);
 				setStatus("Running dry run for all filtered scenes...");
 				const previewRows = await runDryRunForFilteredScenes({
 					template,
 					pathTemplate,
-					criteria: getCriteriaState(),
+					criteria:
+						typeof getDryRunCriteria === "function"
+							? getDryRunCriteria()
+							: getCriteriaState(),
 					excludedSceneIds: [],
 					findFilter:
 						typeof getDryRunFindFilter === "function"
@@ -205,13 +153,29 @@ export function useEditorOperations({
 			}
 
 			setStatus("Queueing task...");
-			const jobId = await queueRenameTask({
-				dryRun,
-				template,
-				pathTemplate,
-				criteria: getCriteriaState(),
-				excludedSceneIds: getExcludedSceneIds(),
-			});
+			console.log("ndskdls");
+			console.log(renameTargetIds);
+			const excluded = getExcludedSceneIds();
+			const jobId = await queueRenameTask(
+				renameTargetIds
+					? {
+							dryRun,
+							template,
+							pathTemplate,
+							criteria: [],
+							ids: renameTargetIds.filter((id) => !excluded.includes(id)),
+						}
+					: {
+							dryRun,
+							template,
+							pathTemplate,
+							criteria:
+								typeof getDryRunCriteria === "function"
+									? getDryRunCriteria()
+									: getCriteriaState(),
+							excludedSceneIds: excluded,
+						},
+			);
 			if (!jobId) {
 				setStatus("Queued (no job id returned)");
 				return;
@@ -264,18 +228,6 @@ export function useEditorOperations({
 	};
 
 	React.useEffect(() => {
-		if (isActionBusy) return;
-		if (!livePreview) return;
-		runPreview(debouncedTemplate, debouncedPathTemplate, false);
-	}, [
-		livePreview,
-		debouncedTemplate,
-		debouncedPathTemplate,
-		isActionBusy,
-		sceneRuntimeToken,
-	]);
-
-	React.useEffect(() => {
 		return () => {
 			if (activeTaskCleanupRef.current) {
 				activeTaskCleanupRef.current();
@@ -290,7 +242,6 @@ export function useEditorOperations({
 		isDryRunReady,
 		taskProgress,
 		taskProgressText,
-		previewBusyCount,
 		excludedSceneCount,
 		submitRenameTask,
 	};

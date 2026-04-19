@@ -145,8 +145,8 @@ def build_find_scenes_query(
     tree = build_field_tree_from_templates(filename_template, path_template, tagger)
     selection = field_tree_to_selection(tree)
     return (
-        "query findScenes($filter: FindFilterType!, $scene_filter: SceneFilterType, $ids: [ID!]) { "
-        "findScenes(filter: $filter, scene_filter: $scene_filter, ids: $ids) { "
+        "query findScenes($filter: FindFilterType, $scene_filter: SceneFilterType, $scene_ids: [Int!]) { "
+        "findScenes(filter: $filter, scene_filter: $scene_filter, scene_ids: $scene_ids) { "
         f"scenes {{ {selection} }} "
         "} }"
     )
@@ -174,13 +174,20 @@ def fetch_scenes_by_filters(
     )
 
     if ids:
-        single_filter = ff.copy()
-        single_filter["page"] = 1
-        single_filter["per_page"] = max(per_page, len(ids))
+        scene_ids = []
+        for i in ids:
+            try:
+                scene_ids.append(int(i))
+            except ValueError:
+                pass
+
+        if not scene_ids:
+            return []
+
         variables = {
-            "filter": single_filter,
-            "scene_filter": scene_filter,
-            "ids": ids,
+            "filter": None,
+            "scene_filter": None,
+            "scene_ids": scene_ids,
         }
         data = gql_call(find_scenes_query, variables)
         scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
@@ -194,7 +201,7 @@ def fetch_scenes_by_filters(
         variables = {
             "filter": page_filter,
             "scene_filter": scene_filter,
-            "ids": None,
+            "scene_ids": None,
         }
         data = gql_call(find_scenes_query, variables)
         scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
@@ -266,14 +273,18 @@ def fetch_scene_by_id_for_templates(
     tree = build_field_tree_from_templates(filename_template, path_template, tagger)
     selection = field_tree_to_selection(tree)
     query = (
-        "query previewSceneById($filter: FindFilterType!, $ids: [ID!]) { "
-        "findScenes(filter: $filter, ids: $ids) { "
+        "query previewSceneById($filter: FindFilterType!, $scene_ids: [Int!]) { "
+        "findScenes(filter: $filter, scene_ids: $scene_ids) { "
         f"scenes {{ {selection} }} "
         "} }"
     )
+    try:
+        scene_id_int = int(scene_id)
+    except ValueError:
+        return None
     variables = {
         "filter": {"page": 1, "per_page": 1},
-        "ids": [scene_id],
+        "scene_ids": [scene_id_int],
     }
     data = gql_call(query, variables)
     scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
@@ -287,13 +298,18 @@ def fetch_full_scenes_by_ids(
     gql_call,
     ids: List[str],
 ) -> List[dict]:
-    normalized_ids = [str(x).strip() for x in (ids or []) if str(x).strip()]
-    if not normalized_ids:
+    scene_ids = []
+    for x in ids or []:
+        try:
+            scene_ids.append(int(str(x).strip()))
+        except ValueError:
+            pass
+    if not scene_ids:
         return []
 
     query = """
-query FindScenesByIds($ids: [ID!]) {
-  findScenes(ids: $ids) {
+query FindScenesByIds($scene_ids: [Int!]) {
+  findScenes(scene_ids: $scene_ids) {
     scenes {
       id
       title
@@ -366,7 +382,7 @@ query FindScenesByIds($ids: [ID!]) {
   }
 }
 """
-    data = gql_call(query, {"ids": normalized_ids})
+    data = gql_call(query, {"scene_ids": scene_ids})
     scenes = ((data or {}).get("findScenes") or {}).get("scenes") or []
     if not isinstance(scenes, list):
         return []

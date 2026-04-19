@@ -151,13 +151,13 @@ export const FilterTags: React.FC<IFilterTagsProps> = ({
 	return (
 		<div className="wrap-tags filter-tags">
 			{tags}
-			<Button
+			{/* <Button
 				className="clear-all-button"
 				variant="secondary"
 				onClick={onRemoveAll}
 			>
 				{intl.formatMessage({ id: "actions.clear" })}
-			</Button>
+			</Button> */}
 		</div>
 	);
 };

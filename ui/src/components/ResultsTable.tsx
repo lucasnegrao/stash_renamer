@@ -4,10 +4,11 @@ import type { IScenePreviewResult } from "../services/sceneRenamerApi";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
-const { Button } = PluginApi.libraries.Bootstrap;
+const { Button, Badge } = PluginApi.libraries.Bootstrap;
 const { Icon } = PluginApi.components;
 const {
 	faArrowRotateLeft,
+	faArrowRotateRight,
 	faCircleCheck,
 	faCircleXmark,
 	faTriangleExclamation,
@@ -76,11 +77,9 @@ function canUndoRow(row: IScenePreviewResult): boolean {
 	const successValue = row.success;
 	const isSuccessful =
 		successValue === true || successValue === 1 || successValue === "1";
+	const opType = String(row.operation_type || "").toLowerCase();
 	return (
-		!!row.id &&
-		!row.undone &&
-		String(row.operation_type || "").toLowerCase() === "rename" &&
-		isSuccessful
+		!!row.id && ["rename", "undo", "redo"].includes(opType) && isSuccessful
 	);
 }
 
@@ -120,9 +119,9 @@ export const ResultsTable: React.FC<IResultsTableProps> = ({
 			minWidth: 220,
 			maxLines: 2,
 			render: (row) => (
-				<span className="font-monospace" title={String(row.old_path || "")}>
+				<Badge className="stash-renamer-list-path-badge" variant="info">
 					{String(row.old_path || "-")}
-				</span>
+				</Badge>
 			),
 		},
 		{
@@ -132,11 +131,17 @@ export const ResultsTable: React.FC<IResultsTableProps> = ({
 			defaultWidth: 360,
 			minWidth: 220,
 			maxLines: 2,
-			render: (row) => (
-				<span className="font-monospace" title={String(row.new_path || "")}>
-					{String(row.new_path || "-")}
-				</span>
-			),
+			render: (row) => {
+				const meta = getStatusMeta(row);
+
+				return (
+					<Badge className="stash-renamer-list-path-badge" variant={meta.tone}>
+						{meta.tone == "danger" || meta.tone == "warning"
+							? String(row.error || row.log)
+							: String(row.new_path)}
+					</Badge>
+				);
+			},
 		},
 		{
 			value: "status",
@@ -147,77 +152,85 @@ export const ResultsTable: React.FC<IResultsTableProps> = ({
 			multiline: false,
 			render: (row) => {
 				const meta = getStatusMeta(row);
-				if (meta.tone === "undone") {
-					return (
+				const canUndo = canUndoRow(row);
+				const opType = String(row.operation_type || "").toLowerCase();
+				const isUndoType = opType === "undo";
+				const titleAction =
+					meta.tone === "undone"
+						? "Redo this rename"
+						: isUndoType
+							? "Redo this rename"
+							: "Undo this rename";
+
+				const iconNode =
+					meta.tone === "undone" ? (
 						<Icon
-							icon={faArrowRotateLeft}
+							size="lg"
+							icon={isUndoType ? faArrowRotateLeft : faArrowRotateRight}
 							className="text-info"
 							title={meta.details || meta.label}
 						/>
-					);
-				}
-				if (meta.tone === "success") {
-					return (
+					) : meta.tone === "success" ? (
 						<Icon
+							size="lg"
 							icon={faCircleCheck}
 							className="text-success"
 							title={meta.details || meta.label}
 						/>
-					);
-				}
-				if (meta.tone === "warning") {
-					return (
+					) : meta.tone === "warning" ? (
 						<Icon
+							size="lg"
 							icon={faTriangleExclamation}
 							className="text-warning"
 							title={meta.details || meta.label}
 						/>
-					);
-				}
-				if (meta.tone === "danger") {
-					return (
+					) : meta.tone === "danger" ? (
 						<Icon
+							size="lg"
 							icon={faCircleXmark}
 							className="text-danger"
 							title={meta.details || meta.label}
 						/>
+					) : (
+						<span title={meta.details}>{meta.label}</span>
+					);
+
+				if (canUndo) {
+					return (
+						<button
+							type="button"
+							title={titleAction}
+							disabled={loading}
+							onClick={(e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								onUndoOne(String(row.id));
+							}}
+							style={{
+								border: "none",
+								background: "transparent",
+								padding: 0,
+								lineHeight: 1,
+								cursor: "pointer",
+							}}
+						>
+							{iconNode}
+						</button>
 					);
 				}
-				return <span title={meta.details}>{meta.label}</span>;
+
+				return iconNode;
 			},
 		},
-		{
-			value: "status_text",
-			label: "Status Text",
-			defaultShow: true,
-			defaultWidth: 280,
-			minWidth: 180,
-			maxLines: 2,
-			render: (row) => <span>{String(row.error || row.log || "-")}</span>,
-		},
-		{
-			value: "undo",
-			label: "Undo",
-			defaultShow: true,
-			resizable: false,
-			defaultWidth: 96,
-			minWidth: 96,
-			multiline: false,
-			render: (row) => {
-				const id = String(row.id || "");
-				const canUndo = canUndoRow(row);
-				return (
-					<Button
-						size="sm"
-						variant="danger"
-						disabled={!id || !canUndo || loading}
-						onClick={() => onUndoOne(id)}
-					>
-						Undo
-					</Button>
-				);
-			},
-		},
+		// {
+		// 	value: "status_text",
+		// 	label: "Status Text",
+		// 	defaultShow: true,
+		// 	defaultWidth: 280,
+		// 	minWidth: 180,
+		// 	maxLines: 2,
+		// 	render: (row) => <span>{String(row.error || row.log || "-")}</span>,
+		// },
 	];
 
 	const defaultColumns = allColumns

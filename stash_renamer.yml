@@ -9,26 +9,14 @@ exec:
   - python3
   - "{pluginDir}/stash_renamer.py"
 interface: raw
-tasks:
-  - name: Rename Scenes (Dry Run)
-    description: Preview what files would be renamed without making changes
-    defaultArgs:
-      mode: rename
-      dry_run: "true"
-      debugMode: "false"
-  - name: Rename Scenes  
-    description: Rename scene files based on configured template
-    defaultArgs:
-      mode: rename
-      dry_run: "false"
-      debugMode: "false"
+
 hooks:
   - name: Rename Scene On Update
     description: Run configured rename templates after scene updates
     triggeredBy:
       - Scene.Update.Post
     defaultArgs:
-      mode: run_hook
+      mode: "hook:run"
       hook_type: Scene.Update.Post
       dry_run: "false"
       debugMode: "false"

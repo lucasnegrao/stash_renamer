@@ -61,31 +61,12 @@ def normalize_input_args(raw_args: Any) -> Dict[str, Any]:
     raise Exception("Expected input args to be a map/object or PluginArgInput list")
 
 
-def log_options_sources(
-    options: Dict[str, Any], source_map: Dict[str, str], args: Dict[str, Any]
-) -> None:
-
-    log.LogInfo(f"[Scene Renamer][Options] raw args keys={sorted(list(args.keys()))}")
-    for key in sorted(options.keys()):
-        source = source_map.get(key, "derived")
-        value = options.get(key)
-        if key == "cookie_value":
-            rendered = "***"
-        else:
-            try:
-                rendered = json.dumps(value, ensure_ascii=False, default=str)
-            except Exception:
-                rendered = str(value)
-        log.LogInfo(f"[Scene Renamer][Options] {key} <- {source}: {rendered}")
-
-
 def main() -> None:
     output: Dict[str, Any] = {}
     try:
         input_data = read_json_input()
         if not input_data:
             raise Exception("No input received from Stash")
-        log.LogInfo(f"Received input: {json.dumps(input_data, ensure_ascii=False)}")
 
         args = normalize_input_args(input_data.get("args"))
         server_conn = input_data.get("server_connection") or {}
@@ -104,7 +85,6 @@ def main() -> None:
         source_map["server_url"] = "server_connection"
         source_map["cookie_name"] = "server_connection"
         source_map["cookie_value"] = "server_connection"
-        log_options_sources(options, source_map, args)
 
         from backend.app import run
 

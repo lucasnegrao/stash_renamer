@@ -1,17 +1,58 @@
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 
-import { EditorView, basicSetup } from "codemirror";
+import {
+	EditorView,
+	keymap,
+	highlightSpecialChars,
+	drawSelection,
+	highlightActiveLine,
+	dropCursor,
+	rectangularSelection,
+	crosshairCursor,
+	placeholder as placeholderExtension,
+} from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import {
+	defaultHighlightStyle,
+	syntaxHighlighting,
+	bracketMatching,
+	indentOnInput,
+	HighlightStyle,
+} from "@codemirror/language";
+import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
+import {
+	closeBrackets,
+	autocompletion,
+	closeBracketsKeymap,
+	completionKeymap,
+} from "@codemirror/autocomplete";
 import { liquid } from "@codemirror/lang-liquid";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { tags as t } from "@lezer/highlight";
 import type { Completion } from "@codemirror/autocomplete";
 import type { ITokenTreeNode } from "../services/sceneRenamerApi";
+
+export interface ITemplateCodeEditorHandle {
+	insertTokenAtCursor: (token: string) => void;
+}
 
 interface Props {
 	value: string;
 	onChange: (value: string) => void;
-	tokenTree: ITokenTreeNode[];
+	tokenTree?: ITokenTreeNode[];
 	singleLine?: boolean;
+	lineNumbers?: boolean;
+	className?: string;
+	style?: React.CSSProperties;
+	disabled?: boolean;
+	placeholder?: string;
+	onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+	onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+	onFocus?: () => void;
+	onBlur?: () => void;
+	onEnter?: () => void;
+	onReady?: (handle: ITemplateCodeEditorHandle) => void;
 }
 
 const PATH_TOKEN_RE =
@@ -99,78 +140,254 @@ function makeLiquidConfig(tokenTree: ITokenTreeNode[]) {
 	};
 }
 
-export function TemplateCodeEditor({
-	value,
-	onChange,
-	tokenTree,
-	singleLine,
-}: Props) {
-	const containerRef = React.useRef<HTMLDivElement | null>(null);
-	const viewRef = React.useRef<EditorView | null>(null);
+export const TemplateCodeEditor = React.forwardRef<
+	ITemplateCodeEditorHandle,
+	Props
+>(
+	(
+		{
+			value,
+			onChange,
+			tokenTree,
+			singleLine,
+			className,
+			style,
+			disabled,
+			placeholder,
+			onDragOver,
+			onDrop,
+			onFocus,
+			onBlur,
+			onEnter,
+			onReady,
+		},
+		ref,
+	) => {
+		const containerRef = React.useRef<HTMLDivElement | null>(null);
+		const viewRef = React.useRef<EditorView | null>(null);
 
-	const liquidConfig = React.useMemo(() => {
-		return makeLiquidConfig(tokenTree || []);
-	}, [tokenTree]);
+		const onChangeRef = React.useRef(onChange);
+		React.useEffect(() => {
+			onChangeRef.current = onChange;
+		}, [onChange]);
 
-	React.useEffect(() => {
-		if (!containerRef.current) return;
-		const fixedHeightEditor = EditorView.theme({
-			"&": { height: "400px" },
-			".cm-scroller": { overflow: "auto" },
-		});
-		var view: EditorView;
-		if (!singleLine)
-			view = new EditorView({
-				parent: containerRef.current,
-				doc: value || "",
-				extensions: [
-					basicSetup,
-					liquid(liquidConfig),
-					oneDark,
-					fixedHeightEditor,
-					EditorView.lineWrapping,
-					EditorView.updateListener.of((update) => {
-						if (update.docChanged) {
-							onChange(update.state.doc.toString());
-						}
+		const onBlurRef = React.useRef(onBlur);
+		React.useEffect(() => {
+			onBlurRef.current = onBlur;
+		}, [onBlur]);
+
+		const onEnterRef = React.useRef(onEnter);
+		React.useEffect(() => {
+			onEnterRef.current = onEnter;
+		}, [onEnter]);
+
+		const displayValue = singleLine
+			? (value || "").replace(/[\r\n]+/g, "")
+			: value || "";
+		const lastNotifiedValue = React.useRef(displayValue);
+
+		const liquidConfig = React.useMemo(() => {
+			return makeLiquidConfig(tokenTree || []);
+		}, [tokenTree]);
+
+		const getEditorHandle = React.useCallback(
+			(): ITemplateCodeEditorHandle => ({
+				insertTokenAtCursor: (token: string) => {
+					const view = viewRef.current;
+					if (!view) return;
+					const { state } = view;
+					const selection = state.selection.main;
+					view.dispatch({
+						changes: { from: selection.from, to: selection.to, insert: token },
+						selection: { anchor: selection.from + token.length },
+						scrollIntoView: true,
+					});
+					view.focus();
+				},
+			}),
+			[],
+		);
+
+		React.useImperativeHandle(ref, () => getEditorHandle());
+
+		React.useEffect(() => {
+			if (onReady) {
+				onReady(getEditorHandle());
+			}
+		}, [onReady, getEditorHandle]);
+
+		React.useEffect(() => {
+			if (!containerRef.current) return;
+
+			const customSetup = [
+				highlightSpecialChars(),
+				history(),
+				drawSelection(),
+				dropCursor(),
+				EditorState.allowMultipleSelections.of(true),
+				indentOnInput(),
+				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+				bracketMatching(),
+				closeBrackets(),
+				autocompletion(),
+				rectangularSelection(),
+				crosshairCursor(),
+				highlightActiveLine(),
+				EditorView.domEventHandlers({
+					blur: () => {
+						if (onBlurRef.current) onBlurRef.current();
+						return false;
+					},
+				}),
+				keymap.of([
+					...closeBracketsKeymap,
+					...defaultKeymap,
+					...historyKeymap,
+					...completionKeymap,
+				]),
+			];
+
+			const baseExtensions = [
+				...customSetup,
+				liquid(liquidConfig),
+				oneDark,
+				EditorView.updateListener.of((update) => {
+					if (update.docChanged) {
+						const newDoc = update.state.doc.toString();
+						lastNotifiedValue.current = newDoc;
+						onChangeRef.current(newDoc);
+					}
+				}),
+				syntaxHighlighting(
+					HighlightStyle.define([
+						{ tag: t.content, color: "white", fontWeight: "bold" },
+						{ tag: t.brace, color: "#abb2bf", fontWeight: "normal" },
+						{ tag: t.bracket, color: "#abb2bf", fontWeight: "normal" },
+					]),
+				),
+			];
+
+			if (placeholder) {
+				baseExtensions.push(placeholderExtension(placeholder));
+			}
+
+			if (disabled) {
+				baseExtensions.push(
+					EditorView.editable.of(false),
+					EditorView.theme({
+						"&": { opacity: 0.6, cursor: "not-allowed" },
+						".cm-content": { cursor: "not-allowed" },
 					}),
-				],
+				);
+			}
+
+			const multiLineTheme = EditorView.theme({
+				"&": { height: "400px" },
+				".cm-scroller": { overflow: "auto" },
 			});
-		else
-			view = new EditorView({
+
+			const singleLineTheme = EditorView.theme({
+				"&": {
+					backgroundColor: "transparent",
+					flex: 1,
+					width: "100%",
+				},
+				"&.cm-focused": {
+					outline: "none",
+				},
+				".cm-scroller": {
+					overflowX: "auto",
+					overflowY: "hidden",
+					whiteSpace: "pre",
+					scrollbarWidth: "none",
+				},
+				".cm-scroller::-webkit-scrollbar": {
+					display: "none",
+				},
+				".cm-content": {
+					padding: 0,
+					whiteSpace: "pre",
+				},
+				".cm-line": {
+					padding: 0,
+				},
+			});
+
+			const singleLineFilter = EditorState.transactionFilter.of((tr) => {
+				if (tr.newDoc.lines > 1) {
+					const text = tr.newDoc.toString().replace(/[\r\n]+/g, "");
+					return {
+						changes: { from: 0, to: tr.startState.doc.length, insert: text },
+						selection: {
+							anchor: Math.min(tr.newSelection.main.anchor, text.length),
+						},
+					};
+				}
+				return tr;
+			});
+
+			const singleLineKeymap = keymap.of([
+				{
+					key: "Enter",
+					run: () => {
+						if (onEnterRef.current) onEnterRef.current();
+						return true;
+					},
+				},
+				{ key: "Shift-Enter", run: () => true },
+			]);
+
+			const extensions = singleLine
+				? [
+						...baseExtensions,
+						singleLineTheme,
+						singleLineFilter,
+						singleLineKeymap,
+					]
+				: [...baseExtensions, multiLineTheme, EditorView.lineWrapping];
+
+			const view = new EditorView({
 				parent: containerRef.current,
-				doc: value || "",
-				extensions: [
-					basicSetup,
-					liquid(liquidConfig),
-					oneDark,
-					EditorView.updateListener.of((update) => {
-						if (update.docChanged) {
-							onChange(update.state.doc.toString());
-						}
-					}),
-				],
+				doc: displayValue,
+				extensions,
 			});
 
-		viewRef.current = view;
+			viewRef.current = view;
 
-		return () => {
-			view.destroy();
-			viewRef.current = null;
-		};
-	}, [liquidConfig]);
+			return () => {
+				view.destroy();
+				viewRef.current = null;
+			};
+		}, [liquidConfig, singleLine, disabled, placeholder]);
 
-	React.useEffect(() => {
-		const view = viewRef.current;
-		if (!view) return;
+		React.useEffect(() => {
+			const view = viewRef.current;
+			if (!view) return;
 
-		const current = view.state.doc.toString();
-		if (current === value) return;
+			const safeValue = singleLine
+				? (value || "").replace(/[\r\n]+/g, "")
+				: value || "";
 
-		view.dispatch({
-			changes: { from: 0, to: current.length, insert: value || "" },
-		});
-	}, [value]);
+			if (safeValue === lastNotifiedValue.current) return;
 
-	return <div ref={containerRef} />;
-}
+			const current = view.state.doc.toString();
+			if (current === safeValue) return;
+
+			view.dispatch({
+				changes: { from: 0, to: current.length, insert: safeValue },
+			});
+			lastNotifiedValue.current = safeValue;
+		}, [value, singleLine]);
+
+		return (
+			<div
+				ref={containerRef}
+				className={className}
+				style={style}
+				onDragOver={onDragOver}
+				onDrop={onDrop}
+				onFocus={onFocus}
+			/>
+		);
+	},
+);
