@@ -1,6 +1,6 @@
-import type { IWatchdogConfig } from "../../services/sceneRenamerApi";
+import type { IWatchdogConfig } from "../../api/sceneRenamerApi";
 import { FolderSelect } from "../list/Filters/FolderFilter";
-import { BooleanOptionField } from "../list/columns/BooleanOptionField";
+import { BooleanOptionField } from "../shared/BooleanOptionField";
 import {
 	WATCHDOG_OPERATIONS,
 	defaultInputForOperation,

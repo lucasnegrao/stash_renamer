@@ -36,7 +36,7 @@ import { PathFilter } from "./Filters/PathFilter";
 import { RatingFilter } from "./Filters/RatingFilter";
 import { StashIDFilter } from "./Filters/StashIDFilter";
 import { TimestampFilter } from "./Filters/TimestampFilter";
-import { ModifierSelectorButtons } from "./ModifierSelect";
+import { ModifierSelectorButtons } from "./Filters/ModifierSelect";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

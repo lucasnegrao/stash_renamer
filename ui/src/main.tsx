@@ -1,5 +1,4 @@
-import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
-import { TaskProgressOverlay } from "./components/TaskProgressOverlay";
+import { TaskProgressOverlay } from "./components/shared/TaskProgressOverlay";
 import {
 	getRenamerTaskOverlayState,
 	resetRenamerRuntimeState,
@@ -8,8 +7,8 @@ import {
 } from "./services/renamerRuntimeState";
 import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import { EditorView } from "./views/EditorView";
-import { RenamerResults } from "./views/results";
-import { RenamerSettings } from "./views/settings";
+import { RenamerResults } from "./views/ResultsView";
+import { SettingsView } from "./views/SettingsView";
 
 (() => {
 	const PluginApi = window.PluginApi;
@@ -148,7 +147,7 @@ import { RenamerSettings } from "./views/settings";
 								<RenamerResults />
 							</Route>
 							<Route path="/plugins/stash_renamer/settings">
-								<RenamerSettings />
+								<SettingsView />
 							</Route>
 						</Switch>
 						<TaskProgressOverlay
@@ -199,7 +198,7 @@ import { RenamerSettings } from "./views/settings";
 					key="stash-renamer-hook-setting"
 					heading="Scene Renamer Settings"
 					subHeading="Configure hook behavior and clean rename history."
-					children={<RenamerSettingsPanel className="mt-2" />}
+					children={<SettingsView className="mt-2" />}
 				/>,
 			];
 		},

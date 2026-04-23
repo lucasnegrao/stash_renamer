@@ -1,8 +1,8 @@
-import type { ISlimSceneData } from "../models/SlimSceneData";
+import type { ISlimSceneData } from "../../models/SlimSceneData";
 import {
 	loadFromLocalStorage,
 	saveToLocalStorage,
-} from "../services/browserStorage";
+} from "../../services/browserStorage";
 import {
 	extractSceneTokenTree,
 	fetchSelectorsCatalogCached,
@@ -10,17 +10,17 @@ import {
 	type IScenePreviewResult,
 	type ITokenTreeNode,
 	previewRenameScenes,
-} from "../services/sceneRenamerApi";
+} from "../../api/sceneRenamerApi";
 import {
 	getTemplateById,
 	isTemplateDirty,
-} from "../services/templateCrudService";
+} from "../../services/templateCrudService";
 import {
 	deleteTemplate,
 	loadTemplates,
 	saveExistingTemplate,
 	saveTemplateAs,
-} from "../services/templateStore";
+} from "../../services/templateStore";
 import { SceneTokenSelector } from "./SceneTokenSelector";
 import { TemplateManagerBar } from "./TemplateManagerBar";
 import {

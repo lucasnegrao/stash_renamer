@@ -1,8 +1,8 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
-import type { IWatchdogConfig } from "../../services/sceneRenamerApi";
+import type { IWatchdogConfig } from "../../api/sceneRenamerApi";
 import { ListTable, type IColumn } from "../list/ListTable";
-import { CrudActionsColumnCell } from "../list/columns/CrudActionsColumnCell";
-import { TextColumnCell } from "../list/columns/TextColumnCell";
+import { CrudActionsColumnCell } from "../list/cells/CrudActionsColumnCell";
+import { TextColumnCell } from "../list/cells/TextColumnCell";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

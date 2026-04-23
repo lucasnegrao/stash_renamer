@@ -1,11 +1,11 @@
-import { ConfirmDialog } from "../components/ConfirmDialog";
-import { ListActionToolbar } from "../components/ListActionToolbar";
+import { ConfirmDialog } from "../components/shared/ConfirmDialog";
+import { ListActionToolbar } from "../components/list/ListActionToolbar";
 import { EditFilterDialog } from "../components/list/EditFilterDialog";
 import { FilterTags } from "../components/list/FilterTags";
-import { SceneListTreeble } from "../components/SceneListTable";
-import { TemplateCodeEditor } from "../components/TemplateCodeEditor";
-import { TemplateEditorModal } from "../components/TemplateEditorModal";
-import { TemplateManagerBar } from "../components/TemplateManagerBar";
+import { SceneListTreeble } from "../components/renamer/SceneListTable";
+import { TemplateCodeEditor } from "../components/template/TemplateCodeEditor";
+import { TemplateEditorModal } from "../components/template/TemplateEditorModal";
+import { TemplateManagerBar } from "../components/template/TemplateManagerBar";
 import { useEditorLogic } from "../hooks/useEditorLogic";
 
 const PluginApi = (window as any).PluginApi;

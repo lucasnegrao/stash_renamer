@@ -4,8 +4,8 @@ import {
 	faSave,
 	faTrash,
 } from "@fortawesome/free-solid-svg-icons";
-import type { IRenamerTemplate } from "../services/sceneRenamerApi";
-import { ConfirmDialog } from "./ConfirmDialog";
+import type { IRenamerTemplate } from "../../api/sceneRenamerApi";
+import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { TemplateSaveAsModal } from "./TemplateSaveAsModal";
 
 const PluginApi = window.PluginApi;

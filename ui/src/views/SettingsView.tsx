@@ -1,19 +1,19 @@
 import { requestResultsFocus } from "../services/renamerRuntimeState";
-import { clearHistory } from "../services/sceneRenamerApi";
-import { ConfirmDialog } from "./ConfirmDialog";
-import { HookSettingsModal } from "./HookSettingsModal";
-import { WatchdogSettingsPanel } from "./watchdog/WatchdogSettingsPanel";
+import { clearHistory } from "../api/sceneRenamerApi";
+import { ConfirmDialog } from "../components/shared/ConfirmDialog";
+import { HookSettingsModal } from "../components/hook/HookSettingsPanel";
+import { WatchdogSettingsPanel } from "../components/watchdog/WatchdogSettingsPanel";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { Button, Card, Spinner } = PluginApi.libraries.Bootstrap;
 
-interface IRenamerSettingsPanelProps {
+interface ISettingsViewProps {
 	className?: string;
 }
 
-export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
-	className = "",
+export const SettingsView: React.FC<ISettingsViewProps> = ({
+	className = "container-fluid p-8",
 }) => {
 	const [activeInlinePanel, setActiveInlinePanel] = React.useState<
 		"" | "hook" | "watchdog"

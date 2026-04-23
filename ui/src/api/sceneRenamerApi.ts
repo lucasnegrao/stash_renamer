@@ -1,4 +1,4 @@
-import type { StasheroApi } from "../stasheroApi";
+import type { StasheroApi } from "./stasheroApi";
 
 const PluginApi = (window as any).PluginApi;
 const { gql } = PluginApi.libraries.Apollo;

@@ -12,7 +12,7 @@ import {
 	setScenePreviewByIdState,
 	subscribeScenePreviewState,
 } from "../services/renamerRuntimeState";
-import { queryFindScenesByIds } from "../services/sceneRenamerApi";
+import { queryFindScenesByIds } from "../api/sceneRenamerApi";
 import { parseTemplateFilterJson } from "../services/templateCrudService";
 import { applySerializedFilterToModel } from "../utils/editorHelpers";
 import { useEditorOperations } from "./useEditorOperations";

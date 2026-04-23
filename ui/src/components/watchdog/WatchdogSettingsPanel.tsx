@@ -12,7 +12,7 @@ import {
 	saveWatchdogConfigToDatabase,
 	stopWatchdog,
 	uninstallFfmpegProxyServiceTask,
-} from "../../services/sceneRenamerApi";
+} from "../../api/sceneRenamerApi";
 import { trackTaskJob } from "../../services/taskProgressService";
 import { WatchdogListTable } from "./WatchdogListTable";
 import { WatchdogOperationModal } from "./WatchdogOperationModal";

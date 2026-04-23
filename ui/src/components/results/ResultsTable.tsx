@@ -1,6 +1,6 @@
-import { useTableColumns } from "../hooks/useTableColumns";
-import type { IScenePreviewResult } from "../services/sceneRenamerApi";
-import { type IColumn, ListTable } from "./list/ListTable";
+import { useTableColumns } from "../../hooks/useTableColumns";
+import type { IScenePreviewResult } from "../../api/sceneRenamerApi";
+import { type IColumn, ListTable } from "../list/ListTable";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

@@ -1,5 +1,5 @@
-import { ResultsTable } from "../components/ResultsTable";
-import { TaskProgressOverlay } from "../components/TaskProgressOverlay";
+import { ResultsTable } from "../components/results/ResultsTable";
+import { TaskProgressOverlay } from "../components/shared/TaskProgressOverlay";
 import {
 	subscribeActiveTabState,
 	subscribeResultsFocus,
@@ -11,7 +11,7 @@ import {
 	type IScenePreviewResult,
 	undoBatchOperation,
 	undoOperation,
-} from "../services/sceneRenamerApi";
+} from "../api/sceneRenamerApi";
 import { trackTaskJob } from "../services/taskProgressService";
 
 const PluginApi = window.PluginApi;

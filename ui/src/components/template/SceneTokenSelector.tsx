@@ -1,6 +1,6 @@
-import type { ITokenTreeNode } from "../services/sceneRenamerApi";
-import { CollapseButton } from "./shared/CollapseButton";
-import { TagItem } from "./shared/TagItem";
+import type { ITokenTreeNode } from "../../api/sceneRenamerApi";
+import { CollapseButton } from "../shared/CollapseButton";
+import { TagItem } from "../shared/TagItem";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

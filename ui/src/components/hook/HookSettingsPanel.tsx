@@ -1,18 +1,15 @@
-import {
-	HookSettingsTable,
-	type IHookTemplateRow,
-} from "./hook/HookSettingsTable";
-import { TemplateEditorModal } from "./TemplateEditorModal";
-import { applySerializedFilterToModel } from "../utils/editorHelpers";
-import { ListFilterModel } from "../models/list-filter/filter";
-import type { ISlimSceneData } from "../models/SlimSceneData";
+import { HookSettingsTable, type IHookTemplateRow } from "./HookSettingsTable";
+import { TemplateEditorModal } from "../template/TemplateEditorModal";
+import { applySerializedFilterToModel } from "../../utils/editorHelpers";
+import { ListFilterModel } from "../../models/list-filter/filter";
+import type { ISlimSceneData } from "../../models/SlimSceneData";
 import {
 	fetchHookSettings,
 	queryFindScenes,
 	fetchSavedTemplates,
 	type IRenamerTemplate,
 	saveHookSettings,
-} from "../services/sceneRenamerApi";
+} from "../../api/sceneRenamerApi";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

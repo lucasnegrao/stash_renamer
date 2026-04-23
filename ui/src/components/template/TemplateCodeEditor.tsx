@@ -31,7 +31,7 @@ import {
 	rectangularSelection,
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
-import type { ITokenTreeNode } from "../services/sceneRenamerApi";
+import type { ITokenTreeNode } from "../../api/sceneRenamerApi";
 
 export interface ITemplateCodeEditorHandle {
 	insertTokenAtCursor: (token: string) => void;

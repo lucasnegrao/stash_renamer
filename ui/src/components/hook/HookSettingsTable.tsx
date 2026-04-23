@@ -1,8 +1,8 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
-import type { IRenamerTemplate } from "../../services/sceneRenamerApi";
+import type { IRenamerTemplate } from "../../api/sceneRenamerApi";
 import { ListTable, type IColumn } from "../list/ListTable";
-import { CrudActionsColumnCell } from "../list/columns/CrudActionsColumnCell";
-import { SelectOptionColumnCell } from "../list/columns/SelectOptionColumnCell";
+import { CrudActionsColumnCell } from "../list/cells/CrudActionsColumnCell";
+import { SelectOptionColumnCell } from "../list/cells/SelectOptionColumnCell";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

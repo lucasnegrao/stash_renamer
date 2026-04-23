@@ -6,7 +6,7 @@ import {
 import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
 import type { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
 import { FilterTag } from "../FilterTags";
-import { ModifierSelect } from "../ModifierSelect";
+import { ModifierSelect } from "./ModifierSelect";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

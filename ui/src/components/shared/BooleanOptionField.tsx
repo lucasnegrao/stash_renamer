@@ -1,4 +1,4 @@
-import { BooleanOptionColumnCell } from "./BooleanOptionColumnCell";
+import { BooleanOptionColumnCell } from "../list/cells/BooleanOptionColumnCell";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

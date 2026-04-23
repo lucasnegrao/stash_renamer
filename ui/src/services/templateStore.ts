@@ -4,7 +4,7 @@ import {
 	type IRenamerTemplate,
 	saveTemplateToDatabase,
 	updateTemplateInDatabase,
-} from "./sceneRenamerApi";
+} from "../api/sceneRenamerApi";
 
 export interface ITemplateLoadResult {
 	templates: IRenamerTemplate[];

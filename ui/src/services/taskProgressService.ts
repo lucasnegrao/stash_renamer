@@ -2,7 +2,7 @@ import {
 	fetchJobById,
 	type ITaskJob,
 	subscribeJobUpdates,
-} from "./sceneRenamerApi";
+} from "../api/sceneRenamerApi";
 
 export interface ITaskProgressEvent {
 	progress: number;

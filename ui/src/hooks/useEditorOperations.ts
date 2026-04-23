@@ -12,7 +12,7 @@ import {
 	type IScenePreviewResult,
 	queueRenameTask,
 	runDryRunForFilteredScenes,
-} from "../services/sceneRenamerApi";
+} from "../api/sceneRenamerApi";
 import { trackTaskJob } from "../services/taskProgressService";
 
 const PluginApi = window.PluginApi;

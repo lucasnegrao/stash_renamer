@@ -1,11 +1,11 @@
-import { objectTitle } from "../core/files";
-import { galleryTitle } from "../core/galleries";
-import { useTableColumns } from "../hooks/useTableColumns";
-import type SceneQueue from "../models/SceneQueue";
-import type { ISlimSceneData } from "../models/SlimSceneData";
-import TextUtils from "../utils/text";
-import { type IColumn, ListTable } from "./list/ListTable";
-import { FileSize } from "./shared/FileSize";
+import { objectTitle } from "../../core/files";
+import { galleryTitle } from "../../core/galleries";
+import { useTableColumns } from "../../hooks/useTableColumns";
+import type SceneQueue from "../../models/SceneQueue";
+import type { ISlimSceneData } from "../../models/SlimSceneData";
+import TextUtils from "../../utils/text";
+import { type IColumn, ListTable } from "../list/ListTable";
+import { FileSize } from "../shared/FileSize";
 
 const PluginApi = window.PluginApi;
 type TSceneOperationStatus = "success" | "fail" | "warn";
