@@ -36,7 +36,7 @@ const {
 	faCaretDown,
 	faCaretUp,
 } = PluginApi.libraries.FontAwesomeSolid;
-const HOOK_BATCH_ID = "stash_renamer_hook_batch";
+const HOOK_BATCH_ID_PREFIX = "stash_renamer_hook_batch";
 
 export const RenamerResults: React.FC = () => {
 	const intl = PluginApi.libraries.Intl.useIntl();
@@ -80,13 +80,17 @@ export const RenamerResults: React.FC = () => {
 	const formatBatchLabel = React.useCallback(
 		(batch: IOperationBatch) => {
 			const mode = String(batch.mode || "").toLowerCase();
+			const rawMode = String(batch.mode || "");
+			const batchId = String(batch.id || "");
 			const isHookBatch =
-				String(batch.id || "") === HOOK_BATCH_ID || mode === "hook";
-			const modeLabel = isHookBatch
-				? "Hook"
-				: mode === "rename"
-					? "Rename"
-					: batch.mode || "Batch";
+				batchId.startsWith(HOOK_BATCH_ID_PREFIX) || mode.startsWith("hook");
+			let modeLabel = mode === "rename" ? "Rename" : batch.mode || "Batch";
+			if (isHookBatch) {
+				const hookType = rawMode.startsWith("hook:")
+					? rawMode.slice("hook:".length).trim()
+					: "";
+				modeLabel = hookType ? `Hook (${hookType})` : "Hook";
+			}
 			const dateLabel = batch.started_at
 				? `${intl.formatDate(new Date(batch.started_at), {
 						year: "numeric",
@@ -205,9 +209,6 @@ export const RenamerResults: React.FC = () => {
 			const rows = (await fetchOperationBatches()).filter((b) => {
 				const mode = String(b.mode || "").toLowerCase();
 				if (mode === "dry_run") return false;
-				if (mode.startsWith("hook") && String(b.id || "") !== HOOK_BATCH_ID) {
-					return false;
-				}
 				return true;
 			});
 			setBatches(rows);

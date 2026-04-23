@@ -1,9 +1,10 @@
 import {
+	clearRenamerTaskOverlayState,
 	getCriteriaState,
 	getScenePreviewByIdState,
 	getSelectedSceneIdsState,
 	requestResultsFocus,
-	setActiveTabState,
+	setRenamerTaskOverlayState,
 	setScenePreviewByIdState,
 } from "../services/renamerRuntimeState";
 import {
@@ -29,6 +30,7 @@ interface IUseEditorOperationsArgs {
 	getDryRunCriteria?: () => any;
 	includeWarnErrorInDryRun?: boolean;
 	renameTargetIds?: string[];
+	onNavigateToResults?: () => void;
 }
 
 export function useEditorOperations({
@@ -43,15 +45,16 @@ export function useEditorOperations({
 	getDryRunCriteria,
 	includeWarnErrorInDryRun,
 	renameTargetIds,
+	onNavigateToResults,
 }: IUseEditorOperationsArgs) {
 	const [isActionBusy, setIsActionBusy] = React.useState(false);
 	const [activeAction, setActiveAction] = React.useState<
 		"" | "dry_run" | "rename"
 	>("");
 	const [isDryRunReady, setIsDryRunReady] = React.useState(false);
-	const [taskProgress, setTaskProgress] = React.useState(0);
-	const [taskProgressText, setTaskProgressText] = React.useState("");
 	const activeTaskCleanupRef = React.useRef<(() => void) | null>(null);
+	const activeActionRef = React.useRef<"" | "dry_run" | "rename">("");
+	const isMountedRef = React.useRef(true);
 
 	const getExcludedSceneIds = () => Array.from(getSelectedSceneIdsState());
 	const excludedSceneCount = React.useMemo(
@@ -96,6 +99,7 @@ export function useEditorOperations({
 		}
 		setIsActionBusy(true);
 		setActiveAction(dryRun ? "dry_run" : "rename");
+		activeActionRef.current = dryRun ? "dry_run" : "rename";
 		try {
 			if (dryRun) {
 				setStatus("Running dry run for all filtered scenes...");
@@ -178,16 +182,24 @@ export function useEditorOperations({
 			);
 			if (!jobId) {
 				setStatus("Queued (no job id returned)");
+				activeActionRef.current = "";
 				return;
 			}
 
-			setTaskProgress(0);
-			setTaskProgressText("Starting task...");
+			setRenamerTaskOverlayState({
+				show: true,
+				progress: 0,
+				text: "Starting task...",
+			});
+			onNavigateToResults?.();
 			setStatus(`Task queued (${jobId})`);
 			const tracker = trackTaskJob(jobId, {
 				onProgress: ({ progress, status, error }) => {
-					setTaskProgress(progress);
-					setTaskProgressText(`${status}${error ? ` - ${error}` : ""}`);
+					setRenamerTaskOverlayState({
+						show: true,
+						progress: Number(progress || 0),
+						text: `${status}${error ? ` - ${error}` : ""}`,
+					});
 				},
 			});
 			activeTaskCleanupRef.current = tracker.stop;
@@ -200,36 +212,51 @@ export function useEditorOperations({
 					const batches = await fetchOperationBatches();
 					const latestBatchId = batches.length > 0 ? String(batches[0].id) : "";
 					requestResultsFocus(latestBatchId || null);
-					setActiveTabState("results");
-					setStatus(`Task ${jobId} finished.`);
+					if (isMountedRef.current) setStatus(`Task ${jobId} finished.`);
 				} catch {
 					requestResultsFocus(null);
-					setActiveTabState("results");
-					setStatus(`Task ${jobId} finished.`);
+					if (isMountedRef.current) setStatus(`Task ${jobId} finished.`);
 				}
 			} else {
-				setStatus(
-					`Task ${jobId} ended with status ${final.status}${final.error ? `: ${final.error}` : ""}.`,
-				);
+				if (isMountedRef.current) {
+					setStatus(
+						`Task ${jobId} ended with status ${final.status}${final.error ? `: ${final.error}` : ""}.`,
+					);
+				}
 			}
-			setIsActionBusy(false);
-			setActiveAction("");
-			return;
-		} catch (e: unknown) {
-			setStatus(`Error: ${toErrorMessage(e)}`);
-			setIsActionBusy(false);
-			setActiveAction("");
-		} finally {
-			if (dryRun) {
+			clearRenamerTaskOverlayState();
+			activeActionRef.current = "";
+			if (isMountedRef.current) {
 				setIsActionBusy(false);
 				setActiveAction("");
+			}
+			return;
+		} catch (e: unknown) {
+			if (isMountedRef.current) {
+				setStatus(`Error: ${toErrorMessage(e)}`);
+				setIsActionBusy(false);
+				setActiveAction("");
+			}
+			clearRenamerTaskOverlayState();
+			activeActionRef.current = "";
+		} finally {
+			if (dryRun) {
+				if (isMountedRef.current) {
+					setIsActionBusy(false);
+					setActiveAction("");
+				}
+				activeActionRef.current = "";
 			}
 		}
 	};
 
 	React.useEffect(() => {
+		isMountedRef.current = true;
 		return () => {
+			isMountedRef.current = false;
 			if (activeTaskCleanupRef.current) {
+				// Keep rename tracker alive after tab switch so progress persists.
+				if (activeActionRef.current === "rename") return;
 				activeTaskCleanupRef.current();
 				activeTaskCleanupRef.current = null;
 			}
@@ -240,8 +267,6 @@ export function useEditorOperations({
 		isActionBusy,
 		activeAction,
 		isDryRunReady,
-		taskProgress,
-		taskProgressText,
 		excludedSceneCount,
 		submitRenameTask,
 	};

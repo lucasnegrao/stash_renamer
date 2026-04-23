@@ -7,6 +7,7 @@ from backend.services.template_service import TemplateService
 from backend.services.GraphQLTagger import GraphQLTagger
 from backend.services.undo_service import UndoService
 from backend.services.watchdog_service import WatchdogService
+from backend.services.ffmpeg_proxy_service import FFmpegProxyService
 from backend.handlers.context import AppContext
 from backend.handlers.router import ROUTES
 from backend.handlers.utils import to_bool
@@ -43,6 +44,10 @@ def run(options: dict, collect_operations: bool = False):
     )
 
     gql = GraphQLService(gql_config)
+    ffmpeg_proxy = FFmpegProxyService(
+        gql_call=gql.call,
+        log_print=logger.debug if using_log else (lambda _msg: None),
+    )
 
     mover = FileMover(
         gql_call=gql.call,
@@ -84,6 +89,7 @@ def run(options: dict, collect_operations: bool = False):
         undo=undo,
         engine=engine,
         watchdog=watchdog,
+        ffmpeg_proxy=ffmpeg_proxy,
         collect_operations=collect_operations,
         debug_mode=debug_mode,
         dry_run=dry_run,

@@ -48,6 +48,11 @@ export function useEditorTemplateCrud({
 		React.useState("");
 	const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
 	const [isDeletingTemplate, setIsDeletingTemplate] = React.useState(false);
+	const [templatesLoaded, setTemplatesLoaded] = React.useState(false);
+
+	const setSelectedTemplateId = React.useCallback((templateId: string) => {
+		setSelectedSavedTemplateId(String(templateId || "").trim());
+	}, []);
 
 	async function loadSavedTemplates(selectFirst = false, preferredId?: string) {
 		try {
@@ -60,6 +65,8 @@ export function useEditorTemplateCrud({
 			setSelectedSavedTemplateId(loaded.nextSelectedId);
 		} catch (e: any) {
 			setStatus(`Error loading saved templates: ${e?.message || String(e)}`);
+		} finally {
+			setTemplatesLoaded(true);
 		}
 	}
 
@@ -182,6 +189,8 @@ export function useEditorTemplateCrud({
 	return {
 		savedTemplates,
 		selectedSavedTemplateId,
+		setSelectedTemplateId,
+		templatesLoaded,
 		isSavingTemplate,
 		isDeletingTemplate,
 		isSelectedTemplateDirty,

@@ -3,7 +3,6 @@ import { ListActionToolbar } from "../components/ListActionToolbar";
 import { EditFilterDialog } from "../components/list/EditFilterDialog";
 import { FilterTags } from "../components/list/FilterTags";
 import { SceneListTreeble } from "../components/SceneListTable";
-import { TaskProgressOverlay } from "../components/TaskProgressOverlay";
 import { TemplateCodeEditor } from "../components/TemplateCodeEditor";
 import { TemplateEditorModal } from "../components/TemplateEditorModal";
 import { TemplateManagerBar } from "../components/TemplateManagerBar";
@@ -94,14 +93,13 @@ export const EditorView: React.FC = () => {
 			saveSelectedTemplateToDatabase,
 			saveAsCurrentTemplateToDatabase,
 			reloadSelectedTemplate,
+			onSelectTemplateIdOnly,
 		},
 		operations: {
 			isActionBusy,
 			isDryRunBusy,
 			isRenameBusy,
 			isDryRunReady,
-			taskProgress,
-			taskProgressText,
 			excludedSceneCount,
 			submitRenameTask,
 		},
@@ -109,11 +107,6 @@ export const EditorView: React.FC = () => {
 
 	return (
 		<div className="tabContent position-relative">
-			<TaskProgressOverlay
-				show={isRenameBusy}
-				progress={taskProgress}
-				text={taskProgressText}
-			/>
 			<ConfirmDialog
 				show={showRenameConfirm}
 				title="Confirm Rename"
@@ -139,6 +132,8 @@ export const EditorView: React.FC = () => {
 				pathTemplate={pathTemplate}
 				onChangeFilenameTemplate={setTemplate}
 				onChangePathTemplate={setPathTemplate}
+				selectedTemplateId={selectedSavedTemplateId}
+				onChangeSelectedTemplateId={onSelectTemplateIdOnly}
 				scenes={effectiveScenes}
 				filenamePreviewSceneId={filenamePreviewSceneId}
 				onChangeFilenamePreviewSceneId={setFilenamePreviewSceneId}
@@ -191,71 +186,65 @@ export const EditorView: React.FC = () => {
 				</ButtonGroup>
 			</div>
 			<div className="mb-3">
-				<InputGroup className="mb-2">
-					{/* @ts-ignore */}
-					<TemplateCodeEditor
-						ref={templateInputRef as any}
-						value={template}
-						disabled={isActionBusy}
-						onChange={(val: any) =>
-							setTemplate(
-								typeof val === "string" ? val : val?.target?.value || "",
-							)
-						}
-						onDragOver={(e: any) => e.preventDefault()}
-						onDrop={handleDropOnInput("filename")}
-						onBlur={syncTemplates}
-						onEnter={syncTemplates}
-						placeholder="{{ scene.studio.name }} - {{ scene.date }} - {{ scene.title }}"
-						lineNumbers={false}
-						singleLine={true}
-						className="form-control clearable-text-field"
-					/>
+				<div className="d-flex align-items-stretch">
+					<div className="flex-grow-1">
+						<InputGroup>
+							<InputGroup.Text className="clearable-text-field">
+								File
+							</InputGroup.Text>
+							{/* @ts-ignore */}
+							<TemplateCodeEditor
+								ref={templateInputRef as any}
+								value={template}
+								disabled={isActionBusy}
+								onChange={(val: any) =>
+									setTemplate(
+										typeof val === "string" ? val : val?.target?.value || "",
+									)
+								}
+								onDragOver={(e: any) => e.preventDefault()}
+								onDrop={handleDropOnInput("filename")}
+								onBlur={syncTemplates}
+								onEnter={syncTemplates}
+								placeholder="{{ scene.studio.name }} - {{ scene.date }} - {{ scene.title }}"
+								lineNumbers={false}
+								singleLine={true}
+								className="form-control clearable-text-field"
+							/>
+						</InputGroup>
 
-					<InputGroup.Text className="clearable-text-field">
-						File Template
-					</InputGroup.Text>
-
+						<InputGroup className="mb-0">
+							{/* @ts-ignore */}
+							<InputGroup.Text className="clearable-text-field">
+								Path
+							</InputGroup.Text>
+							<TemplateCodeEditor
+								disabled={isActionBusy}
+								placeholder="e.g., /Library/{{ scene.studio.name }} or ../Archive/{{ scene.studio.name }}"
+								value={pathTemplate}
+								onChange={(val: any) =>
+									setPathTemplate(
+										typeof val === "string" ? val : val?.target?.value || "",
+									)
+								}
+								onDragOver={(e: any) => e.preventDefault()}
+								onDrop={handleDropOnInput("path")}
+								onBlur={syncTemplates}
+								onEnter={syncTemplates}
+								lineNumbers={false}
+								singleLine={true}
+								className="form-control clearable-text-field"
+							/>
+						</InputGroup>
+					</div>
 					<Button
 						variant="secondary"
-						title="Open file template editor"
+						title="Open Template Editor"
 						onClick={() => setShowTemplateEditorModal(true)}
 					>
 						<Icon icon={faCode} />
 					</Button>
-				</InputGroup>
-
-				<InputGroup className="mb-2">
-					{/* @ts-ignore */}
-					<TemplateCodeEditor
-						disabled={isActionBusy}
-						placeholder="e.g., /Library/{{ scene.studio.name }} or ../Archive/{{ scene.studio.name }}"
-						value={pathTemplate}
-						onChange={(val: any) =>
-							setPathTemplate(
-								typeof val === "string" ? val : val?.target?.value || "",
-							)
-						}
-						onDragOver={(e: any) => e.preventDefault()}
-						onDrop={handleDropOnInput("path")}
-						onBlur={syncTemplates}
-						onEnter={syncTemplates}
-						lineNumbers={false}
-						singleLine={true}
-						className="form-control clearable-text-field"
-					/>
-					<InputGroup.Text className="clearable-text-field">
-						Path Template
-					</InputGroup.Text>
-
-					<Button
-						variant="secondary"
-						title="Open path template editor"
-						onClick={() => setShowTemplateEditorModal(true)}
-					>
-						<Icon icon={faCode} />
-					</Button>
-				</InputGroup>
+				</div>
 			</div>
 			{error ? (
 				<div className="mb-3">

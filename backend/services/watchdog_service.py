@@ -116,7 +116,7 @@ class WatchdogService:
         )
 
         restarted = False
-        if self.status(options).get("status") == "running":
+        if self._should_restart_for_save(options, row):
             self.restart(options)
             restarted = True
 
@@ -137,12 +137,20 @@ class WatchdogService:
 
         self._store.reorder_watchdog_configs(path, config_ids)
 
-        restarted = False
-        if self.status(options).get("status") == "running":
-            self.restart(options)
-            restarted = True
+        return {"restarted": False}
 
-        return {"restarted": restarted}
+    def delete_config(self, options: Dict[str, Any]) -> Dict[str, Any]:
+        config_id = str(options.get("id") or "").strip()
+        if not config_id:
+            raise ValueError("id is required for watchdog:delete_config")
+
+        deleted = self._store.delete_watchdog_config(config_id)
+
+        return {
+            "deleted": deleted,
+            "id": config_id,
+            "restarted": False,
+        }
 
     def close(self) -> None:
         self._store.close()
@@ -208,6 +216,29 @@ class WatchdogService:
             "cookie_value": self._gql_config.cookie_value,
             "watch_paths": list(watch_paths_dict.values()),
         }
+
+    def _should_restart_for_save(
+        self,
+        options: Dict[str, Any],
+        saved_row: Dict[str, Any],
+    ) -> bool:
+        # Watchdog needs a reload only when a new enabled watch path is introduced
+        # that is not present in the currently loaded worker config.
+        if self.status(options).get("status") != "running":
+            return False
+
+        if not to_bool(saved_row.get("enabled", False)):
+            return False
+
+        runtime_dir = self._runtime_dir(options)
+        current_config = self._read_json(self._config_path(runtime_dir)) or {}
+        current_paths = {
+            str(item.get("path") or "").strip()
+            for item in (current_config.get("watch_paths") or [])
+            if isinstance(item, dict)
+        }
+        saved_path = str(saved_row.get("path") or "").strip()
+        return bool(saved_path and saved_path not in current_paths)
 
     @staticmethod
     def _parse_options_dict(options_json: str) -> Dict[str, Any]:
@@ -466,6 +497,6 @@ class WatchdogService:
             "id": str(row.get("id") or ""),
             "path": str(row.get("path") or ""),
             "operation": str(row.get("operation") or ""),
-            "enabled": bool(row.get("enabled")),
+            "enabled": to_bool(row.get("enabled")),
             "options": parsed_options,
         }

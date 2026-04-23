@@ -694,11 +694,28 @@ class DBService:
         conn = self._get_conn()
 
         if sort_order is None:
-            row = conn.execute(
-                "SELECT MAX(sort_order) as max_order FROM watchdog_configs WHERE path = ?",
-                (normalized_path,)
+            existing_row = conn.execute(
+                """
+                SELECT path, sort_order
+                FROM watchdog_configs
+                WHERE id = ?
+                """,
+                (normalized_id,),
             ).fetchone()
-            sort_order = (row["max_order"] + 1) if row and row["max_order"] is not None else 0
+            if existing_row and str(existing_row["path"] or "").strip() == normalized_path:
+                # Preserve current explicit user-defined order on in-place updates
+                # (e.g. toggling enabled), unless caller explicitly sends sort_order.
+                sort_order = int(existing_row["sort_order"])
+            else:
+                row = conn.execute(
+                    "SELECT MAX(sort_order) as max_order FROM watchdog_configs WHERE path = ?",
+                    (normalized_path,),
+                ).fetchone()
+                sort_order = (
+                    row["max_order"] + 1
+                    if row and row["max_order"] is not None
+                    else 0
+                )
 
         conn.execute(
             """
@@ -780,6 +797,21 @@ class DBService:
         if self._writes_since_commit >= self._commit_every:
             conn.commit()
             self._writes_since_commit = 0
+
+    def delete_watchdog_config(self, config_id: str) -> bool:
+        normalized_id = str(config_id or "").strip()
+        if not normalized_id:
+            return False
+        conn = self._get_conn()
+        cur = conn.execute(
+            "DELETE FROM watchdog_configs WHERE id = ?",
+            (normalized_id,),
+        )
+        self._writes_since_commit += 1
+        if self._writes_since_commit >= self._commit_every:
+            conn.commit()
+            self._writes_since_commit = 0
+        return bool(cur.rowcount and cur.rowcount > 0)
 
     def close(self) -> None:
         if self._conn is None:

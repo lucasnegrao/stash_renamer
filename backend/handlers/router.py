@@ -17,7 +17,11 @@ from backend.handlers.template import (
 )
 from backend.handlers.hook import handle_get_settings, handle_save_settings, handle_run
 from backend.handlers.rename import handle_rename, handle_preview_dry_run
-from backend.handlers.system import handle_list_selectors
+from backend.handlers.system import (
+    handle_list_selectors,
+    handle_ffmpeg_proxy_enable,
+    handle_ffmpeg_proxy_reverse,
+)
 from backend.handlers.watchdog import (
     handle_watchdog_run,
     handle_watchdog_stop,
@@ -27,6 +31,7 @@ from backend.handlers.watchdog import (
     handle_watchdog_save_config,
     handle_watchdog_list_config,
     handle_watchdog_reorder,
+    handle_watchdog_delete_config,
 )
 
 HandlerFunc = Callable[[Dict[str, Any], AppContext], Any]
@@ -48,6 +53,8 @@ ROUTES: Dict[str, HandlerFunc] = {
     "rename:run": handle_rename,
     "rename:preview_dry_run": handle_preview_dry_run,
     "system:list_selectors": handle_list_selectors,
+    "system:ffmpeg_proxy_enable": handle_ffmpeg_proxy_enable,
+    "system:ffmpeg_proxy_reverse": handle_ffmpeg_proxy_reverse,
     "watchdog:run": handle_watchdog_run,
     "watchdog:stop": handle_watchdog_stop,
     "watchdog:status": handle_watchdog_status,
@@ -56,4 +63,5 @@ ROUTES: Dict[str, HandlerFunc] = {
     "watchdog:save_config": handle_watchdog_save_config,
     "watchdog:list_config": handle_watchdog_list_config,
     "watchdog:reorder": handle_watchdog_reorder,
+    "watchdog:delete_config": handle_watchdog_delete_config,
 }

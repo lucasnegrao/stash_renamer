@@ -2,7 +2,7 @@ import { requestResultsFocus } from "../services/renamerRuntimeState";
 import { clearHistory } from "../services/sceneRenamerApi";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { HookSettingsModal } from "./HookSettingsModal";
-import { WatchdogSettingsPanel } from "./WatchdogSettingsPanel";
+import { WatchdogSettingsPanel } from "./watchdog/WatchdogSettingsPanel";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
@@ -15,7 +15,9 @@ interface IRenamerSettingsPanelProps {
 export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 	className = "",
 }) => {
-	const [showHookModal, setShowHookModal] = React.useState(false);
+	const [activeInlinePanel, setActiveInlinePanel] = React.useState<
+		"" | "hook" | "watchdog"
+	>("");
 	const [showClearConfirm, setShowClearConfirm] = React.useState(false);
 	const [clearing, setClearing] = React.useState(false);
 	const [status, setStatus] = React.useState("");
@@ -45,11 +47,6 @@ export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 
 	return (
 		<div className={className}>
-			<HookSettingsModal
-				show={showHookModal}
-				onHide={() => setShowHookModal(false)}
-				hookType="Scene.Update.Post"
-			/>
 			<ConfirmDialog
 				show={showClearConfirm}
 				title="Clear Rename History?"
@@ -69,14 +66,31 @@ export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 					<div className="d-flex flex-column gap-2">
 						<div className="d-flex align-items-center gap-2">
 							<Button
-								variant="primary"
-								onClick={() => setShowHookModal(true)}
+								variant={activeInlinePanel === "hook" ? "primary" : "primary"}
+								onClick={() =>
+									setActiveInlinePanel((prev) =>
+										prev === "hook" ? "" : "hook",
+									)
+								}
 								disabled={clearing}
 							>
-								Edit Hook Settings
+								Hook Settings
 							</Button>
 							<Button
-								variant="outline-danger"
+								variant={
+									activeInlinePanel === "watchdog" ? "primary" : "primary"
+								}
+								onClick={() =>
+									setActiveInlinePanel((prev) =>
+										prev === "watchdog" ? "" : "watchdog",
+									)
+								}
+								disabled={clearing}
+							>
+								Watchdog Settings
+							</Button>
+							<Button
+								variant="danger"
 								onClick={() => setShowClearConfirm(true)}
 								disabled={clearing}
 							>
@@ -96,14 +110,20 @@ export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 							</Button>
 						</div>
 						<div className="text-muted small">
-							Hook settings control automatic rename on Scene update events.
+							Use the buttons above to load hook or watchdog settings inline.
 						</div>
 						{status ? <div className="small">{status}</div> : null}
 					</div>
 				</Card.Body>
 			</Card>
 
-			<WatchdogSettingsPanel />
+			{activeInlinePanel === "hook" ? (
+				<div className="mb-4">
+					<HookSettingsModal inline hookType="Scene.Update.Post" />
+				</div>
+			) : null}
+
+			{activeInlinePanel === "watchdog" ? <WatchdogSettingsPanel /> : null}
 		</div>
 	);
 };

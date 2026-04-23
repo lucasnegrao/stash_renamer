@@ -79,6 +79,11 @@ export function useEditorLogic() {
 		scenes: [],
 	});
 	const initialTemplateRestoreDoneRef = React.useRef(false);
+	const initialStoredTemplateIdRef = React.useRef(
+		String(
+			loadFromLocalStorage<string>(LAST_TEMPLATE_ID_STORAGE_KEY, "") || "",
+		).trim(),
+	);
 	const [sceneOperationById, setSceneOperationById] = React.useState<
 		Record<string, IScenePreviewEntry>
 	>(() => ({ ...getScenePreviewByIdState() }));
@@ -128,6 +133,23 @@ export function useEditorLogic() {
 		criteriaSignature,
 	});
 	const { savedTemplates, applyTemplateById } = templateCrud;
+	const isInitialTemplateHydrating =
+		Boolean(initialStoredTemplateIdRef.current) &&
+		!initialTemplateRestoreDoneRef.current;
+	const history = PluginApi.libraries.ReactRouterDOM.useHistory?.();
+
+	const navigateToResults = React.useCallback(() => {
+		const nextPath = "/plugins/stash_renamer/results";
+		if (history && typeof history.push === "function") {
+			if (String(window.location.pathname || "") !== nextPath) {
+				history.push(nextPath);
+			}
+			return;
+		}
+		if (String(window.location.pathname || "") === nextPath) return;
+		window.history.pushState({}, "", nextPath);
+		window.dispatchEvent(new PopStateEvent("popstate"));
+	}, [history]);
 
 	const operations = useEditorOperations({
 		template,
@@ -147,6 +169,7 @@ export function useEditorLogic() {
 		getDryRunCriteria: () => filter?.criteria || [],
 		includeWarnErrorInDryRun: true,
 		renameTargetIds,
+		onNavigateToResults: navigateToResults,
 		onDryRunCompleted: (rows) => {
 			setLastDryRunRows(rows || []);
 			let hasChanges = false;
@@ -226,7 +249,11 @@ export function useEditorLogic() {
 	}, [lastDryRunRows, statusFilters]);
 
 	const queryResult = PluginApi.GQL.useFindScenesQuery({
-		skip: filter === undefined || hasChangedIdFilter,
+		skip:
+			filter === undefined ||
+			hasChangedIdFilter ||
+			livePreview ||
+			isInitialTemplateHydrating,
 		fetchPolicy: "cache-first",
 		nextFetchPolicy: "cache-first",
 		notifyOnNetworkStatusChange: true,
@@ -452,6 +479,20 @@ export function useEditorLogic() {
 		if (isActionBusy) return;
 
 		if (currentDryRunStateSignature !== lastExecutedDryRunSignature.current) {
+			// Hide stale preview rows while the next dry-run is recomputed.
+			setChangedIdPlan(null);
+			setOrderedChangedSceneIds([]);
+			setChangedScenesResult({
+				loading: false,
+				error: null,
+				count: 0,
+				scenes: [],
+			});
+			setSelectedIds(new Set());
+			setStatusCounts({ success: 0, error: 0, warn: 0 });
+			setTotalAnalyzedCount(0);
+			setRenameTargetIds([]);
+			setLastDryRunRows(null);
 			lastExecutedDryRunSignature.current = currentDryRunStateSignature;
 			submitRenameTask(true);
 		}
@@ -463,6 +504,11 @@ export function useEditorLogic() {
 		submitRenameTask,
 		changedIdPlan,
 	]);
+
+	const previewGateLoading =
+		livePreview &&
+		(!hasChangedIdFilter || isDebouncing || isDryRunBusy || isDryRunDirty);
+	const startupHydrationLoading = isInitialTemplateHydrating;
 
 	React.useEffect(() => {
 		const firstId = String(effectiveScenes?.[0]?.id || "");
@@ -481,6 +527,13 @@ export function useEditorLogic() {
 	}, [effectiveScenes]);
 
 	const metadataByline = React.useMemo(() => {
+		if (startupHydrationLoading) {
+			return "Loading template...";
+		}
+		if (previewGateLoading) {
+			return "Computing preview results...";
+		}
+
 		const total = hasChangedIdFilter
 			? totalAnalyzedCount
 			: Number(queryResult?.data?.findScenes?.count ?? 0);
@@ -502,6 +555,8 @@ export function useEditorLogic() {
 		queryResult?.data?.findScenes?.count,
 		statusFilters,
 		statusCounts,
+		startupHydrationLoading,
+		previewGateLoading,
 	]);
 
 	function updateFilter(updater: (prev: ListFilterModel) => ListFilterModel) {
@@ -556,6 +611,12 @@ export function useEditorLogic() {
 		setFilter(applySerializedFilterToModel(parsed, filter));
 	}
 
+	function onSelectTemplateIdOnly(templateId: string) {
+		const normalizedId = String(templateId || "").trim();
+		templateCrud.setSelectedTemplateId(normalizedId);
+		saveToLocalStorage(LAST_TEMPLATE_ID_STORAGE_KEY, normalizedId);
+	}
+
 	function reloadSelectedTemplate() {
 		if (templateCrud.selectedSavedTemplateId) {
 			onSelectTemplate(templateCrud.selectedSavedTemplateId);
@@ -564,19 +625,20 @@ export function useEditorLogic() {
 
 	React.useEffect(() => {
 		if (initialTemplateRestoreDoneRef.current) return;
-		if (!Array.isArray(savedTemplates) || savedTemplates.length === 0) return;
+		if (!templateCrud.templatesLoaded) return;
 		initialTemplateRestoreDoneRef.current = true;
 
 		const lastTemplateId = String(
 			loadFromLocalStorage<string>(LAST_TEMPLATE_ID_STORAGE_KEY, "") || "",
 		).trim();
 		if (!lastTemplateId) return;
+		if (!Array.isArray(savedTemplates) || savedTemplates.length === 0) return;
 		const exists = savedTemplates.some(
 			(t) => String(t.id) === String(lastTemplateId),
 		);
 		if (!exists) return;
 		onSelectTemplate(lastTemplateId);
-	}, [savedTemplates]);
+	}, [savedTemplates, templateCrud.templatesLoaded]);
 
 	return {
 		state: {
@@ -596,7 +658,7 @@ export function useEditorLogic() {
 			effectiveScenes,
 			effectiveTotalItems,
 			metadataByline,
-			loading,
+			loading: loading || previewGateLoading || startupHydrationLoading,
 			error,
 			currentPage,
 			itemsPerPage,
@@ -624,6 +686,7 @@ export function useEditorLogic() {
 		templateCrud: {
 			...templateCrud,
 			reloadSelectedTemplate,
+			onSelectTemplateIdOnly,
 		},
 		operations: {
 			...operations,

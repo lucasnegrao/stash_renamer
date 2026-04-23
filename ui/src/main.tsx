@@ -1,7 +1,10 @@
 import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
+import { TaskProgressOverlay } from "./components/TaskProgressOverlay";
 import {
+	getRenamerTaskOverlayState,
 	resetRenamerRuntimeState,
 	setActiveTabState,
+	subscribeRenamerTaskOverlayState,
 } from "./services/renamerRuntimeState";
 import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import { EditorView } from "./views/EditorView";
@@ -48,6 +51,16 @@ import { RenamerSettings } from "./views/settings";
 		React.useEffect(() => {
 			setActiveTabState(currentTab as any);
 		}, [currentTab]);
+		const [globalTaskOverlay, setGlobalTaskOverlay] = React.useState(() =>
+			getRenamerTaskOverlayState(),
+		);
+
+		React.useEffect(() => {
+			const unsub = subscribeRenamerTaskOverlayState((payload) => {
+				setGlobalTaskOverlay(payload);
+			});
+			return () => unsub();
+		}, []);
 
 		const pageRef = React.useRef<HTMLDivElement | null>(null);
 		const componentsToLoad = [
@@ -126,7 +139,7 @@ import { RenamerSettings } from "./views/settings";
 							</Nav.Link>
 						</Nav.Item>
 					</Nav>
-					<div className="pt-10">
+					<div className="pt-10 position-relative">
 						<Switch>
 							<Route exact path="/plugins/stash_renamer">
 								<EditorView />
@@ -138,6 +151,11 @@ import { RenamerSettings } from "./views/settings";
 								<RenamerSettings />
 							</Route>
 						</Switch>
+						<TaskProgressOverlay
+							show={Boolean(globalTaskOverlay?.show)}
+							progress={Number(globalTaskOverlay?.progress || 0)}
+							text={String(globalTaskOverlay?.text || "")}
+						/>
 					</div>
 				</div>
 			</>

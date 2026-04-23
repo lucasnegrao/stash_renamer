@@ -35,6 +35,10 @@ export interface IFindScenesResult {
 	scenes: any[];
 }
 
+export interface IGeneralConfigSnapshot {
+	ffmpegPath: string;
+}
+
 let selectorsCatalogCache: any | null = null;
 let selectorsCatalogInflight: Promise<any> | null = null;
 
@@ -207,6 +211,11 @@ export class StasheroApiClient {
 				"watchdog:reorder",
 				args,
 			),
+		deleteConfig: (args: StasheroApi.Watchdog.IDeleteConfigArgs) =>
+			this.runOperation<StasheroApi.Watchdog.IDeleteConfigResponse>(
+				"watchdog:delete_config",
+				args,
+			),
 	};
 
 	public system = {
@@ -214,6 +223,12 @@ export class StasheroApiClient {
 			this.runOperation<StasheroApi.System.IListSelectorsResponse>(
 				"system:list_selectors",
 			),
+		ffmpegProxyEnableTask: (
+			args: StasheroApi.System.IFFmpegProxyEnableArgs = {},
+		) => this.runTask("system:ffmpeg_proxy_enable", args),
+		ffmpegProxyReverseTask: (
+			args: StasheroApi.System.IFFmpegProxyReverseArgs = {},
+		) => this.runTask("system:ffmpeg_proxy_reverse", args),
 	};
 }
 
@@ -340,12 +355,21 @@ export async function queryFindScenesByIds(args: {
 	sceneFilter?: any;
 	ids: string[];
 }): Promise<IFindScenesResult> {
+	return queryFindScenes({
+		filter: args.filter,
+		sceneFilter: args.sceneFilter,
+		ids: args.ids,
+	});
+}
+
+export async function queryFindScenes(args: {
+	filter?: any;
+	sceneFilter?: any;
+	ids?: string[];
+}): Promise<IFindScenesResult> {
 	const normalizedIds = (args.ids || [])
 		.map((id) => String(id || "").trim())
 		.filter((id) => Boolean(id));
-	if (normalizedIds.length === 0) {
-		return { count: 0, filesize: 0, duration: 0, scenes: [] };
-	}
 
 	const query = gql`
 		query FindScenesByIds($filter: FindFilterType, $scene_filter: SceneFilterType, $ids: [ID!]) {
@@ -378,7 +402,7 @@ export async function queryFindScenesByIds(args: {
 		variables: {
 			filter: args.filter ?? null,
 			scene_filter: args.sceneFilter ?? null,
-			ids: normalizedIds,
+			ids: normalizedIds.length > 0 ? normalizedIds : null,
 		},
 		fetchPolicy: "network-only",
 	});
@@ -422,6 +446,37 @@ export async function clearHistory(): Promise<{
 
 export async function fetchSelectorsCatalog(): Promise<any> {
 	return api.system.listSelectors();
+}
+
+export async function fetchGeneralConfigSnapshot(): Promise<IGeneralConfigSnapshot> {
+	const query = gql`
+		query GetGeneralConfigSnapshot {
+			configuration {
+				general {
+					ffmpegPath
+				}
+			}
+		}
+	`;
+	const result = await api.client.query({
+		query,
+		// Avoid writing partial configuration payloads into Apollo cache.
+		fetchPolicy: "no-cache",
+	});
+	const ffmpegPath = String(
+		result?.data?.configuration?.general?.ffmpegPath || "",
+	).trim();
+	return { ffmpegPath };
+}
+
+export async function installFfmpegProxyServiceTask(): Promise<string | null> {
+	return api.system.ffmpegProxyEnableTask({});
+}
+
+export async function uninstallFfmpegProxyServiceTask(): Promise<
+	string | null
+> {
+	return api.system.ffmpegProxyReverseTask({});
 }
 
 export async function fetchSavedTemplates(): Promise<IRenamerTemplate[]> {
@@ -506,7 +561,24 @@ export async function saveHookSettings(args: {
 
 export async function fetchWatchdogConfigs(): Promise<IWatchdogConfig[]> {
 	const res = await api.watchdog.listConfig();
-	return res?.watchdog?.configs || [];
+	const rows = Array.isArray(res?.watchdog?.configs)
+		? res.watchdog.configs
+		: [];
+	return rows.map((row: any) => {
+		const rawEnabled = row?.enabled;
+		const normalizedEnabled =
+			rawEnabled === true ||
+			rawEnabled === 1 ||
+			rawEnabled === "1" ||
+			String(rawEnabled || "").toLowerCase() === "true";
+		return {
+			...row,
+			id: String(row?.id || ""),
+			path: String(row?.path || ""),
+			operation: String(row?.operation || ""),
+			enabled: normalizedEnabled,
+		} as IWatchdogConfig;
+	});
 }
 
 export async function reorderWatchdogConfigs(
@@ -515,6 +587,18 @@ export async function reorderWatchdogConfigs(
 ): Promise<boolean> {
 	const res = await api.watchdog.reorderConfigs({ path, configIds });
 	return Boolean(res?.watchdog?.restarted);
+}
+
+export async function deleteWatchdogConfigFromDatabase(
+	configId: string,
+): Promise<{ deleted: boolean; id: string; restarted: boolean }> {
+	const res = await api.watchdog.deleteConfig({ id: String(configId || "") });
+	const watchdog = res?.watchdog || {};
+	return {
+		deleted: Boolean(watchdog.deleted),
+		id: String(watchdog.id || configId || ""),
+		restarted: Boolean(watchdog.restarted),
+	};
 }
 
 export async function saveWatchdogConfigToDatabase(

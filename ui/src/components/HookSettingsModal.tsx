@@ -1,5 +1,14 @@
 import {
+	HookSettingsTable,
+	type IHookTemplateRow,
+} from "./hook/HookSettingsTable";
+import { TemplateEditorModal } from "./TemplateEditorModal";
+import { applySerializedFilterToModel } from "../utils/editorHelpers";
+import { ListFilterModel } from "../models/list-filter/filter";
+import type { ISlimSceneData } from "../models/SlimSceneData";
+import {
 	fetchHookSettings,
+	queryFindScenes,
 	fetchSavedTemplates,
 	type IRenamerTemplate,
 	saveHookSettings,
@@ -7,28 +16,156 @@ import {
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
-const { Button, Form, Modal, InputGroup, Spinner } =
+const { Button, Form, Modal, Spinner, Card, Alert } =
 	PluginApi.libraries.Bootstrap;
+const { Icon } = PluginApi.components;
+const { faPlus } = PluginApi.libraries.FontAwesomeSolid;
+const AUTO_SAVE_DEBOUNCE_MS = 300;
 
 interface IHookSettingsModalProps {
-	show: boolean;
+	show?: boolean;
 	hookType?: string;
-	onHide: () => void;
+	onHide?: () => void;
 	onSaved?: () => void;
+	inline?: boolean;
 }
 
-export const HookSettingsModal: React.FC<IHookSettingsModalProps> = ({
-	show,
+interface ITemplateEditorState {
+	show: boolean;
+	templateId: string;
+	selectedTemplateId: string;
+	filenameTemplate: string;
+	pathTemplate: string;
+	filenamePreviewSceneId: string;
+	pathPreviewSceneId: string;
+	scenes: ISlimSceneData[];
+	loading: boolean;
+}
+
+function makeRow(templateId = ""): IHookTemplateRow {
+	return {
+		id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+		templateId: String(templateId || "").trim(),
+	};
+}
+
+function toRows(templateIds: string[]): IHookTemplateRow[] {
+	const ids = (templateIds || [])
+		.map((id) => String(id || "").trim())
+		.filter((id) => Boolean(id));
+	if (ids.length === 0) return [makeRow("")];
+	return ids.map((id) => makeRow(id));
+}
+
+function parseTemplateCriteriaFilter(template: IRenamerTemplate): {
+	findFilter: any;
+	sceneFilter: any;
+} {
+	const parsed = (() => {
+		try {
+			const raw = JSON.parse(String(template.filter_json || "[]"));
+			if (Array.isArray(raw)) return { criteria: raw };
+			return null;
+		} catch {
+			return null;
+		}
+	})();
+	const base = new ListFilterModel(PluginApi.GQL.FilterMode.Scenes);
+	const model = parsed ? applySerializedFilterToModel(parsed, base) : base;
+	const rawFindFilter = (model.makeFindFilter() || {}) as Record<string, any>;
+	const findFilter = {
+		...rawFindFilter,
+		page: 1,
+		per_page: 5,
+	};
+	const sceneFilter = model.makeFilter();
+	return { findFilter, sceneFilter };
+}
+
+const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 	hookType = "Scene.Update.Post",
 	onHide,
 	onSaved,
 }) => {
 	const [templates, setTemplates] = React.useState<IRenamerTemplate[]>([]);
 	const [enabled, setEnabled] = React.useState(false);
-	const [templateIds, setTemplateIds] = React.useState<string[]>([""]);
+	const [rows, setRows] = React.useState<IHookTemplateRow[]>([makeRow("")]);
 	const [loading, setLoading] = React.useState(false);
 	const [saving, setSaving] = React.useState(false);
 	const [status, setStatus] = React.useState("");
+	const loadedRef = React.useRef(false);
+	const lastSavedSignatureRef = React.useRef("");
+	const saveInFlightRef = React.useRef(false);
+	const queuedSaveRef = React.useRef<{
+		signature: string;
+		enabled: boolean;
+		templateIds: string[];
+	} | null>(null);
+	const saveTimerRef = React.useRef<number | null>(null);
+	const [editorState, setEditorState] = React.useState<ITemplateEditorState>({
+		show: false,
+		templateId: "",
+		selectedTemplateId: "",
+		filenameTemplate: "",
+		pathTemplate: "",
+		filenamePreviewSceneId: "",
+		pathPreviewSceneId: "",
+		scenes: [],
+		loading: false,
+	});
+
+	const buildTemplateIds = React.useCallback((items: IHookTemplateRow[]) => {
+		return items
+			.map((row) => String(row.templateId || "").trim())
+			.filter((id) => Boolean(id));
+	}, []);
+
+	const buildSignature = React.useCallback(
+		(nextEnabled: boolean, templateIds: string[]) => {
+			return JSON.stringify({ enabled: nextEnabled, templateIds });
+		},
+		[],
+	);
+
+	const runSave = React.useCallback(
+		async (payload: {
+			signature: string;
+			enabled: boolean;
+			templateIds: string[];
+		}) => {
+			if (saveInFlightRef.current) {
+				queuedSaveRef.current = payload;
+				return;
+			}
+
+			saveInFlightRef.current = true;
+			setSaving(true);
+			setStatus("");
+			try {
+				await saveHookSettings({
+					hookType,
+					enabled: payload.enabled,
+					templateIds: payload.templateIds,
+				});
+				lastSavedSignatureRef.current = payload.signature;
+				onSaved?.();
+			} catch (e: any) {
+				setStatus(`Error saving hook settings: ${e?.message || String(e)}`);
+			} finally {
+				saveInFlightRef.current = false;
+				setSaving(false);
+
+				const queued = queuedSaveRef.current;
+				if (queued) {
+					queuedSaveRef.current = null;
+					if (queued.signature !== lastSavedSignatureRef.current) {
+						void runSave(queued);
+					}
+				}
+			}
+		},
+		[hookType, onSaved],
+	);
 
 	const load = React.useCallback(async () => {
 		setLoading(true);
@@ -41,164 +178,264 @@ export const HookSettingsModal: React.FC<IHookSettingsModalProps> = ({
 			setTemplates(allTemplates);
 			setEnabled(Boolean(hook.enabled));
 			const nextIds = Array.isArray(hook.template_ids) ? hook.template_ids : [];
-			setTemplateIds(nextIds.length > 0 ? nextIds : [""]);
+			setRows(toRows(nextIds));
+			const initialTemplateIds = nextIds
+				.map((id) => String(id || "").trim())
+				.filter((id) => Boolean(id));
+			lastSavedSignatureRef.current = buildSignature(
+				Boolean(hook.enabled),
+				initialTemplateIds,
+			);
+			loadedRef.current = true;
 		} catch (e: any) {
 			setStatus(`Error loading hook settings: ${e?.message || String(e)}`);
 		} finally {
 			setLoading(false);
 		}
-	}, [hookType]);
+	}, [buildSignature, hookType]);
 
 	React.useEffect(() => {
-		if (!show) return;
 		load();
-	}, [show, load]);
+	}, [load]);
 
-	const setRow = (index: number, value: string) => {
-		setTemplateIds((prev: string[]) =>
-			prev.map((row: string, i: number) =>
-				i === index ? String(value || "") : row,
-			),
-		);
-	};
+	React.useEffect(() => {
+		if (!loadedRef.current || loading) return;
+		const templateIds = buildTemplateIds(rows);
+		const signature = buildSignature(enabled, templateIds);
+		if (signature === lastSavedSignatureRef.current) return;
 
-	const addRow = () => {
-		setTemplateIds((prev: string[]) => [...prev, ""]);
-	};
-
-	const removeRow = (index: number) => {
-		setTemplateIds((prev: string[]) => {
-			const next = prev.filter((_: string, i: number) => i !== index);
-			return next.length > 0 ? next : [""];
-		});
-	};
-
-	const moveRow = (index: number, direction: -1 | 1) => {
-		setTemplateIds((prev: string[]) => {
-			const target = index + direction;
-			if (target < 0 || target >= prev.length) return prev;
-			const next = [...prev];
-			const current = next[index];
-			next[index] = next[target];
-			next[target] = current;
-			return next;
-		});
-	};
-
-	const save = async () => {
-		setSaving(true);
-		setStatus("");
-		try {
-			const filteredIds = templateIds
-				.map((id: string) => String(id || "").trim())
-				.filter((id: string) => Boolean(id));
-			await saveHookSettings({
-				hookType,
-				enabled,
-				templateIds: filteredIds,
-			});
-			setStatus("Hook settings saved.");
-			if (onSaved) onSaved();
-			onHide();
-		} catch (e: any) {
-			setStatus(`Error saving hook settings: ${e?.message || String(e)}`);
-		} finally {
-			setSaving(false);
+		if (saveTimerRef.current !== null) {
+			window.clearTimeout(saveTimerRef.current);
 		}
-	};
+		saveTimerRef.current = window.setTimeout(() => {
+			void runSave({ signature, enabled, templateIds });
+		}, AUTO_SAVE_DEBOUNCE_MS);
+
+		return () => {
+			if (saveTimerRef.current !== null) {
+				window.clearTimeout(saveTimerRef.current);
+				saveTimerRef.current = null;
+			}
+		};
+	}, [buildSignature, buildTemplateIds, enabled, loading, rows, runSave]);
+
+	const setRowTemplate = React.useCallback(
+		(rowId: string, templateId: string) => {
+			setRows((prev) =>
+				prev.map((row) =>
+					row.id === rowId
+						? { ...row, templateId: String(templateId || "").trim() }
+						: row,
+				),
+			);
+		},
+		[],
+	);
+
+	const addRow = React.useCallback(() => {
+		setRows((prev) => [...prev, makeRow("")]);
+	}, []);
+
+	const removeRow = React.useCallback((rowId: string) => {
+		setRows((prev) => {
+			const next = prev.filter((row) => row.id !== rowId);
+			return next.length > 0 ? next : [makeRow("")];
+		});
+	}, []);
+
+	const openEditTemplate = React.useCallback(
+		async (row: IHookTemplateRow) => {
+			const template = templates.find(
+				(item) => String(item.id) === String(row.templateId),
+			);
+			if (!template) {
+				setStatus("Select a template before editing.");
+				return;
+			}
+
+			setEditorState({
+				show: true,
+				templateId: String(template.id || ""),
+				selectedTemplateId: String(template.id || ""),
+				filenameTemplate: String(template.filename_template || ""),
+				pathTemplate: String(template.path_template || ""),
+				filenamePreviewSceneId: "",
+				pathPreviewSceneId: "",
+				scenes: [],
+				loading: true,
+			});
+
+			try {
+				const { findFilter, sceneFilter } =
+					parseTemplateCriteriaFilter(template);
+				const result = await queryFindScenes({
+					filter: findFilter,
+					sceneFilter,
+				});
+				const scenes = (result?.scenes || []).slice(0, 5) as ISlimSceneData[];
+				const firstSceneId = String(scenes?.[0]?.id || "");
+				setEditorState((prev) => ({
+					...prev,
+					scenes,
+					filenamePreviewSceneId: firstSceneId,
+					pathPreviewSceneId: firstSceneId,
+					loading: false,
+				}));
+			} catch (error: unknown) {
+				setEditorState((prev) => ({ ...prev, loading: false }));
+				setStatus(
+					`Failed to load preview scenes for template: ${
+						typeof error === "object" && error && "message" in error
+							? String((error as { message?: unknown }).message || error)
+							: String(error)
+					}`,
+				);
+			}
+		},
+		[templates],
+	);
+
+	const closeEditor = React.useCallback(async () => {
+		setEditorState((prev) => ({
+			...prev,
+			show: false,
+			loading: false,
+		}));
+		try {
+			const allTemplates = await fetchSavedTemplates();
+			setTemplates(allTemplates);
+		} catch {
+			// no-op; keep stale list if refresh fails
+		}
+	}, []);
 
 	return (
-		<Modal show={show} onHide={saving ? undefined : onHide} centered size="lg">
-			<Modal.Header closeButton={!saving}>
+		<>
+			<TemplateEditorModal
+				show={editorState.show}
+				onHide={closeEditor}
+				filenameTemplate={editorState.filenameTemplate}
+				pathTemplate={editorState.pathTemplate}
+				onChangeFilenameTemplate={(next) =>
+					setEditorState((prev) => ({ ...prev, filenameTemplate: next }))
+				}
+				onChangePathTemplate={(next) =>
+					setEditorState((prev) => ({ ...prev, pathTemplate: next }))
+				}
+				selectedTemplateId={editorState.selectedTemplateId}
+				onChangeSelectedTemplateId={(next) =>
+					setEditorState((prev) => ({ ...prev, selectedTemplateId: next }))
+				}
+				scenes={editorState.scenes}
+				filenamePreviewSceneId={editorState.filenamePreviewSceneId}
+				onChangeFilenamePreviewSceneId={(sceneId) =>
+					setEditorState((prev) => ({
+						...prev,
+						filenamePreviewSceneId: sceneId,
+					}))
+				}
+				pathPreviewSceneId={editorState.pathPreviewSceneId}
+				onChangePathPreviewSceneId={(sceneId) =>
+					setEditorState((prev) => ({ ...prev, pathPreviewSceneId: sceneId }))
+				}
+			/>
+
+			{editorState.loading && editorState.show ? (
+				<div className="d-flex align-items-center gap-2 mb-2">
+					<Spinner animation="border" size="sm" role="status" />
+					<span>Loading template preview scenes...</span>
+				</div>
+			) : null}
+
+			<Form.Group className="mb-3">
+				<Form.Check
+					id="scene-renamer-hook-enabled"
+					type="switch"
+					checked={enabled}
+					onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+						setEnabled(e.target.checked)
+					}
+					disabled={loading}
+					label={`Enable ${hookType} hook`}
+				/>
+			</Form.Group>
+
+			<div className="d-flex align-items-center justify-content-between mb-2">
+				<div className="fw-bold">Templates to run (drag to reorder)</div>
+				<Button variant="primary" size="sm" onClick={addRow} disabled={loading}>
+					<Icon icon={faPlus} className="mr-1" /> Add Template
+				</Button>
+			</div>
+
+			<HookSettingsTable
+				tableName={`hook_settings_${hookType.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`}
+				rows={rows}
+				templates={templates}
+				disabled={loading}
+				onReorder={setRows}
+				onTemplateChange={(row, templateId) =>
+					setRowTemplate(row.id, templateId)
+				}
+				onEdit={openEditTemplate}
+				onRemove={(row) => removeRow(row.id)}
+			/>
+
+			{status ? <div className="mt-3 text-muted">{status}</div> : null}
+
+			{saving ? (
+				<div className="d-flex align-items-center justify-content-end gap-2 mt-3 text-muted">
+					<Spinner animation="border" size="sm" role="status" />
+					<span>Saving changes...</span>
+				</div>
+			) : null}
+
+			{onHide ? (
+				<div className="d-flex justify-content-end gap-2 mt-3">
+					<Button variant="secondary" onClick={onHide}>
+						Close
+					</Button>
+				</div>
+			) : null}
+		</>
+	);
+};
+
+export const HookSettingsModal: React.FC<IHookSettingsModalProps> = ({
+	show = false,
+	hookType = "Scene.Update.Post",
+	onHide,
+	onSaved,
+	inline = false,
+}) => {
+	if (inline) {
+		return (
+			<Card>
+				<Card.Header>
+					<h6 className="mb-0">Hook Settings ({hookType})</h6>
+				</Card.Header>
+				<Card.Body>
+					<HookSettingsPanelInner
+						hookType={hookType}
+						onHide={onHide}
+						onSaved={onSaved}
+					/>
+				</Card.Body>
+			</Card>
+		);
+	}
+
+	return (
+		<Modal show={show} onHide={onHide} centered size="xl">
+			<Modal.Header closeButton>
 				<Modal.Title>Hook Settings ({hookType})</Modal.Title>
 			</Modal.Header>
 			<Modal.Body>
-				{loading ? (
-					<div className="d-flex align-items-center gap-2">
-						<Spinner animation="border" size="sm" role="status" />
-						<span>Loading hook settings...</span>
-					</div>
-				) : (
-					<>
-						<Form.Group className="mb-3">
-							<Form.Check
-								id="scene-renamer-hook-enabled"
-								type="switch"
-								checked={enabled}
-								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-									setEnabled(e.target.checked)
-								}
-								disabled={saving}
-								label="Enable Scene.Update.Post hook"
-							/>
-						</Form.Group>
-
-						<div className="mb-2 fw-bold">Templates to run (in order)</div>
-						{templateIds.map((templateId: string, index: number) => (
-							<InputGroup className="mb-2" key={`hook-template-${index}`}>
-								<InputGroup.Text>#{index + 1}</InputGroup.Text>
-								<Form.Control
-									as="select"
-									value={templateId}
-									onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-										setRow(index, e.target.value)
-									}
-									disabled={saving}
-								>
-									<option value="">Select template...</option>
-									{templates.map((tpl: IRenamerTemplate) => (
-										<option key={String(tpl.id)} value={String(tpl.id)}>
-											{String(tpl.name)}
-										</option>
-									))}
-								</Form.Control>
-								<Button
-									variant="outline-secondary"
-									onClick={() => moveRow(index, -1)}
-									disabled={saving || index === 0}
-									title="Move up"
-								>
-									Up
-								</Button>
-								<Button
-									variant="outline-secondary"
-									onClick={() => moveRow(index, 1)}
-									disabled={saving || index === templateIds.length - 1}
-									title="Move down"
-								>
-									Down
-								</Button>
-								<Button
-									variant="outline-danger"
-									onClick={() => removeRow(index)}
-									disabled={saving}
-									title="Remove row"
-								>
-									Remove
-								</Button>
-							</InputGroup>
-						))}
-
-						<Button
-							variant="outline-primary"
-							onClick={addRow}
-							disabled={saving}
-						>
-							Add Template Row
-						</Button>
-
-						{status ? <div className="mt-3 text-muted">{status}</div> : null}
-					</>
-				)}
+				<HookSettingsPanelInner
+					hookType={hookType}
+					onHide={onHide}
+					onSaved={onSaved}
+				/>
 			</Modal.Body>
-			<Modal.Footer>
-				<Button variant="secondary" onClick={onHide} disabled={saving}>
-					Cancel
-				</Button>
-				<Button variant="primary" onClick={save} disabled={loading || saving}>
-					{saving ? "Saving..." : "Save"}
-				</Button>
-			</Modal.Footer>
 		</Modal>
 	);
 };

@@ -239,6 +239,8 @@ export namespace StasheroApi {
 			excluded_scene_ids?: string[];
 			find_filter?: any;
 			include_warn_error?: boolean;
+			batch_id?: string;
+			batch_mode?: string;
 		}
 
 		/** mode: 'rename:run' */
@@ -278,6 +280,12 @@ export namespace StasheroApi {
 			}>;
 			syntax: Record<string, string>;
 		}
+
+		/** mode: 'system:ffmpeg_proxy_enable' */
+		export type IFFmpegProxyEnableArgs = {};
+
+		/** mode: 'system:ffmpeg_proxy_reverse' */
+		export type IFFmpegProxyReverseArgs = {};
 	}
 
 	// =========================================================================
@@ -347,6 +355,19 @@ export namespace StasheroApi {
 		}
 		export interface IReorderResponse {
 			watchdog: {
+				restarted: boolean;
+			};
+		}
+
+		/** mode: 'watchdog:delete_config' */
+		export interface IDeleteConfigArgs {
+			id: string;
+			watchdog_runtime_dir?: string;
+		}
+		export interface IDeleteConfigResponse {
+			watchdog: {
+				deleted: boolean;
+				id: string;
 				restarted: boolean;
 			};
 		}

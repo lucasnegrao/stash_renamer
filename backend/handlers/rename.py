@@ -30,6 +30,8 @@ def _execute_rename_workflow(mode: str, options: Dict[str, Any], ctx: AppContext
     if find_filter is not None and not isinstance(find_filter, dict):
         raise ValueError("'find_filter' must be an object/dict")
     include_warn_error = to_bool(options.get("include_warn_error", False))
+    batch_id_opt = str(options.get("batch_id") or "").strip() or None
+    batch_mode_opt = str(options.get("batch_mode") or "").strip() or None
 
     if isinstance(find_filter, dict):
         find_filter = dict(find_filter)
@@ -92,7 +94,10 @@ def _execute_rename_workflow(mode: str, options: Dict[str, Any], ctx: AppContext
             all_operations = filtered_operations
         return {"operations": all_operations} if ctx.collect_operations else None
 
-    batch_id = ctx.mover.start_batch(mode="rename")
+    batch_id = ctx.mover.start_batch(
+        mode=batch_mode_opt or "rename",
+        fixed_batch_id=batch_id_opt,
+    )
     try:
         ops = ctx.engine.edit_run(
             filename_template=filename_template,

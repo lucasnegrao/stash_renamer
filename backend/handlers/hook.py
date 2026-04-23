@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict, List
 from backend.handlers.context import AppContext
 from backend.handlers.utils import (
@@ -18,6 +19,17 @@ mutation RunPluginTask($plugin_id: ID!, $description: String, $args_map: Map) {
     )
 }
 """
+
+
+def _hook_batch_identity(hook_type: str) -> Dict[str, str]:
+    raw_hook = str(hook_type or "").strip() or "Scene.Update.Post"
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", raw_hook).strip("_").lower()
+    if not normalized:
+        normalized = "scene_update_post"
+    return {
+        "batch_id": f"stash_renamer_hook_batch__{normalized}",
+        "batch_mode": f"hook:{raw_hook}",
+    }
 
 
 def handle_get_settings(options: Dict[str, Any], ctx: AppContext):
@@ -63,6 +75,7 @@ def handle_run(options: Dict[str, Any], ctx: AppContext):
         hook_settings.get("template_ids"),
         "hook_settings.template_ids",
     )
+    hook_batch = _hook_batch_identity(hook_type)
     configured_templates = ctx.templates.list_templates_by_ids(
         template_ids=template_ids
     )
@@ -151,6 +164,8 @@ def handle_run(options: Dict[str, Any], ctx: AppContext):
             "mode": "rename:run",
             "filename_template": filename_template,
             "ids": [object_id],
+            "batch_id": hook_batch["batch_id"],
+            "batch_mode": hook_batch["batch_mode"],
         }
         if path_template:
             args_map["path_template"] = path_template

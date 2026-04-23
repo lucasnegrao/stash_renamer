@@ -34,3 +34,7 @@ def handle_watchdog_list_config(options: Dict[str, Any], ctx: AppContext):
 
 def handle_watchdog_reorder(options: Dict[str, Any], ctx: AppContext):
     return {"watchdog": ctx.watchdog.reorder_configs(options)}
+
+
+def handle_watchdog_delete_config(options: Dict[str, Any], ctx: AppContext):
+    return {"watchdog": ctx.watchdog.delete_config(options)}

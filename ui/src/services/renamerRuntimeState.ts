@@ -15,6 +15,11 @@ type TResultFocusListener = (payload: {
 type TSceneRuntimeListener = (payload: { token: number }) => void;
 type TScenePreviewListener = (payload: { token: number }) => void;
 type TSetFilterFn = (value: any | ((prevState: any) => any)) => void;
+type TRenamerTaskOverlayListener = (payload: {
+	show: boolean;
+	progress: number;
+	text: string;
+}) => void;
 
 let filterState: any = null;
 let sceneListForPreviewState: any[] = [];
@@ -32,6 +37,12 @@ let scenePreviewListeners: TScenePreviewListener[] = [];
 let lastSceneRuntimeSignature = "";
 let sceneListSetFilterState: TSetFilterFn | null = null;
 let lastAppliedFilterSignature = "";
+let renamerTaskOverlayState = {
+	show: false,
+	progress: 0,
+	text: "",
+};
+let renamerTaskOverlayListeners: TRenamerTaskOverlayListener[] = [];
 
 function normalizeSerializedCriterion(rawCriterion: any): any | null {
 	if (!rawCriterion || typeof rawCriterion !== "object") return null;
@@ -253,6 +264,7 @@ export function resetRenamerRuntimeState(): void {
 	sceneRuntimeToken = 0;
 	scenePreviewToken = 0;
 	lastSceneRuntimeSignature = "";
+	renamerTaskOverlayState = { show: false, progress: 0, text: "" };
 }
 
 export function getActiveTabState(): TActiveTab {
@@ -300,5 +312,43 @@ export function subscribeScenePreviewState(
 	scenePreviewListeners.push(cb);
 	return () => {
 		scenePreviewListeners = scenePreviewListeners.filter((x) => x !== cb);
+	};
+}
+
+export function getRenamerTaskOverlayState(): {
+	show: boolean;
+	progress: number;
+	text: string;
+} {
+	return { ...renamerTaskOverlayState };
+}
+
+export function setRenamerTaskOverlayState(next: {
+	show: boolean;
+	progress: number;
+	text: string;
+}): void {
+	renamerTaskOverlayState = {
+		show: Boolean(next?.show),
+		progress: Number(next?.progress || 0),
+		text: String(next?.text || ""),
+	};
+	renamerTaskOverlayListeners.forEach((cb) =>
+		cb({ ...renamerTaskOverlayState }),
+	);
+}
+
+export function clearRenamerTaskOverlayState(): void {
+	setRenamerTaskOverlayState({ show: false, progress: 0, text: "" });
+}
+
+export function subscribeRenamerTaskOverlayState(
+	cb: TRenamerTaskOverlayListener,
+): () => void {
+	renamerTaskOverlayListeners.push(cb);
+	return () => {
+		renamerTaskOverlayListeners = renamerTaskOverlayListeners.filter(
+			(x) => x !== cb,
+		);
 	};
 }

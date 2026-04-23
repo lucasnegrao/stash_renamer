@@ -70,6 +70,8 @@ interface IListTableProps<T> {
 			onToggle: (nextSelected: boolean, shiftKey: boolean) => void;
 		},
 	) => React.ReactNode;
+	rowReorderEnabled?: boolean;
+	onRowReorder?: (items: T[]) => void;
 }
 
 export const ListTable = <T extends { id: string }>(
@@ -88,6 +90,8 @@ export const ListTable = <T extends { id: string }>(
 		isRowSelectable,
 		renderSelectHeader,
 		renderSelectCell,
+		rowReorderEnabled = false,
+		onRowReorder,
 	} = props;
 
 	const allColumnsByValue = useMemo(
@@ -114,6 +118,9 @@ export const ListTable = <T extends { id: string }>(
 	const [draggingColumnValue, setDraggingColumnValue] = useState<string | null>(
 		null,
 	);
+	const [rowOrder, setRowOrder] = useState<string[]>([]);
+	const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
+	const [dragOverRowId, setDragOverRowId] = useState<string | null>(null);
 	const resizeRef = useRef<{
 		column: string;
 		startX: number;
@@ -124,9 +131,8 @@ export const ListTable = <T extends { id: string }>(
 		{},
 	);
 
-	const MIN_COL_WIDTH = 80;
+	const MIN_COL_WIDTH = 20;
 	const SELECT_COL_WIDTH = 52;
-	const DEFAULT_MULTILINE_LINES = 3;
 	const visibleColumnByValue = useMemo(
 		() => Object.fromEntries(visibleColumns.map((c) => [c.value, c])),
 		[visibleColumns],
@@ -202,6 +208,62 @@ export const ListTable = <T extends { id: string }>(
 		setColumns(next);
 	}
 
+	const rowReorderActive = rowReorderEnabled && items.length > 1;
+
+	useEffect(() => {
+		if (!rowReorderActive) {
+			setRowOrder([]);
+			setDraggingRowId(null);
+			setDragOverRowId(null);
+			return;
+		}
+
+		const latestIds = items.map((item) => item.id);
+		setRowOrder((prev) => {
+			if (!prev.length) return latestIds;
+
+			const latestSet = new Set(latestIds);
+			const kept = prev.filter((id) => latestSet.has(id));
+			const missing = latestIds.filter((id) => !kept.includes(id));
+			return [...kept, ...missing];
+		});
+	}, [rowReorderActive, items]);
+
+	const orderedItems = useMemo(() => {
+		if (!rowReorderActive || !rowOrder.length) return items;
+
+		const byId = new Map(items.map((item) => [item.id, item]));
+		const ordered = rowOrder
+			.map((id) => byId.get(id))
+			.filter((item): item is T => Boolean(item));
+		if (ordered.length === items.length) return ordered;
+		return items;
+	}, [items, rowOrder, rowReorderActive]);
+
+	function reorderRows(sourceId: string, targetId: string) {
+		if (!rowReorderActive || sourceId === targetId) return;
+		const sourceIndex = rowOrder.indexOf(sourceId);
+		const targetIndex = rowOrder.indexOf(targetId);
+		if (sourceIndex < 0 || targetIndex < 0) return;
+
+		const nextOrder = [...rowOrder];
+		const [moved] = nextOrder.splice(sourceIndex, 1);
+		nextOrder.splice(targetIndex, 0, moved);
+		setRowOrder(nextOrder);
+
+		if (!onRowReorder) return;
+		const byId = new Map(items.map((item) => [item.id, item]));
+		const nextItems = nextOrder
+			.map((id) => byId.get(id))
+			.filter((item): item is T => Boolean(item));
+		onRowReorder(nextItems);
+	}
+
+	function shouldIgnoreRowDragStart(target: EventTarget | null): boolean {
+		if (!(target instanceof HTMLElement)) return false;
+		return Boolean(target.closest('[data-row-drag-ignore="true"]'));
+	}
+
 	useEffect(() => {
 		saveToLocalStorage(widthStorageKey, columnWidths);
 	}, [columnWidths, widthStorageKey]);
@@ -241,7 +303,7 @@ export const ListTable = <T extends { id: string }>(
 			});
 			return changed ? next : prev;
 		});
-	}, [visibleColumns, items]);
+	}, [visibleColumns, orderedItems]);
 
 	const baseColumnWidths = useMemo(() => {
 		const out: Record<string, number> = {};
@@ -261,9 +323,51 @@ export const ListTable = <T extends { id: string }>(
 		const selected = selectedIds.has(item.id);
 		const onToggle = (nextSelected: boolean, nextShiftKey = false) =>
 			onSelectChange(item.id, nextSelected, nextShiftKey);
+		const isDragging = draggingRowId === item.id;
+		const isDragTarget = dragOverRowId === item.id && draggingRowId !== item.id;
 
 		return (
-			<tr key={item.id}>
+			<tr
+				key={item.id}
+				draggable={rowReorderActive}
+				onDragStart={(event) => {
+					if (!rowReorderActive) return;
+					if (shouldIgnoreRowDragStart(event.target)) {
+						event.preventDefault();
+						return;
+					}
+					setDraggingRowId(item.id);
+					setDragOverRowId(null);
+					event.dataTransfer.effectAllowed = "move";
+					event.dataTransfer.setData("text/plain", item.id);
+				}}
+				onDragOver={(event) => {
+					if (!rowReorderActive) return;
+					if (!draggingRowId || draggingRowId === item.id) return;
+					event.preventDefault();
+					event.dataTransfer.dropEffect = "move";
+					setDragOverRowId(item.id);
+				}}
+				onDrop={(event) => {
+					if (!rowReorderActive) return;
+					event.preventDefault();
+					const sourceId =
+						draggingRowId || event.dataTransfer.getData("text/plain");
+					setDraggingRowId(null);
+					setDragOverRowId(null);
+					if (!sourceId) return;
+					reorderRows(sourceId, item.id);
+				}}
+				onDragEnd={() => {
+					setDraggingRowId(null);
+					setDragOverRowId(null);
+				}}
+				style={{
+					cursor: rowReorderActive ? "grab" : undefined,
+					opacity: isDragging ? 0.65 : 1,
+					boxShadow: isDragTarget ? "inset 0 2px 0 #67b3ff" : undefined,
+				}}
+			>
 				<td className="select-col">
 					{renderSelectCell ? (
 						renderSelectCell(item, index, {
@@ -475,7 +579,7 @@ export const ListTable = <T extends { id: string }>(
 						<th className="border-row" colSpan={100}></th>
 					</tr>
 				</thead>
-				<tbody>{items.map(renderObjectRow)}</tbody>
+				<tbody>{orderedItems.map(renderObjectRow)}</tbody>
 			</Table>
 		</div>
 	);

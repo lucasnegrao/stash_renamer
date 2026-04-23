@@ -26,6 +26,17 @@ interface ITemplateManagerBarProps {
 	onSaveTemplate: () => void;
 	onSaveAsTemplate: (name: string) => Promise<void>;
 	onReloadTemplate: () => void;
+	onEvent?: (event: {
+		type:
+			| "select"
+			| "delete"
+			| "save"
+			| "save_as"
+			| "reload"
+			| "confirm_reload"
+			| "confirm_overwrite";
+		templateId?: string;
+	}) => void;
 	showCreatedAtInLabel?: boolean;
 	className?: string;
 }
@@ -42,6 +53,7 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 	onSaveTemplate,
 	onSaveAsTemplate,
 	onReloadTemplate,
+	onEvent,
 	showCreatedAtInLabel = true,
 	className,
 }) => {
@@ -94,6 +106,10 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 				onCancel={() => setShowReloadConfirm(false)}
 				onConfirm={() => {
 					setShowReloadConfirm(false);
+					onEvent?.({
+						type: "confirm_reload",
+						templateId: String(selectedTemplateId || ""),
+					});
 					onReloadTemplate();
 				}}
 			/>
@@ -112,6 +128,10 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 				onCancel={() => setShowOverwriteConfirm(false)}
 				onConfirm={() => {
 					setShowOverwriteConfirm(false);
+					onEvent?.({
+						type: "confirm_overwrite",
+						templateId: String(selectedTemplateId || ""),
+					});
 					onSaveTemplate();
 				}}
 			/>
@@ -130,6 +150,12 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 							!selectedTemplateId
 						}
 						onClick={onDeleteTemplate}
+						onClickCapture={() =>
+							onEvent?.({
+								type: "delete",
+								templateId: String(selectedTemplateId || ""),
+							})
+						}
 					>
 						<Icon icon={faTrash} fixedWidth />
 					</Button>
@@ -149,6 +175,12 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 							!isSelectedTemplateDirty
 						}
 						onClick={() => setShowOverwriteConfirm(true)}
+						onClickCapture={() =>
+							onEvent?.({
+								type: "save",
+								templateId: String(selectedTemplateId || ""),
+							})
+						}
 					>
 						<Icon icon={faSave} fixedWidth />
 					</Button>
@@ -164,6 +196,10 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 						}
 						onClick={() => {
 							if (!isSelectedTemplateDirty) {
+								onEvent?.({
+									type: "reload",
+									templateId: String(selectedTemplateId || ""),
+								});
 								onReloadTemplate();
 								return;
 							}
@@ -177,6 +213,12 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 						title="Save as new template"
 						disabled={isActionBusy || isSavingTemplate || isDeletingTemplate}
 						onClick={() => setShowSaveAsModal(true)}
+						onClickCapture={() =>
+							onEvent?.({
+								type: "save_as",
+								templateId: String(selectedTemplateId || ""),
+							})
+						}
 					>
 						<Icon icon={faCopy} fixedWidth />
 					</Button>
@@ -204,6 +246,7 @@ export const TemplateManagerBar: React.FC<ITemplateManagerBarProps> = ({
 									onSelect={(eventKey: string | null) => {
 										const selectedId = String(eventKey || "");
 										if (!selectedId) return;
+										onEvent?.({ type: "select", templateId: selectedId });
 										onSelectTemplate(selectedId);
 									}}
 								>
