@@ -1,9 +1,7 @@
 import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
 import {
-	getActiveTabState,
 	resetRenamerRuntimeState,
 	setActiveTabState,
-	subscribeActiveTabState,
 } from "./services/renamerRuntimeState";
 import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import { EditorView } from "./views/EditorView";
@@ -13,8 +11,9 @@ import { RenamerSettings } from "./views/settings";
 (() => {
 	const PluginApi = window.PluginApi;
 	const React = PluginApi.React;
-	const { Button, Tabs, Tab } = PluginApi.libraries.Bootstrap;
-	const { NavLink } = PluginApi.libraries.ReactRouterDOM;
+	const { Button, Nav } = PluginApi.libraries.Bootstrap;
+	const { NavLink, Route, Switch, useLocation } =
+		PluginApi.libraries.ReactRouterDOM;
 	const { faEthernet } = PluginApi.libraries.FontAwesomeSolid;
 	const isRenamerPath = (pathname: string) =>
 		pathname === "/plugins/stash_renamer" ||
@@ -35,7 +34,21 @@ import { RenamerSettings } from "./views/settings";
 	});
 
 	const MainPage: React.FC = () => {
-		const [tab, setTab] = React.useState(getActiveTabState());
+		const location = useLocation();
+		const match = PluginApi.libraries.ReactRouterDOM.useRouteMatch();
+
+		let currentTab = "editor";
+		if (location.pathname.endsWith("/results")) currentTab = "results";
+		if (location.pathname.endsWith("/settings")) currentTab = "settings";
+
+		// Only render when the route is an exact match to prevent Stash from double-rendering
+		// since it renders plugin routes without exact mode, matching base and sub-routes simultaneously.
+		if (match && !match.isExact) return null;
+
+		React.useEffect(() => {
+			setActiveTabState(currentTab as any);
+		}, [currentTab]);
+
 		const pageRef = React.useRef<HTMLDivElement | null>(null);
 		const componentsToLoad = [
 			PluginApi.loadableComponents.Scenes,
@@ -44,16 +57,8 @@ import { RenamerSettings } from "./views/settings";
 			PluginApi.loadableComponents.SceneList,
 			PluginApi.loadableComponents.SceneQueryModal,
 		];
-		const componentsLoading =
+		const _componentsLoading =
 			PluginApi.hooks.useLoadComponents(componentsToLoad);
-
-		// const { LoadingIndicator } = PluginApi.components;
-
-		// if (componentsLoading) return <LoadingIndicator />;
-		React.useEffect(() => {
-			const unsub = subscribeActiveTabState((nextTab) => setTab(nextTab));
-			return () => unsub();
-		}, []);
 
 		React.useEffect(() => {
 			ensureSceneRenamerStyles();
@@ -63,7 +68,7 @@ import { RenamerSettings } from "./views/settings";
 			const pageEl = pageRef.current;
 			if (!pageEl) return;
 			const navEl = pageEl.querySelector(
-				"#stash-renamer-tabs > .nav",
+				"#stash-renamer-tabs",
 			) as HTMLElement | null;
 			if (!navEl) return;
 
@@ -81,45 +86,67 @@ import { RenamerSettings } from "./views/settings";
 
 			window.addEventListener("resize", update);
 			return () => window.removeEventListener("resize", update);
-		}, [tab]);
+		}, [currentTab]);
 
 		return (
 			<>
 				<div ref={pageRef} className="stash-renamer-page">
-					<Tabs
+					<Nav
+						variant="tabs"
 						className="mb-3"
 						id="stash-renamer-tabs"
-						activeKey={tab}
-						onSelect={(k: any) =>
-							setActiveTabState(String(k || "editor") as any)
-						}
+						activeKey={currentTab}
 					>
-						<Tab eventKey="editor" title="Editor">
-							<div className="pt-10">
+						<Nav.Item>
+							<Nav.Link
+								as={NavLink}
+								exact
+								to="/plugins/stash_renamer"
+								eventKey="editor"
+							>
+								Editor
+							</Nav.Link>
+						</Nav.Item>
+						<Nav.Item>
+							<Nav.Link
+								as={NavLink}
+								to="/plugins/stash_renamer/results"
+								eventKey="results"
+							>
+								Results
+							</Nav.Link>
+						</Nav.Item>
+						<Nav.Item>
+							<Nav.Link
+								as={NavLink}
+								to="/plugins/stash_renamer/settings"
+								eventKey="settings"
+							>
+								Settings
+							</Nav.Link>
+						</Nav.Item>
+					</Nav>
+					<div className="pt-10">
+						<Switch>
+							<Route exact path="/plugins/stash_renamer">
 								<EditorView />
-							</div>
-						</Tab>
-
-						<Tab eventKey="results" title="Results">
-							<div className="pt-10">
+							</Route>
+							<Route path="/plugins/stash_renamer/results">
 								<RenamerResults />
-							</div>
-						</Tab>
-
-						<Tab eventKey="settings" title="Settings">
-							<div className="pt-10">
+							</Route>
+							<Route path="/plugins/stash_renamer/settings">
 								<RenamerSettings />
-							</div>
-						</Tab>
-					</Tabs>
+							</Route>
+						</Switch>
+					</div>
 				</div>
 			</>
 		);
 	};
 
 	PluginApi.register.route("/plugins/stash_renamer", MainPage);
-	PluginApi.register.route("/plugins/stash_renamer/results", RenamerResults);
-	PluginApi.register.route("/plugins/stash_renamer/settings", RenamerSettings);
+	PluginApi.register.route("/plugins/stash_renamer/results", MainPage);
+	PluginApi.register.route("/plugins/stash_renamer/settings", MainPage);
 
 	PluginApi.patch.before("MainNavBar.UtilityItems", (props: any) => {
 		const { Icon } = PluginApi.components;
