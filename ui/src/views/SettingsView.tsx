@@ -109,9 +109,7 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 								)}
 							</Button>
 						</div>
-						<div className="text-muted small">
-							Use the buttons above to load hook or watchdog settings inline.
-						</div>
+
 						{status ? <div className="small">{status}</div> : null}
 					</div>
 				</Card.Body>

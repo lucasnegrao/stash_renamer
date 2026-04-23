@@ -47,6 +47,14 @@ export const WatchdogListTable: React.FC<IWatchdogListTableProps> = ({
 }) => {
 	const allColumns: IColumn[] = [
 		{
+			value: "actions",
+			label: "Actions",
+			mandatory: true,
+			defaultWidth: 280,
+			minWidth: 20,
+			multiline: false,
+		},
+		{
 			value: "operation",
 			label: "Operation",
 			mandatory: true,
@@ -54,14 +62,6 @@ export const WatchdogListTable: React.FC<IWatchdogListTableProps> = ({
 			minWidth: 180,
 			multiline: true,
 			maxLines: 2,
-		},
-		{
-			value: "actions",
-			label: "Actions",
-			mandatory: true,
-			defaultWidth: 280,
-			minWidth: 240,
-			multiline: false,
 		},
 	];
 
