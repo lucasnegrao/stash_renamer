@@ -460,6 +460,12 @@ interface IInputFilterProps {
 	mode?: FilterMode;
 }
 
+interface IFolderSelectProps {
+	value?: string;
+	onChange: (path: string) => void;
+	mode?: FilterMode;
+}
+
 export const FolderFilter: React.FC<IInputFilterProps> = ({
 	criterion,
 	setCriterion,
@@ -596,6 +602,57 @@ export const FolderFilter: React.FC<IInputFilterProps> = ({
 					onToggleExpanded={onToggleExpanded}
 					onSelect={onSelect}
 					canExclude
+				/>
+			</Form.Group>
+		</div>
+	);
+};
+
+export const FolderSelect: React.FC<IFolderSelectProps> = ({
+	value,
+	onChange,
+	mode,
+}) => {
+	const intl = useIntl();
+	const [query, setQuery] = useState("");
+	const [displayQuery, onQueryChange] = useDebouncedState(query, setQuery, 250);
+	const { folderMap, onToggleExpanded } = useFolderMap({ query, mode });
+
+	function onSelect(folder: IFolder) {
+		onChange(folder.path);
+	}
+
+	const onUnselect = useCallback(() => onChange(""), [onChange]);
+
+	function onEnter() {
+		if (!query) return;
+		const matchingFolders = getMatchingFolders(folderMap, query);
+		if (matchingFolders.length === 1) {
+			onSelect(matchingFolders[0]);
+		}
+	}
+
+	const selectedList = useMemo(() => {
+		const normalized = String(value || "").trim();
+		if (!normalized) return null;
+		const selected: Option[] = [{ id: normalized, label: normalized }];
+		return <SelectedList items={selected} onUnselect={onUnselect} />;
+	}, [value, onUnselect]);
+
+	return (
+		<div className="folder-select">
+			<Form.Group>
+				{selectedList}
+				<ClearableInput
+					value={displayQuery}
+					setValue={(v) => onQueryChange(v)}
+					placeholder={`${intl.formatMessage({ id: "actions.search" })}…`}
+					onEnter={onEnter}
+				/>
+				<FolderSelector
+					folderMap={folderMap}
+					onToggleExpanded={onToggleExpanded}
+					onSelect={(folder) => onSelect(folder)}
 				/>
 			</Form.Group>
 		</div>

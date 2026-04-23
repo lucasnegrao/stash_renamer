@@ -15,7 +15,12 @@ class GraphQLService:
     def __init__(self, config: GraphQLConfig):
         self.config = config
 
-    def call(self, query: str, variables: Optional[dict] = None) -> Dict[str, Any]:
+    def call(
+        self,
+        query: str,
+        variables: Optional[dict] = None,
+        timeout_seconds: Optional[float] = None,
+    ) -> Dict[str, Any]:
         if not self.config.server_url:
             raise RuntimeError("CONFIG.server_url missing")
         if not (self.config.cookie_name and self.config.cookie_value):
@@ -36,7 +41,12 @@ class GraphQLService:
         if variables is not None:
             payload["variables"] = variables
 
-        resp = requests.post(self.config.server_url, json=payload, headers=headers)
+        resp = requests.post(
+            self.config.server_url,
+            json=payload,
+            headers=headers,
+            timeout=timeout_seconds,
+        )
         if resp.status_code != 200:
             raise Exception(
                 f"GraphQL query failed:{resp.status_code} - {resp.content}. Query: {query}. Variables: {variables}"

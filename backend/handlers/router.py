@@ -18,6 +18,15 @@ from backend.handlers.template import (
 from backend.handlers.hook import handle_get_settings, handle_save_settings, handle_run
 from backend.handlers.rename import handle_rename, handle_preview_dry_run
 from backend.handlers.system import handle_list_selectors
+from backend.handlers.watchdog import (
+    handle_watchdog_run,
+    handle_watchdog_stop,
+    handle_watchdog_status,
+    handle_watchdog_restart,
+    handle_watchdog_configure,
+    handle_watchdog_save_config,
+    handle_watchdog_list_config,
+)
 
 HandlerFunc = Callable[[Dict[str, Any], AppContext], Any]
 
@@ -38,4 +47,11 @@ ROUTES: Dict[str, HandlerFunc] = {
     "rename:run": handle_rename,
     "rename:preview_dry_run": handle_preview_dry_run,
     "system:list_selectors": handle_list_selectors,
+    "watchdog:run": handle_watchdog_run,
+    "watchdog:stop": handle_watchdog_stop,
+    "watchdog:status": handle_watchdog_status,
+    "watchdog:restart": handle_watchdog_restart,
+    "watchdog:configure": handle_watchdog_configure,
+    "watchdog:save_config": handle_watchdog_save_config,
+    "watchdog:list_config": handle_watchdog_list_config,
 }

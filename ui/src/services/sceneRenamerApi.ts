@@ -7,6 +7,8 @@ export type IScenePreviewResult = StasheroApi.IScenePreviewResult;
 export type IOperationBatch = StasheroApi.IOperationBatch;
 export type IRenamerTemplate = StasheroApi.IRenamerTemplate;
 export type IHookSettings = StasheroApi.IHookSettings;
+export type IWatchdogConfig = StasheroApi.IWatchdogConfig;
+export type IWatchdogState = StasheroApi.IWatchdogState;
 
 export interface ITokenTreeNode {
 	name: string;
@@ -165,6 +167,39 @@ export class StasheroApiClient {
 		previewDryRun: (args: StasheroApi.Rename.IPreviewDryRunArgs) =>
 			this.runOperation<StasheroApi.Rename.IPreviewDryRunResponse>(
 				"rename:preview_dry_run",
+				args,
+			),
+	};
+
+	public watchdog = {
+		run: (args: StasheroApi.Watchdog.IRunArgs = {}) =>
+			this.runOperation<StasheroApi.Watchdog.IRunResponse>(
+				"watchdog:run",
+				args,
+			),
+		stop: (args: StasheroApi.Watchdog.IStopArgs = {}) =>
+			this.runOperation<StasheroApi.Watchdog.IStopResponse>(
+				"watchdog:stop",
+				args,
+			),
+		status: (args: StasheroApi.Watchdog.IStatusArgs = {}) =>
+			this.runOperation<StasheroApi.Watchdog.IStatusResponse>(
+				"watchdog:status",
+				args,
+			),
+		restart: (args: StasheroApi.Watchdog.IRestartArgs = {}) =>
+			this.runOperation<StasheroApi.Watchdog.IRestartResponse>(
+				"watchdog:restart",
+				args,
+			),
+		saveConfig: (args: StasheroApi.Watchdog.ISaveConfigArgs) =>
+			this.runOperation<StasheroApi.Watchdog.ISaveConfigResponse>(
+				"watchdog:save_config",
+				args,
+			),
+		listConfig: (args: StasheroApi.Watchdog.IListConfigArgs = {}) =>
+			this.runOperation<StasheroApi.Watchdog.IListConfigResponse>(
+				"watchdog:list_config",
 				args,
 			),
 	};
@@ -462,6 +497,46 @@ export async function saveHookSettings(args: {
 			? hook.template_ids.map(String)
 			: [],
 	};
+}
+
+export async function fetchWatchdogConfigs(): Promise<IWatchdogConfig[]> {
+	const res = await api.watchdog.listConfig();
+	return res?.watchdog?.configs || [];
+}
+
+export async function saveWatchdogConfigToDatabase(
+	args: StasheroApi.Watchdog.ISaveConfigArgs,
+): Promise<{ config: IWatchdogConfig; restarted: boolean } | null> {
+	const res = await api.watchdog.saveConfig(args);
+	return res?.watchdog || null;
+}
+
+export async function runWatchdog(
+	args: StasheroApi.Watchdog.IRunArgs = {},
+): Promise<IWatchdogState> {
+	const res = await api.watchdog.run(args);
+	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
+}
+
+export async function stopWatchdog(
+	args: StasheroApi.Watchdog.IStopArgs = {},
+): Promise<IWatchdogState> {
+	const res = await api.watchdog.stop(args);
+	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
+}
+
+export async function restartWatchdog(
+	args: StasheroApi.Watchdog.IRestartArgs = {},
+): Promise<IWatchdogState> {
+	const res = await api.watchdog.restart(args);
+	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
+}
+
+export async function fetchWatchdogStatus(
+	args: StasheroApi.Watchdog.IStatusArgs = {},
+): Promise<IWatchdogState> {
+	const res = await api.watchdog.status(args);
+	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
 }
 
 export async function fetchSelectorsCatalogCached(force = false): Promise<any> {

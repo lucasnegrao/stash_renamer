@@ -59,6 +59,31 @@ export namespace StasheroApi {
 		template_ids: string[];
 	}
 
+	export interface IWatchdogConfigOptions {
+		event_types?: Array<"modified" | "created" | "deleted" | "moved">;
+		recursive?: boolean;
+		debounce_seconds?: number;
+		request_timeout_seconds?: number;
+		variables?: Record<string, any>;
+	}
+
+	export interface IWatchdogConfig {
+		id: string;
+		path: string;
+		operation: string;
+		enabled: boolean;
+		options?: IWatchdogConfigOptions;
+	}
+
+	export interface IWatchdogState {
+		status: "running" | "stopped" | string;
+		pid?: number | null;
+		enabled_configs?: number;
+		active_items?: number;
+		stopped?: boolean;
+		message?: string;
+	}
+
 	// =========================================================================
 	// 1. Undo Operations (Prefix: `undo:`)
 	// =========================================================================
@@ -251,6 +276,67 @@ export namespace StasheroApi {
 				description: string;
 			}>;
 			syntax: Record<string, string>;
+		}
+	}
+
+	// =========================================================================
+	// 6. Watchdog Operations (Prefix: `watchdog:`)
+	// =========================================================================
+	export namespace Watchdog {
+		/** mode: 'watchdog:run' */
+		export interface IRunArgs {
+			watchdog_runtime_dir?: string;
+		}
+		export interface IRunResponse {
+			watchdog: IWatchdogState;
+		}
+
+		/** mode: 'watchdog:stop' */
+		export interface IStopArgs {
+			watchdog_runtime_dir?: string;
+		}
+		export interface IStopResponse {
+			watchdog: IWatchdogState;
+		}
+
+		/** mode: 'watchdog:status' */
+		export interface IStatusArgs {
+			watchdog_runtime_dir?: string;
+		}
+		export interface IStatusResponse {
+			watchdog: IWatchdogState;
+		}
+
+		/** mode: 'watchdog:restart' (and alias: 'watchdog:configure') */
+		export interface IRestartArgs {
+			watchdog_runtime_dir?: string;
+		}
+		export interface IRestartResponse {
+			watchdog: IWatchdogState;
+		}
+
+		/** mode: 'watchdog:save_config' */
+		export interface ISaveConfigArgs {
+			id?: string;
+			path: string;
+			operation: string;
+			enabled?: boolean;
+			options?: IWatchdogConfigOptions | Record<string, any> | string;
+			watchdog_runtime_dir?: string;
+		}
+		export interface ISaveConfigResponse {
+			watchdog: {
+				config: IWatchdogConfig;
+				restarted: boolean;
+			};
+		}
+
+		/** mode: 'watchdog:list_config' */
+		export interface IListConfigArgs {}
+		export interface IListConfigResponse {
+			watchdog: {
+				configs: IWatchdogConfig[];
+			};
 		}
 	}
 }

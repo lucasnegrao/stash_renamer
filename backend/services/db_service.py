@@ -89,6 +89,17 @@ class DBService:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS watchdog_configs (
+                id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                options TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
         try:
             conn.execute("ALTER TABLE file_operations ADD COLUMN batch_id TEXT")
         except sqlite3.OperationalError:
@@ -116,6 +127,9 @@ class DBService:
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_hook_template_bindings_order ON hook_template_bindings(hook_type, sort_order)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_watchdog_configs_enabled ON watchdog_configs(enabled)"
         )
         conn.commit()
 
@@ -658,6 +672,82 @@ class DBService:
             self._writes_since_commit = 0
 
         return self.get_hook_settings(normalized_hook_type)
+
+    def save_watchdog_config(
+        self,
+        config_id: Optional[str],
+        path: str,
+        operation: str,
+        options: Optional[str],
+        enabled: bool,
+    ) -> Dict[str, Any]:
+        normalized_id = str(config_id or "").strip() or str(uuid.uuid4())
+        normalized_path = str(path or "").strip()
+        normalized_operation = str(operation or "").strip()
+        normalized_options = str(options or "")
+        conn = self._get_conn()
+
+        conn.execute(
+            """
+            INSERT INTO watchdog_configs (id, path, operation, options, enabled)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                path = excluded.path,
+                operation = excluded.operation,
+                options = excluded.options,
+                enabled = excluded.enabled
+            """,
+            (
+                normalized_id,
+                normalized_path,
+                normalized_operation,
+                normalized_options,
+                1 if enabled else 0,
+            ),
+        )
+        self._writes_since_commit += 1
+        if self._writes_since_commit >= self._commit_every:
+            conn.commit()
+            self._writes_since_commit = 0
+
+        row = conn.execute(
+            """
+            SELECT id, path, operation, options, enabled
+            FROM watchdog_configs
+            WHERE id = ?
+            """,
+            (normalized_id,),
+        ).fetchone()
+        if not row:
+            raise RuntimeError("Failed to persist watchdog config")
+        return dict(row)
+
+    def list_watchdog_configs(self) -> List[Dict[str, Any]]:
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        rows = conn.execute(
+            """
+            SELECT id, path, operation, options, enabled
+            FROM watchdog_configs
+            ORDER BY rowid DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_enabled_watchdog_configs(self) -> List[Dict[str, Any]]:
+        conn = self._get_conn()
+        conn.commit()
+        self._writes_since_commit = 0
+        rows = conn.execute(
+            """
+            SELECT id, path, operation, options, enabled
+            FROM watchdog_configs
+            WHERE enabled = 1
+            ORDER BY rowid DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         if self._conn is None:

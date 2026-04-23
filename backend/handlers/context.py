@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Dict
 from backend.services.file_mover import FileMover
 from backend.services.graphql import GraphQLService
 from backend.services.logger import LoggerService
 from backend.services.template_service import TemplateService
 from backend.services.GraphQLTagger import GraphQLTagger
 from backend.services.undo_service import UndoService
+from backend.services.watchdog_service import WatchdogService
 from backend.renamer.engine import RenamerEngine
 
 
@@ -18,6 +18,7 @@ class AppContext:
     templates: TemplateService
     undo: UndoService
     engine: RenamerEngine
+    watchdog: WatchdogService
     collect_operations: bool
     debug_mode: bool
     dry_run: bool

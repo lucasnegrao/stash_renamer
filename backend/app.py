@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from backend.renamer.engine import RenamerEngine
 from backend.services.file_mover import FileMover
 from backend.services.graphql import GraphQLConfig, GraphQLService
@@ -6,6 +6,7 @@ from backend.services.logger import LoggerService
 from backend.services.template_service import TemplateService
 from backend.services.GraphQLTagger import GraphQLTagger
 from backend.services.undo_service import UndoService
+from backend.services.watchdog_service import WatchdogService
 from backend.handlers.context import AppContext
 from backend.handlers.router import ROUTES
 from backend.handlers.utils import to_bool
@@ -27,15 +28,20 @@ def run(options: dict, collect_operations: bool = False):
     using_log = to_bool(options.get("using_log", True))
     dry_run = to_bool(options.get("dry_run", False))
     debug_mode = to_bool(options.get("debug_mode", True))
-
-    gql = GraphQLService(
-        GraphQLConfig(
-            server_url=str(server_url),
-            cookie_name=str(cookie_name),
-            cookie_value=str(cookie_value),
-        )
-    )
     logger = LoggerService(debug_mode=debug_mode)
+
+    gql_config = GraphQLConfig(
+        server_url=str(server_url),
+        cookie_name=str(cookie_name),
+        cookie_value=str(cookie_value),
+    )
+    watchdog = WatchdogService(
+        db_path=str(options.get("operations_db_path") or "rename_operations.db"),
+        gql_config=gql_config,
+        log_print=logger.debug if using_log else (lambda _msg: None)
+    )
+
+    gql = GraphQLService(gql_config)
 
     mover = FileMover(
         gql_call=gql.call,
@@ -76,6 +82,7 @@ def run(options: dict, collect_operations: bool = False):
         templates=templates,
         undo=undo,
         engine=engine,
+        watchdog=watchdog,
         collect_operations=collect_operations,
         debug_mode=debug_mode,
         dry_run=dry_run,
@@ -85,6 +92,7 @@ def run(options: dict, collect_operations: bool = False):
     if not handler:
         mover.flush()
         mover.close()
+        watchdog.close()
         raise ValueError(f"Unsupported mode: {mode}")
 
     try:
@@ -93,3 +101,4 @@ def run(options: dict, collect_operations: bool = False):
     finally:
         mover.flush()
         mover.close()
+        watchdog.close()
