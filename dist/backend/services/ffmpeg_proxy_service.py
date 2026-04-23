@@ -1,7 +1,6 @@
 import json
 import os
 import platform
-import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -158,28 +157,11 @@ class FFmpegProxyService:
         data = self._gql_call(GET_CONFIG_FFMPEG_QUERY, None)
         configuration = (data or {}).get("configuration") or {}
         general = configuration.get("general") or {}
-        configured_path = str(general.get("ffmpegPath") or "").strip()
-        if configured_path:
-            return configured_path
-        env_ffmpeg = self._resolve_ffmpeg_from_env()
-        if env_ffmpeg:
-            self._log_print(
-                f"ffmpegPath is empty in configuration; using environment ffmpeg: {env_ffmpeg}"
-            )
-        return env_ffmpeg
+        return str(general.get("ffmpegPath") or "").strip()
 
     def _set_ffmpeg_path(self, ffmpeg_path: str) -> None:
         variables = {"input": {"ffmpegPath": str(ffmpeg_path or "")}}
         self._gql_call(CONFIGURE_GENERAL_MUTATION, variables)
-
-    @staticmethod
-    def _resolve_ffmpeg_from_env() -> str:
-        # Prefer explicit env override if present.
-        explicit = str(os.environ.get("FFMPEG_PATH") or "").strip()
-        if explicit:
-            return explicit
-        discovered = shutil.which("ffmpeg")
-        return str(discovered or "").strip()
 
     @staticmethod
     def _runtime_dir(options: Dict[str, Any]) -> Path:

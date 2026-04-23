@@ -116,8 +116,18 @@ export const WatchdogSettingsPanel: React.FC<{ className?: string }> = ({
 			});
 
 			const final = await tracker.done;
-			if (String(final.status).toUpperCase() === "FINISHED") {
-				await refreshServiceInstalled();
+			const finished = String(final.status).toUpperCase() === "FINISHED";
+			const hasError = Boolean(String(final.error || "").trim());
+			await refreshServiceInstalled();
+			const expectedInstalled = !serviceInstalled;
+			// Note: serviceInstalled state updates async; use a fresh snapshot to verify.
+			const snapshot = await fetchGeneralConfigSnapshot();
+			const ffmpegPath = String(snapshot?.ffmpegPath || "");
+			const isInstalledNow =
+				/(?:^|[\\/])\.ffmpeg_proxy[\\/]ffmpeg_proxy(?:\.sh|\.cmd)?$/i.test(
+					ffmpegPath,
+				);
+			if (finished && !hasError && isInstalledNow === expectedInstalled) {
 				setServiceStatus(
 					serviceInstalled
 						? "Service uninstalled successfully."
@@ -125,7 +135,7 @@ export const WatchdogSettingsPanel: React.FC<{ className?: string }> = ({
 				);
 			} else {
 				setServiceStatus(
-					`Service task ended with status ${final.status}${final.error ? `: ${final.error}` : ""}`,
+					`Service task ended with status ${final.status}${final.error ? `: ${final.error}` : ""}${!hasError && finished ? " (configuration was not updated as expected)" : ""}`,
 				);
 			}
 		} catch (e: unknown) {

@@ -8,3 +8,4 @@ stash_ui/*
 __pycache__
 ui/dist
 node_modules/*
+devdocs/graphql

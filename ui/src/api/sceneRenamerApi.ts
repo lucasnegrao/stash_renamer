@@ -1,4 +1,8 @@
 import type { StasheroApi } from "./stasheroApi";
+import {
+	getRuntimePythonPath,
+	setRuntimePythonPath,
+} from "../services/runtimePythonState";
 
 const PluginApi = (window as any).PluginApi;
 const { gql } = PluginApi.libraries.Apollo;
@@ -39,6 +43,11 @@ export interface IGeneralConfigSnapshot {
 	ffmpegPath: string;
 }
 
+export interface IPluginRuntimeConfig {
+	installed: boolean;
+	pythonPath: string;
+}
+
 let selectorsCatalogCache: any | null = null;
 let selectorsCatalogInflight: Promise<any> | null = null;
 
@@ -61,6 +70,13 @@ export class StasheroApiClient {
 		mode: string,
 		args: Record<string, any> = {},
 	): Promise<T> {
+		const runtimePython = getRuntimePythonPath();
+		const mergedArgs = {
+			...args,
+			...(runtimePython
+				? { python_path: String(args?.python_path || runtimePython) }
+				: {}),
+		};
 		const mutation = gql`
 			mutation RunPluginOperation($plugin_id: ID!, $args: Map!) {
 				runPluginOperation(plugin_id: $plugin_id, args: $args)
@@ -68,7 +84,7 @@ export class StasheroApiClient {
 		`;
 		const result = await this.client.mutate({
 			mutation,
-			variables: { plugin_id: this.pluginId, args: { mode, ...args } },
+			variables: { plugin_id: this.pluginId, args: { mode, ...mergedArgs } },
 			fetchPolicy: "no-cache",
 		});
 		const payload = result?.data?.runPluginOperation;
@@ -80,6 +96,13 @@ export class StasheroApiClient {
 		args: Record<string, any> = {},
 	): Promise<string | null> {
 		const description = `${this.pluginId} ${mode.replace(":", " ")}`;
+		const runtimePython = getRuntimePythonPath();
+		const mergedArgs = {
+			...args,
+			...(runtimePython
+				? { python_path: String(args?.python_path || runtimePython) }
+				: {}),
+		};
 
 		const mutation = gql`
 			mutation RunPluginTask($plugin_id: ID!, $description: String, $args_map: Map) {
@@ -95,7 +118,7 @@ export class StasheroApiClient {
 			variables: {
 				plugin_id: this.pluginId,
 				description,
-				args_map: { mode, ...args },
+				args_map: { mode, ...mergedArgs },
 			},
 			fetchPolicy: "no-cache",
 		});
@@ -229,6 +252,9 @@ export class StasheroApiClient {
 		ffmpegProxyReverseTask: (
 			args: StasheroApi.System.IFFmpegProxyReverseArgs = {},
 		) => this.runTask("system:ffmpeg_proxy_reverse", args),
+		runtimeServiceInstallTask: (
+			args: StasheroApi.System.IRuntimeServiceInstallArgs = {},
+		) => this.runTask("system:runtime_service_install", args),
 	};
 }
 
@@ -477,6 +503,68 @@ export async function uninstallFfmpegProxyServiceTask(): Promise<
 	string | null
 > {
 	return api.system.ffmpegProxyReverseTask({});
+}
+
+export async function installRuntimeServiceTask(): Promise<string | null> {
+	return api.system.runtimeServiceInstallTask({});
+}
+
+export async function fetchPluginRuntimeConfig(
+	pluginId = "stash_renamer",
+): Promise<IPluginRuntimeConfig> {
+	const query = gql`
+		query GetPluginRuntimeConfig($include: [ID!]) {
+			configuration {
+				plugins(include: $include)
+			}
+		}
+	`;
+	const result = await api.client.query({
+		query,
+		variables: { include: [pluginId] },
+		fetchPolicy: "no-cache",
+	});
+	const plugins = result?.data?.configuration?.plugins;
+	const pluginCfg =
+		plugins && typeof plugins === "object"
+			? (plugins as Record<string, any>)[pluginId]
+			: null;
+	const installed = Boolean(pluginCfg && pluginCfg.installed === true);
+	const pythonPath = String(pluginCfg?.pythonPath || "").trim();
+	if (installed && pythonPath) {
+		setRuntimePythonPath(pythonPath);
+	}
+	return {
+		installed,
+		pythonPath,
+	};
+}
+
+export async function setPluginRuntimeConfig(args: {
+	pluginId?: string;
+	installed: boolean;
+	pythonPath?: string;
+}): Promise<void> {
+	const mutation = gql`
+		mutation ConfigurePluginRuntime($plugin_id: ID!, $input: PluginConfigInput!) {
+			configurePlugin(plugin_id: $plugin_id, input: $input)
+		}
+	`;
+	const pluginId = String(args.pluginId || "stash_renamer");
+	const pythonPath = String(args.pythonPath || "").trim();
+	const input: Record<string, any> = {
+		installed: Boolean(args.installed),
+	};
+	if (pythonPath) input.pythonPath = pythonPath;
+	await api.client.mutate({
+		mutation,
+		variables: {
+			plugin_id: pluginId,
+			input,
+		},
+		fetchPolicy: "no-cache",
+	});
+	setRuntimePythonPath(pythonPath);
 }
 
 export async function fetchSavedTemplates(): Promise<IRenamerTemplate[]> {

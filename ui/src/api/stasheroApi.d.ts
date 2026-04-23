@@ -9,6 +9,22 @@ export namespace StasheroApi {
 	// =========================================================================
 	// Core Entities
 	// =========================================================================
+	export interface IRuntimePreflightError {
+		code:
+			| "PYTHON_VERSION_UNSUPPORTED"
+			| "REQUIREMENTS_FILE_NOT_FOUND"
+			| "REQUIREMENTS_INSTALL_FAILED"
+			| "REQUIREMENTS_VALIDATION_FAILED"
+			| "RUNTIME_PREFLIGHT_FAILED"
+			| string;
+		message: string;
+		details?: Record<string, any>;
+	}
+
+	export interface IPluginOperationEnvelope<TOutput = any> {
+		output?: TOutput;
+		error?: string | IRuntimePreflightError;
+	}
 
 	export interface IScenePreviewResult {
 		scene_id: string;
@@ -286,6 +302,11 @@ export namespace StasheroApi {
 
 		/** mode: 'system:ffmpeg_proxy_reverse' */
 		export type IFFmpegProxyReverseArgs = {};
+
+		/** mode: 'system:runtime_service_install' */
+		export interface IRuntimeServiceInstallArgs {
+			plugin_id?: string;
+		}
 	}
 
 	// =========================================================================
