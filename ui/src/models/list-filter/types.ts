@@ -1,4 +1,4 @@
-import { CriterionValue, ISavedCriterion } from "./criteria/criterion";
+import type { CriterionValue, ISavedCriterion } from "./criteria/criterion";
 
 export type SavedObjectFilter = {
 	[K in CriterionType]?: ISavedCriterion<CriterionValue>;

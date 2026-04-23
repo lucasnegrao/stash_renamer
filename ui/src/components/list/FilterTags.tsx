@@ -1,5 +1,5 @@
 import {
-	Criterion,
+	type Criterion,
 	UnsupportedCriterion,
 } from "src/models/list-filter/criteria/criterion";
 import { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";

@@ -1,9 +1,9 @@
-import { ClearableInput } from "src/components/shared/ClearableInput";
-import { useIntl } from "react-intl";
-import { keyboardClickHandler } from "src/utils/keyboard";
-import { useDebounce } from "src/hooks/debounce";
-import useFocus from "src/utils/focus";
 import cx from "classnames";
+import { useIntl } from "react-intl";
+import { ClearableInput } from "src/components/shared/ClearableInput";
+import { useDebounce } from "src/hooks/debounce";
+import type useFocus from "src/utils/focus";
+import { keyboardClickHandler } from "src/utils/keyboard";
 import ScreenUtils from "src/utils/screen";
 
 const PluginApi = window.PluginApi;

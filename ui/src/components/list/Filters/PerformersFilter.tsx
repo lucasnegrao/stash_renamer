@@ -1,27 +1,28 @@
-import React, { ReactNode, useMemo } from "react";
-import {
-	PerformersCriterion,
-	PerformersCriterionOption,
-} from "src/models/list-filter/criteria/performers";
+import type React from "react";
+import { type ReactNode, useMemo } from "react";
+import { FormattedMessage } from "react-intl";
 import {
 	CriterionModifier,
-	FindPerformersForSelectQueryVariables,
-	PerformerDataFragment,
-	PerformerFilterType,
+	type FindPerformersForSelectQueryVariables,
+	type PerformerDataFragment,
+	type PerformerFilterType,
 	useFindPerformersForSelectQuery,
 } from "src/core/generated-graphql";
-import { ObjectsFilter } from "./SelectableFilter";
-import { sortByRelevance } from "src/utils/query";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import { CriterionOption } from "src/models/list-filter/criteria/criterion";
+import type { CriterionOption } from "src/models/list-filter/criteria/criterion";
 import {
-	IUseQueryHookProps,
+	type PerformersCriterion,
+	PerformersCriterionOption,
+} from "src/models/list-filter/criteria/performers";
+import type { ListFilterModel } from "src/models/list-filter/filter";
+import { sortByRelevance } from "src/utils/query";
+import {
+	type IUseQueryHookProps,
 	makeQueryVariables,
 	setObjectFilter,
 	useLabeledIdFilterState,
 } from "./LabeledIdFilter";
+import { ObjectsFilter } from "./SelectableFilter";
 import { SidebarListFilter } from "./SidebarListFilter";
-import { FormattedMessage } from "react-intl";
 
 interface IPerformersFilter {
 	criterion: PerformersCriterion;

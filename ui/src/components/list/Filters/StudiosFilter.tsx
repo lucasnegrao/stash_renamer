@@ -1,25 +1,26 @@
-import React, { ReactNode, useMemo } from "react";
+import type React from "react";
+import { type ReactNode, useMemo } from "react";
+import { FormattedMessage } from "react-intl";
 import {
-	StudioDataFragment,
-	StudioFilterType,
+	type StudioDataFragment,
+	type StudioFilterType,
 	useFindStudiosForSelectQuery,
 } from "src/core/generated-graphql";
-import { HierarchicalObjectsFilter } from "./SelectableFilter";
+import type { CriterionOption } from "src/models/list-filter/criteria/criterion";
 import {
-	StudiosCriterion,
+	type StudiosCriterion,
 	StudiosCriterionOption,
 } from "src/models/list-filter/criteria/studios";
+import type { ListFilterModel } from "src/models/list-filter/filter";
 import { sortByRelevance } from "src/utils/query";
-import { CriterionOption } from "src/models/list-filter/criteria/criterion";
-import { ListFilterModel } from "src/models/list-filter/filter";
 import {
-	IUseQueryHookProps,
+	type IUseQueryHookProps,
 	makeQueryVariables,
 	setObjectFilter,
 	useLabeledIdFilterState,
 } from "./LabeledIdFilter";
+import { HierarchicalObjectsFilter } from "./SelectableFilter";
 import { SidebarListFilter } from "./SidebarListFilter";
-import { FormattedMessage } from "react-intl";
 
 interface IStudiosFilter {
 	criterion: StudiosCriterion;

@@ -1,9 +1,9 @@
 import { CriterionModifier } from "src/core/generated-graphql";
 import {
-	ModifierCriterionOption,
 	IHierarchicalLabeledIdCriterion,
 	ILabeledIdCriterion,
 	ILabeledIdCriterionOption,
+	ModifierCriterionOption,
 } from "./criterion";
 
 const modifierOptions = [

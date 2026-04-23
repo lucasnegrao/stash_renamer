@@ -202,6 +202,11 @@ export class StasheroApiClient {
 				"watchdog:list_config",
 				args,
 			),
+		reorderConfigs: (args: StasheroApi.Watchdog.IReorderArgs) =>
+			this.runOperation<StasheroApi.Watchdog.IReorderResponse>(
+				"watchdog:reorder",
+				args,
+			),
 	};
 
 	public system = {
@@ -504,6 +509,14 @@ export async function fetchWatchdogConfigs(): Promise<IWatchdogConfig[]> {
 	return res?.watchdog?.configs || [];
 }
 
+export async function reorderWatchdogConfigs(
+	path: string,
+	configIds: string[],
+): Promise<boolean> {
+	const res = await api.watchdog.reorderConfigs({ path, configIds });
+	return Boolean(res?.watchdog?.restarted);
+}
+
 export async function saveWatchdogConfigToDatabase(
 	args: StasheroApi.Watchdog.ISaveConfigArgs,
 ): Promise<{ config: IWatchdogConfig; restarted: boolean } | null> {
@@ -567,7 +580,7 @@ export function extractSceneTokenTree(catalog: any): ITokenTreeNode[] {
 		if (!raw) return false;
 		if (raw.startsWith("$scene.")) return true;
 		// Liquid variable expression form: {{ scene.foo }}
-		return /^\{\{\s*scene(?:[.\[]|$)/.test(raw);
+		return /^\{\{\s*scene(?:[.[]|$)/.test(raw);
 	};
 
 	const virtualTokens: string[] = Array.isArray(catalog?.virtual_selectors)

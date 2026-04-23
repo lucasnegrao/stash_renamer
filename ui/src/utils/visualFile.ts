@@ -1,4 +1,4 @@
-import { Maybe } from "src/core/generated-graphql";
+import type { Maybe } from "src/core/generated-graphql";
 
 // returns true if the file should be treated as a video in the UI
 export function isVideo(o: {

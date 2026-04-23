@@ -1,6 +1,6 @@
 import { CriterionModifier } from "src/core/generated-graphql";
-import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
-import { IDateValue } from "src/models/list-filter/types";
+import type { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
+import type { IDateValue } from "src/models/list-filter/types";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

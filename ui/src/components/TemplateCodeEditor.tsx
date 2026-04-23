@@ -1,36 +1,36 @@
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 
+import type { Completion } from "@codemirror/autocomplete";
 import {
-	EditorView,
-	keymap,
-	highlightSpecialChars,
-	drawSelection,
-	highlightActiveLine,
-	dropCursor,
-	rectangularSelection,
-	crosshairCursor,
-	placeholder as placeholderExtension,
-} from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
-import {
-	defaultHighlightStyle,
-	syntaxHighlighting,
-	bracketMatching,
-	indentOnInput,
-	HighlightStyle,
-} from "@codemirror/language";
-import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
-import {
-	closeBrackets,
 	autocompletion,
+	closeBrackets,
 	closeBracketsKeymap,
 	completionKeymap,
 } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { liquid } from "@codemirror/lang-liquid";
+import {
+	bracketMatching,
+	defaultHighlightStyle,
+	HighlightStyle,
+	indentOnInput,
+	syntaxHighlighting,
+} from "@codemirror/language";
+import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import {
+	crosshairCursor,
+	drawSelection,
+	dropCursor,
+	EditorView,
+	highlightActiveLine,
+	highlightSpecialChars,
+	keymap,
+	placeholder as placeholderExtension,
+	rectangularSelection,
+} from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
-import type { Completion } from "@codemirror/autocomplete";
 import type { ITokenTreeNode } from "../services/sceneRenamerApi";
 
 export interface ITemplateCodeEditorHandle {

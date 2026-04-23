@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { debounce, DebouncedFunc, DebounceSettings } from "lodash-es";
+import { type DebouncedFunc, type DebounceSettings, debounce } from "lodash-es";
 
 const { useCallback, useRef, useState } = window.PluginApi.React;
 

@@ -96,7 +96,8 @@ class DBService:
                 path TEXT NOT NULL,
                 operation TEXT NOT NULL,
                 options TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1
+                enabled INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -106,6 +107,10 @@ class DBService:
             pass
         try:
             conn.execute("ALTER TABLE rename_templates ADD COLUMN filter_json TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE watchdog_configs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
         conn.execute(
@@ -680,6 +685,7 @@ class DBService:
         operation: str,
         options: Optional[str],
         enabled: bool,
+        sort_order: Optional[int] = None,
     ) -> Dict[str, Any]:
         normalized_id = str(config_id or "").strip() or str(uuid.uuid4())
         normalized_path = str(path or "").strip()
@@ -687,15 +693,23 @@ class DBService:
         normalized_options = str(options or "")
         conn = self._get_conn()
 
+        if sort_order is None:
+            row = conn.execute(
+                "SELECT MAX(sort_order) as max_order FROM watchdog_configs WHERE path = ?",
+                (normalized_path,)
+            ).fetchone()
+            sort_order = (row["max_order"] + 1) if row and row["max_order"] is not None else 0
+
         conn.execute(
             """
-            INSERT INTO watchdog_configs (id, path, operation, options, enabled)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO watchdog_configs (id, path, operation, options, enabled, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 path = excluded.path,
                 operation = excluded.operation,
                 options = excluded.options,
-                enabled = excluded.enabled
+                enabled = excluded.enabled,
+                sort_order = excluded.sort_order
             """,
             (
                 normalized_id,
@@ -703,6 +717,7 @@ class DBService:
                 normalized_operation,
                 normalized_options,
                 1 if enabled else 0,
+                sort_order,
             ),
         )
         self._writes_since_commit += 1
@@ -712,7 +727,7 @@ class DBService:
 
         row = conn.execute(
             """
-            SELECT id, path, operation, options, enabled
+            SELECT id, path, operation, options, enabled, sort_order
             FROM watchdog_configs
             WHERE id = ?
             """,
@@ -728,9 +743,9 @@ class DBService:
         self._writes_since_commit = 0
         rows = conn.execute(
             """
-            SELECT id, path, operation, options, enabled
+            SELECT id, path, operation, options, enabled, sort_order
             FROM watchdog_configs
-            ORDER BY rowid DESC
+            ORDER BY path ASC, sort_order ASC, rowid DESC
             """
         ).fetchall()
         return [dict(r) for r in rows]
@@ -741,13 +756,30 @@ class DBService:
         self._writes_since_commit = 0
         rows = conn.execute(
             """
-            SELECT id, path, operation, options, enabled
+            SELECT id, path, operation, options, enabled, sort_order
             FROM watchdog_configs
             WHERE enabled = 1
-            ORDER BY rowid DESC
+            ORDER BY path ASC, sort_order ASC, rowid DESC
             """
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def reorder_watchdog_configs(self, path: str, config_ids: List[str]) -> None:
+        conn = self._get_conn()
+        normalized_path = str(path or "").strip()
+        for index, config_id in enumerate(config_ids):
+            conn.execute(
+                """
+                UPDATE watchdog_configs
+                SET sort_order = ?
+                WHERE id = ? AND path = ?
+                """,
+                (index, str(config_id).strip(), normalized_path),
+            )
+        self._writes_since_commit += 1
+        if self._writes_since_commit >= self._commit_every:
+            conn.commit()
+            self._writes_since_commit = 0
 
     def close(self) -> None:
         if self._conn is None:

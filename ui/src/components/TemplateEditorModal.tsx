@@ -1,15 +1,15 @@
-import { ISlimSceneData } from "../models/SlimSceneData";
+import type { ISlimSceneData } from "../models/SlimSceneData";
 import {
 	extractSceneTokenTree,
 	fetchSelectorsCatalogCached,
-	previewRenameScenes,
 	type IScenePreviewResult,
 	type ITokenTreeNode,
+	previewRenameScenes,
 } from "../services/sceneRenamerApi";
 import { SceneTokenSelector } from "./SceneTokenSelector";
 import {
-	TemplateCodeEditor,
 	type ITemplateCodeEditorHandle,
+	TemplateCodeEditor,
 } from "./TemplateCodeEditor";
 
 const PluginApi = window.PluginApi;

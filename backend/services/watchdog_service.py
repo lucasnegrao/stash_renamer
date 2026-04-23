@@ -22,6 +22,7 @@ class WatchdogService:
     def run(self, options: Dict[str, Any]) -> Dict[str, Any]:
         runtime_dir = self._runtime_dir(options)
         current = self._read_status(runtime_dir)
+        self._log_print(f"watchdog status: {current}")
         if current.get("status") == "running":
             return {
                 "status": "running",
@@ -31,12 +32,16 @@ class WatchdogService:
 
         worker_config = self._build_worker_config()
         self._write_json(self._config_path(runtime_dir), worker_config)
-        self._spawn_worker(runtime_dir)
+        self._spawn_worker(runtime_dir, options.get("PluginDir") or "")
         status = self._read_status(runtime_dir)
+        
+        watch_paths = worker_config.get("watch_paths", [])
+        active_items = sum(len(p.get("operations", [])) for p in watch_paths)
+        
         return {
             "status": status.get("status", "stopped"),
             "pid": status.get("pid"),
-            "enabled_configs": len(worker_config.get("watch_items") or []),
+            "enabled_configs": active_items,
         }
 
     def restart(self, options: Dict[str, Any]) -> Dict[str, Any]:
@@ -74,13 +79,16 @@ class WatchdogService:
     def status(self, options: Dict[str, Any]) -> Dict[str, Any]:
         runtime_dir = self._runtime_dir(options)
         status = self._read_status(runtime_dir)
-        watch_items = (self._read_json(self._config_path(runtime_dir)) or {}).get("watch_items")
+        watch_paths = (self._read_json(self._config_path(runtime_dir)) or {}).get(
+            "watch_paths"
+        )
         enabled_count = len(self._store.list_enabled_watchdog_configs())
+        active_items = sum(len(p.get("operations", [])) for p in (watch_paths or []))
         return {
             "status": status.get("status", "stopped"),
             "pid": status.get("pid"),
             "enabled_configs": enabled_count,
-            "active_items": len(watch_items or []),
+            "active_items": active_items,
         }
 
     def save_config(self, options: Dict[str, Any]) -> Dict[str, Any]:
@@ -121,6 +129,21 @@ class WatchdogService:
         rows = self._store.list_watchdog_configs()
         return {"configs": [self._row_to_response(row) for row in rows]}
 
+    def reorder_configs(self, options: Dict[str, Any]) -> Dict[str, Any]:
+        path = str(options.get("path") or "").strip()
+        config_ids = options.get("configIds", [])
+        if not path or not isinstance(config_ids, list):
+            raise ValueError("path and configIds (list) are required for watchdog:reorder")
+
+        self._store.reorder_watchdog_configs(path, config_ids)
+
+        restarted = False
+        if self.status(options).get("status") == "running":
+            self.restart(options)
+            restarted = True
+
+        return {"restarted": restarted}
+
     def close(self) -> None:
         self._store.close()
 
@@ -131,7 +154,7 @@ class WatchdogService:
                 "No enabled watchdog configs found. Save and enable at least one config first"
             )
 
-        watch_items: List[Dict[str, Any]] = []
+        watch_paths_dict: Dict[str, Dict[str, Any]] = {}
         for row in rows:
             parsed_options = self._parse_options_dict(str(row.get("options") or ""))
             self._validate_config_options_dict(parsed_options)
@@ -153,30 +176,37 @@ class WatchdogService:
                 raise ValueError(
                     f"Enabled watchdog config has empty operation ({row.get('id')})"
                 )
-            watch_items.append(
-                {
-                    "id": str(row.get("id") or ""),
-                    "path": str(watch_dir),
-                    "operation": operation,
-                    "variables": parsed_options.get("variables")
-                    if isinstance(parsed_options.get("variables"), dict)
-                    else None,
+
+            path_key = str(watch_dir)
+            if path_key not in watch_paths_dict:
+                watch_paths_dict[path_key] = {
+                    "path": path_key,
                     "recursive": bool(parsed_options.get("recursive", True)),
                     "event_types": event_types,
                     "debounce_seconds": self._to_float(
                         parsed_options.get("debounce_seconds"), default=1.0
                     ),
-                    "request_timeout_seconds": self._to_float(
-                        parsed_options.get("request_timeout_seconds"), default=30.0
-                    ),
+                    "operations": []
                 }
-            )
+            
+            watch_paths_dict[path_key]["operations"].append({
+                "id": str(row.get("id") or ""),
+                "operation": operation,
+                "variables": (
+                    parsed_options.get("variables")
+                    if isinstance(parsed_options.get("variables"), dict)
+                    else None
+                ),
+                "request_timeout_seconds": self._to_float(
+                    parsed_options.get("request_timeout_seconds"), default=30.0
+                ),
+            })
 
         return {
             "server_url": self._gql_config.server_url,
             "cookie_name": self._gql_config.cookie_name,
             "cookie_value": self._gql_config.cookie_value,
-            "watch_items": watch_items,
+            "watch_paths": list(watch_paths_dict.values()),
         }
 
     @staticmethod
@@ -240,16 +270,24 @@ class WatchdogService:
         except Exception:
             return default
 
-    def _spawn_worker(self, runtime_dir: Path) -> None:
+    def _spawn_worker(self, runtime_dir: Path, plugin_dir) -> None:
         log_path = runtime_dir / "watchdog.log"
+        worker_path = f"{plugin_dir}/backend/services/watchdog_worker.py"
+
         python_exe = sys.executable
         cmd = [
             python_exe,
-            "-m",
-            "backend.services.watchdog_worker",
+            worker_path,
             "--runtime-dir",
             str(runtime_dir),
         ]
+
+        # # we need to attach rundtime_dir to current ENV so popen can resolve the modules
+        current_env = os.environ.copy()
+
+        current_env["PYTHONPATH"] = (
+            f"{plugin_dir}{os.pathsep}{current_env['PYTHONPATH']}"
+        )
 
         stdout_handle = open(log_path, "a", encoding="utf-8")
         stderr_handle = open(log_path, "a", encoding="utf-8")
@@ -266,6 +304,7 @@ class WatchdogService:
                     stdin=subprocess.DEVNULL,
                     creationflags=creation_flags,
                     close_fds=True,
+                    env=current_env,
                 )
             else:
                 subprocess.Popen(
@@ -275,7 +314,16 @@ class WatchdogService:
                     stdin=subprocess.DEVNULL,
                     start_new_session=True,
                     close_fds=True,
+                    env=current_env,
                 )
+        except Exception as e:
+            error_msg = f"Failed to start watchdog worker: {e}"
+            self._log_print(error_msg)
+            self._write_json(
+                self._status_path(runtime_dir),
+                {"status": "error", "message": error_msg, "pid": None},
+            )
+            return
         finally:
             stdout_handle.close()
             stderr_handle.close()
@@ -289,6 +337,9 @@ class WatchdogService:
 
     def _read_status(self, runtime_dir: Path) -> Dict[str, Any]:
         status = self._read_json(self._status_path(runtime_dir)) or {}
+        if status.get("status") == "error":
+            return status
+
         pid = status.get("pid")
         if not pid:
             return {"status": "stopped", "pid": None}
@@ -315,6 +366,35 @@ class WatchdogService:
             return True
         except OSError:
             return False
+
+        try:
+            if os.name == "nt":
+                output = subprocess.check_output(
+                    f'wmic process where "ProcessId={pid}" get CommandLine',
+                    shell=True,
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                if "watchdog_worker" not in output:
+                    return False
+            else:
+                cmdline_file = Path(f"/proc/{pid}/cmdline")
+                if cmdline_file.exists():
+                    cmdline = cmdline_file.read_text(encoding="utf-8", errors="ignore")
+                    if "watchdog_worker" not in cmdline:
+                        return False
+                else:
+                    output = subprocess.check_output(
+                        ["ps", "-p", str(pid), "-o", "command="],
+                        text=True,
+                        stderr=subprocess.DEVNULL
+                    )
+                    if "watchdog_worker" not in output:
+                        return False
+        except Exception:
+            pass
+
         return True
 
     @staticmethod
@@ -341,7 +421,9 @@ class WatchdogService:
         if raw:
             runtime_dir = Path(raw).expanduser().resolve()
         else:
-            runtime_dir = Path(tempfile.gettempdir()) / "stash_renamer_watchdog"
+            runtime_dir = (
+                Path(options.get("PluginDir") or tempfile.gettempdir()) / ".watchdog"
+            )
 
         runtime_dir.mkdir(parents=True, exist_ok=True)
         return runtime_dir
@@ -365,7 +447,9 @@ class WatchdogService:
 
     @staticmethod
     def _write_json(path: Path, payload: Dict[str, Any]) -> None:
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     @staticmethod
     def _row_to_response(row: Dict[str, Any]) -> Dict[str, Any]:

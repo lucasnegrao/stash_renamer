@@ -1,23 +1,23 @@
 import {
-	createStringCriterionOption,
 	createDateCriterionOption,
-	createMandatoryTimestampCriterionOption,
 	createDurationCriterionOption,
 	createMandatoryNumberCriterionOption,
+	createMandatoryTimestampCriterionOption,
+	createStringCriterionOption,
 } from "./criteria/criterion";
-import { GroupIsMissingCriterionOption } from "./criteria/is-missing";
-import { StudiosCriterionOption } from "./criteria/studios";
-import { PerformersCriterionOption } from "./criteria/performers";
-import { ListFilterOptions } from "./filter-options";
-import { DisplayMode } from "./types";
-import { RatingCriterionOption } from "./criteria/rating";
-// import { StudioTagsCriterionOption } from "./criteria/tags";
-import { TagsCriterionOption } from "./criteria/tags";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
 import {
 	ContainingGroupsCriterionOption,
 	SubGroupsCriterionOption,
 } from "./criteria/groups";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
+import { GroupIsMissingCriterionOption } from "./criteria/is-missing";
+import { PerformersCriterionOption } from "./criteria/performers";
+import { RatingCriterionOption } from "./criteria/rating";
+import { StudiosCriterionOption } from "./criteria/studios";
+// import { StudioTagsCriterionOption } from "./criteria/tags";
+import { TagsCriterionOption } from "./criteria/tags";
+import { ListFilterOptions } from "./filter-options";
+import { DisplayMode } from "./types";
 
 const defaultSortBy = "name";
 

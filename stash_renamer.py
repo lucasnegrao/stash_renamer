@@ -68,6 +68,7 @@ def main() -> None:
         if not input_data:
             raise Exception("No input received from Stash")
 
+        log.LogTrace(f"Input data: {input_data}")
         args = normalize_input_args(input_data.get("args"))
         server_conn = input_data.get("server_connection") or {}
 
@@ -80,6 +81,7 @@ def main() -> None:
         options["server_url"] = f"{scheme}://{host}:{port}/graphql"
         options["cookie_name"] = session_cookie.get("Name", "")
         options["cookie_value"] = session_cookie.get("Value", "")
+        options["PluginDir"] = server_conn.get("PluginDir", "")
 
         source_map = {k: "args" for k in args.keys()}
         source_map["server_url"] = "server_connection"

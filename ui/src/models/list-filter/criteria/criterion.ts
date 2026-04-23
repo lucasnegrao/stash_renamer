@@ -1,28 +1,28 @@
 /* eslint @typescript-eslint/no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
-import { IntlShape } from "react-intl";
+import type { IntlShape } from "react-intl";
 import {
+	type ConfigDataFragment,
 	CriterionModifier,
-	HierarchicalMultiCriterionInput,
-	IntCriterionInput,
-	MultiCriterionInput,
-	TimestampCriterionInput,
-	ConfigDataFragment,
-	DateCriterionInput,
+	type DateCriterionInput,
+	type HierarchicalMultiCriterionInput,
+	type IntCriterionInput,
+	type MultiCriterionInput,
+	type TimestampCriterionInput,
 } from "src/core/generated-graphql";
 import TextUtils from "src/utils/text";
-import {
+import type {
 	CriterionType,
+	IDateValue,
 	IDuplicationValue,
 	IHierarchicalLabelValue,
 	ILabeledId,
+	ILabeledValueListValue,
 	INumberValue,
 	IOptionType,
-	IStashIDValue,
-	IDateValue,
-	ITimestampValue,
-	ILabeledValueListValue,
 	IPhashDistanceValue,
 	IRangeValue,
+	IStashIDValue,
+	ITimestampValue,
 } from "../types";
 
 export type Option = string | number | IOptionType;
@@ -179,7 +179,7 @@ export abstract class ModifierCriterion<
 	}
 
 	public toQueryParams(): Record<string, unknown> {
-		let encodedCriterion: Record<string, unknown> = {
+		const encodedCriterion: Record<string, unknown> = {
 			type: this.criterionOption.type,
 			modifier: this.modifier,
 		};

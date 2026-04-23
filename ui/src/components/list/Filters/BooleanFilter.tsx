@@ -1,4 +1,4 @@
-import { BooleanCriterion } from "src/models/list-filter/criteria/criterion";
+import type { BooleanCriterion } from "src/models/list-filter/criteria/criterion";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

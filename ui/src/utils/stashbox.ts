@@ -1,4 +1,4 @@
-import { StashIdInput } from "src/core/generated-graphql";
+import type { StashIdInput } from "src/core/generated-graphql";
 
 export function stashboxDisplayName(name: string, index: number) {
 	return name || `Stash-Box #${index + 1}`;

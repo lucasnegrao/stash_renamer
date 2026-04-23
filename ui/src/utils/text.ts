@@ -1,4 +1,4 @@
-import { IntlShape } from "react-intl";
+import type { IntlShape } from "react-intl";
 
 // Typescript currently does not implement the intl Unit interface
 type Unit =

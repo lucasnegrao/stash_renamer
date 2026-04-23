@@ -1,4 +1,4 @@
-import { FilterMode, Scene } from "src/core/generated-graphql";
+import { FilterMode, type Scene } from "src/core/generated-graphql";
 import { ListFilterModel } from "./list-filter/filter";
 import { ISlimSceneData } from "./SlimSceneData";
 export interface INamedObject {
@@ -113,7 +113,7 @@ export class SceneQueue {
 	}
 
 	public makeLink(sceneID: string, options: IPlaySceneOptions) {
-		let params = [
+		const params = [
 			this.makeQueryParameters(options.sceneIndex, options.newPage),
 		];
 		if (options.autoPlay) {

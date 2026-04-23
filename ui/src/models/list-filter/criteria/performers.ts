@@ -1,14 +1,14 @@
 /* eslint @typescript-eslint/no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
-import { IntlShape } from "react-intl";
+import type { IntlShape } from "react-intl";
 import {
 	CriterionModifier,
-	MultiCriterionInput,
+	type MultiCriterionInput,
 } from "src/core/generated-graphql";
-import { ILabeledId, ILabeledValueListValue } from "../types";
+import type { ILabeledId, ILabeledValueListValue } from "../types";
 import {
+	type ISavedCriterion,
 	ModifierCriterion,
 	ModifierCriterionOption,
-	ISavedCriterion,
 } from "./criterion";
 
 const modifierOptions = [

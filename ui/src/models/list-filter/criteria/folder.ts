@@ -1,7 +1,7 @@
 import { CriterionModifier } from "src/core/generated-graphql";
 import {
-	ModifierCriterionOption,
 	IHierarchicalLabeledIdCriterion,
+	ModifierCriterionOption,
 } from "./criterion";
 
 const modifierOptions = [CriterionModifier.Includes];

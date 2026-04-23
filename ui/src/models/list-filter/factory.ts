@@ -1,13 +1,13 @@
-import { ListFilterOptions } from "./filter-options";
+import type { FilterMode } from "src/core/generated-graphql";
+import type { ListFilterOptions } from "./filter-options";
 import { GalleryListFilterOptions } from "./galleries";
-import { ImageListFilterOptions } from "./images";
 import { GroupListFilterOptions } from "./groups";
+import { ImageListFilterOptions } from "./images";
 import { PerformerListFilterOptions } from "./performers";
 import { SceneMarkerListFilterOptions } from "./scene-markers";
 import { SceneListFilterOptions } from "./scenes";
 import { StudioListFilterOptions } from "./studios";
 import { TagListFilterOptions } from "./tags";
-import { FilterMode } from "src/core/generated-graphql";
 
 function normalizeMode(mode: unknown): string {
 	return String(mode || "")

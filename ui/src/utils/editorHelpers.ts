@@ -1,6 +1,6 @@
-import { ISlimSceneData } from "../models/SlimSceneData";
-import { Criterion } from "../models/list-filter/criteria/criterion";
-import { ListFilterModel } from "../models/list-filter/filter";
+import type { Criterion } from "../models/list-filter/criteria/criterion";
+import type { ListFilterModel } from "../models/list-filter/filter";
+import type { ISlimSceneData } from "../models/SlimSceneData";
 
 export function includesNoChangeMessage(value: unknown): boolean {
 	return String(value || "")
@@ -25,7 +25,7 @@ export function applySerializedFilterToModel(
 	const next = base.clone();
 
 	const assignIfPresent = (key: string) => {
-		if (Object.prototype.hasOwnProperty.call(source, key)) {
+		if (Object.hasOwn(source, key)) {
 			(next as any)[key] = source[key];
 		}
 	};
@@ -48,10 +48,7 @@ export function applySerializedFilterToModel(
 				const criterion = next.makeCriterion(type);
 				const payload = {
 					modifier: rawCriterion?.modifier ?? rawCriterion?._modifier,
-					value: Object.prototype.hasOwnProperty.call(
-						rawCriterion || {},
-						"value",
-					)
+					value: Object.hasOwn(rawCriterion || {}, "value")
 						? rawCriterion.value
 						: rawCriterion?._value,
 				};

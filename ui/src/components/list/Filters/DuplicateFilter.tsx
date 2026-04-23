@@ -1,8 +1,8 @@
 import {
-	DuplicatedCriterion,
-	DuplicationFieldId,
 	DUPLICATION_FIELD_IDS,
 	DUPLICATION_FIELD_MESSAGE_IDS,
+	type DuplicatedCriterion,
+	type DuplicationFieldId,
 } from "src/models/list-filter/criteria/phash";
 
 const PluginApi = window.PluginApi;

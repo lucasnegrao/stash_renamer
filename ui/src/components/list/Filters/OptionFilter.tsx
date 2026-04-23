@@ -1,4 +1,4 @@
-import {
+import type {
 	CriterionValue,
 	ModifierCriterion,
 } from "src/models/list-filter/criteria/criterion";

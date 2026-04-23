@@ -2,20 +2,20 @@ import {
 	createBooleanCriterionOption,
 	createMandatoryNumberCriterionOption,
 	createMandatoryStringCriterionOption,
+	createMandatoryTimestampCriterionOption,
 	createStringCriterionOption,
 	MandatoryNumberCriterionOption,
-	createMandatoryTimestampCriterionOption,
 } from "./criteria/criterion";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
+import { FavoriteTagCriterionOption } from "./criteria/favorite";
 import { TagIsMissingCriterionOption } from "./criteria/is-missing";
-import { ListFilterOptions } from "./filter-options";
-import { DisplayMode } from "./types";
+import { StashIDCriterionOption } from "./criteria/stash-ids";
 import {
 	ChildTagsCriterionOption,
 	ParentTagsCriterionOption,
 } from "./criteria/tags";
-import { FavoriteTagCriterionOption } from "./criteria/favorite";
-import { StashIDCriterionOption } from "./criteria/stash-ids";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
+import { ListFilterOptions } from "./filter-options";
+import { DisplayMode } from "./types";
 
 const defaultSortBy = "name";
 const sortByOptions = ["name", "random", "scenes_duration", "scenes_size"]

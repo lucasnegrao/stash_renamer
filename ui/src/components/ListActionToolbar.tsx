@@ -1,5 +1,5 @@
 import { SortDirectionEnum } from "src/core/generated-graphql";
-import { ListFilterModel } from "src/models/list-filter/filter";
+import type { ListFilterModel } from "src/models/list-filter/filter";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

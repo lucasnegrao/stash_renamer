@@ -2,8 +2,9 @@ import {
 	faChevronDown,
 	faChevronRight,
 	faChevronUp,
-	IconDefinition,
+	type IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
+
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { Button, Collapse } = PluginApi.libraries.Bootstrap;

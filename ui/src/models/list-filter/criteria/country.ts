@@ -1,4 +1,4 @@
-import { IntlShape } from "react-intl";
+import type { IntlShape } from "react-intl";
 import { CriterionModifier } from "src/core/generated-graphql";
 import { StringCriterion, StringCriterionOption } from "./criterion";
 

@@ -1,27 +1,23 @@
+import cx from "classnames";
+import type { MessageDescriptor } from "react-intl";
+import ClearableInput from "src/components/shared/ClearableInput";
+import { ExpandCollapseButton } from "src/components/shared/CollapseButton";
 import {
 	CriterionModifier,
 	FilterMode,
-	FolderDataFragment,
-	MultiCriterionInput,
+	type FolderDataFragment,
+	type MultiCriterionInput,
 } from "src/core/generated-graphql";
-
-import { Option, SelectedList } from "./SidebarListFilter";
-
-import { ExpandCollapseButton } from "src/components/shared/CollapseButton";
-import cx from "classnames";
-
-import { keyboardClickHandler } from "src/utils/keyboard";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import {
-	FolderCriterion,
-	FolderCriterionOption,
-} from "src/models/list-filter/criteria/folder";
-
-import { DepthSelector } from "./SelectableFilter";
-import ClearableInput from "src/components/shared/ClearableInput";
 import { useDebouncedState } from "src/hooks/debounce";
 import { ModifierCriterionOption } from "src/models/list-filter/criteria/criterion";
-import { MessageDescriptor } from "react-intl";
+import {
+	type FolderCriterion,
+	FolderCriterionOption,
+} from "src/models/list-filter/criteria/folder";
+import { ListFilterModel } from "src/models/list-filter/filter";
+import { keyboardClickHandler } from "src/utils/keyboard";
+import { DepthSelector } from "./SelectableFilter";
+import { type Option, SelectedList } from "./SidebarListFilter";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

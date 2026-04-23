@@ -1,5 +1,5 @@
-import { CriterionOption } from "./criteria/criterion";
-import { DisplayMode } from "./types";
+import type { CriterionOption } from "./criteria/criterion";
+import type { DisplayMode } from "./types";
 
 export interface ISortByOption {
 	messageID: string;

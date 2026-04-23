@@ -1,12 +1,12 @@
 /* eslint @typescript-eslint/no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
-import { IntlShape } from "react-intl";
+import type { IntlShape } from "react-intl";
 import {
 	CriterionModifier,
-	StashIdCriterionInput,
+	type StashIdCriterionInput,
 } from "src/core/generated-graphql";
-import { IStashIDValue } from "../types";
+import type { IStashIDValue } from "../types";
 import {
-	ISavedCriterion,
+	type ISavedCriterion,
 	ModifierCriterion,
 	ModifierCriterionOption,
 } from "./criterion";

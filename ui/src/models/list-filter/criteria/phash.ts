@@ -1,11 +1,11 @@
+import type { IntlShape } from "react-intl";
 import {
 	CriterionModifier,
-	PhashDistanceCriterionInput,
-	DuplicationCriterionInput,
+	type DuplicationCriterionInput,
+	type PhashDistanceCriterionInput,
 } from "src/core/generated-graphql";
-import { IDuplicationValue, IPhashDistanceValue } from "../types";
+import type { IDuplicationValue, IPhashDistanceValue } from "../types";
 import { ModifierCriterion, ModifierCriterionOption } from "./criterion";
-import { IntlShape } from "react-intl";
 
 // Shared mapping of duplication field IDs to their i18n message IDs
 export const DUPLICATION_FIELD_MESSAGE_IDS = {

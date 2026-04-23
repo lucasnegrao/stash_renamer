@@ -1,7 +1,7 @@
 import type {
+	DropdownIndicatorProps,
 	OnChangeValue,
 	OptionProps,
-	DropdownIndicatorProps,
 } from "react-select";
 
 type Option = { value: string; label: string };

@@ -1,9 +1,9 @@
-import React from "react";
+import type React from "react";
 import { Form } from "react-bootstrap";
-import { defineMessages, MessageDescriptor, useIntl } from "react-intl";
-import { FilterSelect, SelectObject } from "src/components/Shared/Select";
-import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
-import { IHierarchicalLabelValue } from "src/models/list-filter/types";
+import { defineMessages, type MessageDescriptor, useIntl } from "react-intl";
+import { FilterSelect, type SelectObject } from "src/components/Shared/Select";
+import type { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
+import type { IHierarchicalLabelValue } from "src/models/list-filter/types";
 import { NumberField } from "src/utils/form";
 
 interface IHierarchicalLabelValueFilterProps {

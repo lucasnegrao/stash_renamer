@@ -1,10 +1,10 @@
-import { IntlShape } from "react-intl";
-import { Criterion, CriterionOption, ModifierCriterion } from "./criterion";
+import { cloneDeep } from "@apollo/client/utilities";
+import type { IntlShape } from "react-intl";
 import {
 	CriterionModifier,
-	CustomFieldCriterionInput,
+	type CustomFieldCriterionInput,
 } from "src/core/generated-graphql";
-import { cloneDeep } from "@apollo/client/utilities";
+import { Criterion, CriterionOption, ModifierCriterion } from "./criterion";
 
 function valueToString(value: unknown[] | undefined | null) {
 	if (!value) return "";

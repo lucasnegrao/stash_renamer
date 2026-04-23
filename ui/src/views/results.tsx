@@ -1,18 +1,18 @@
-import {
-	fetchBatchOperations,
-	fetchOperationBatches,
-	undoBatchOperation,
-	undoOperation,
-	type IOperationBatch,
-	type IScenePreviewResult,
-} from "../services/sceneRenamerApi";
+import { ResultsTable } from "../components/ResultsTable";
+import { TaskProgressOverlay } from "../components/TaskProgressOverlay";
 import {
 	subscribeActiveTabState,
 	subscribeResultsFocus,
 } from "../services/renamerRuntimeState";
-import { ResultsTable } from "../components/ResultsTable";
+import {
+	fetchBatchOperations,
+	fetchOperationBatches,
+	type IOperationBatch,
+	type IScenePreviewResult,
+	undoBatchOperation,
+	undoOperation,
+} from "../services/sceneRenamerApi";
 import { trackTaskJob } from "../services/taskProgressService";
-import { TaskProgressOverlay } from "../components/TaskProgressOverlay";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

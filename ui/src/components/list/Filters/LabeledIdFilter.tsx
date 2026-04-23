@@ -1,34 +1,35 @@
-import React, { useCallback, useMemo, useState } from "react";
+import type React from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Form } from "react-bootstrap";
-import { FilterSelect, SelectObject } from "src/components/Shared/Select";
+import { useIntl } from "react-intl";
+import { FilterSelect, type SelectObject } from "src/components/Shared/Select";
 import { objectTitle } from "src/core/files";
 import { galleryTitle } from "src/core/galleries";
-import { ILoadResults, useCacheResults } from "src/hooks/data";
 import {
+	CriterionModifier,
+	FilterMode,
+	type GalleryFilterType,
+	type GroupFilterType,
+	type ImageFilterType,
+	type InputMaybe,
+	type IntCriterionInput,
+	type PerformerFilterType,
+	type SceneFilterType,
+	type SceneMarkerFilterType,
+	type StudioFilterType,
+} from "src/core/generated-graphql";
+import { type ILoadResults, useCacheResults } from "src/hooks/data";
+import type {
 	CriterionOption,
 	ModifierCriterion,
 } from "src/models/list-filter/criteria/criterion";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import {
+import type { ListFilterModel } from "src/models/list-filter/filter";
+import type {
 	IHierarchicalLabelValue,
 	ILabeledId,
 	ILabeledValueListValue,
 } from "src/models/list-filter/types";
-import { Option } from "./SidebarListFilter";
-import {
-	CriterionModifier,
-	FilterMode,
-	GalleryFilterType,
-	GroupFilterType,
-	ImageFilterType,
-	InputMaybe,
-	IntCriterionInput,
-	PerformerFilterType,
-	SceneFilterType,
-	SceneMarkerFilterType,
-	StudioFilterType,
-} from "src/core/generated-graphql";
-import { useIntl } from "react-intl";
+import type { Option } from "./SidebarListFilter";
 
 interface ILabeledIdFilterProps {
 	criterion: ModifierCriterion<ILabeledId[]>;

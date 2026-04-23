@@ -1,8 +1,8 @@
 import {
 	fetchHookSettings,
 	fetchSavedTemplates,
-	saveHookSettings,
 	type IRenamerTemplate,
+	saveHookSettings,
 } from "../services/sceneRenamerApi";
 
 const PluginApi = window.PluginApi;

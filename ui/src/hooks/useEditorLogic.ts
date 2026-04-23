@@ -1,23 +1,23 @@
-import { useEditorOperations } from "./useEditorOperations";
-import { useEditorTemplateCrud } from "./useEditorTemplateCrud";
-import { useEditorTemplateFields } from "./useEditorTemplateFields";
-import { ISlimSceneData } from "../models/SlimSceneData";
+import type { Criterion } from "../models/list-filter/criteria/criterion";
+import { ListFilterModel } from "../models/list-filter/filter";
+import type { ISlimSceneData } from "../models/SlimSceneData";
 import {
 	loadFromLocalStorage,
 	saveToLocalStorage,
 } from "../services/browserStorage";
 import {
 	getScenePreviewByIdState,
-	setScenePreviewByIdState,
-	setFilterState,
-	subscribeScenePreviewState,
 	type IScenePreviewEntry,
+	setFilterState,
+	setScenePreviewByIdState,
+	subscribeScenePreviewState,
 } from "../services/renamerRuntimeState";
-import { parseTemplateFilterJson } from "../services/templateCrudService";
 import { queryFindScenesByIds } from "../services/sceneRenamerApi";
-import { Criterion } from "../models/list-filter/criteria/criterion";
-import { ListFilterModel } from "../models/list-filter/filter";
+import { parseTemplateFilterJson } from "../services/templateCrudService";
 import { applySerializedFilterToModel } from "../utils/editorHelpers";
+import { useEditorOperations } from "./useEditorOperations";
+import { useEditorTemplateCrud } from "./useEditorTemplateCrud";
+import { useEditorTemplateFields } from "./useEditorTemplateFields";
 
 const PluginApi = (window as any).PluginApi;
 const React = PluginApi.React;
@@ -109,10 +109,7 @@ export function useEditorLogic() {
 		const normalized = criteria.map((criterion: any) => {
 			const type = criterion?.type || criterion?.criterionOption?.type || "";
 			const modifier = criterion?.modifier ?? criterion?._modifier ?? "";
-			const value = Object.prototype.hasOwnProperty.call(
-				criterion || {},
-				"value",
-			)
+			const value = Object.hasOwn(criterion || {}, "value")
 				? criterion.value
 				: criterion?._value;
 			return { type, modifier, value };
@@ -342,7 +339,7 @@ export function useEditorLogic() {
 	]);
 
 	React.useEffect(() => {
-		if (Boolean(queryResult?.loading)) return;
+		if (queryResult?.loading) return;
 		const payload = {
 			mode: hasChangedIdFilter ? "changed-only" : "normal",
 			rawCount: hasChangedIdFilter

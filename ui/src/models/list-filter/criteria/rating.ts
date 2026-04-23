@@ -1,15 +1,15 @@
 import {
+	type ConfigDataFragment,
+	CriterionModifier,
+	type IntCriterionInput,
+} from "src/core/generated-graphql";
+import {
 	convertFromRatingFormat,
 	convertToRatingFormat,
 	defaultRatingSystemOptions,
-	RatingSystemOptions,
+	type RatingSystemOptions,
 } from "src/utils/rating";
-import {
-	ConfigDataFragment,
-	CriterionModifier,
-	IntCriterionInput,
-} from "src/core/generated-graphql";
-import { INumberValue } from "../types";
+import type { INumberValue } from "../types";
 import {
 	encodeRangeValue,
 	ModifierCriterion,

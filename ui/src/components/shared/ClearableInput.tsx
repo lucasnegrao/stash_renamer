@@ -1,5 +1,5 @@
-import useFocus from "src/utils/focus";
 import cx from "classnames";
+import useFocus from "src/utils/focus";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

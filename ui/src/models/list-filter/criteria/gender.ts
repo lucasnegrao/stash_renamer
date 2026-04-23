@@ -1,12 +1,12 @@
 import {
 	CriterionModifier,
-	GenderCriterionInput,
-	GenderEnum,
+	type GenderCriterionInput,
+	type GenderEnum,
 } from "src/core/generated-graphql";
 import { genderStrings, stringToGender } from "src/utils/gender";
 import {
+	type ISavedCriterion,
 	ModifierCriterionOption,
-	ISavedCriterion,
 	MultiStringCriterion,
 } from "./criterion";
 

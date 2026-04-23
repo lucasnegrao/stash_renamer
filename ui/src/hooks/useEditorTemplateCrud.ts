@@ -4,6 +4,7 @@ import {
 	hasSceneListSetFilterState,
 	setFilterState,
 } from "../services/renamerRuntimeState";
+import type { IRenamerTemplate } from "../services/sceneRenamerApi";
 import {
 	getTemplateById,
 	isTemplateDirty,
@@ -15,7 +16,6 @@ import {
 	saveExistingTemplate,
 	saveTemplateAs,
 } from "../services/templateStore";
-import type { IRenamerTemplate } from "../services/sceneRenamerApi";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

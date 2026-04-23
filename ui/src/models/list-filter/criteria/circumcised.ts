@@ -1,6 +1,6 @@
 import {
-	CircumcisionCriterionInput,
-	CircumcisedEnum,
+	type CircumcisedEnum,
+	type CircumcisionCriterionInput,
 	CriterionModifier,
 } from "src/core/generated-graphql";
 import { circumcisedStrings, stringToCircumcised } from "src/utils/circumcised";

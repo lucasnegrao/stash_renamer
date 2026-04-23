@@ -1,6 +1,10 @@
 import { CriterionModifier } from "src/core/generated-graphql";
-import { CriterionType } from "../types";
-import { ModifierCriterionOption, StringCriterion, Option } from "./criterion";
+import type { CriterionType } from "../types";
+import {
+	ModifierCriterionOption,
+	type Option,
+	StringCriterion,
+} from "./criterion";
 
 export class IsMissingCriterion extends StringCriterion {
 	public toCriterionInput(): string {

@@ -1,12 +1,12 @@
 import { FilterMode } from "src/core/generated-graphql";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import {
+import type {
 	CriterionValue,
 	ModifierCriterion,
 } from "src/models/list-filter/criteria/criterion";
+import { ListFilterModel } from "src/models/list-filter/filter";
 import {
 	criterionIsHierarchicalLabelValue,
-	ILabeledId,
+	type ILabeledId,
 } from "src/models/list-filter/types";
 import { HierarchicalObjectsFilter, ObjectsFilter } from "./SelectableFilter";
 

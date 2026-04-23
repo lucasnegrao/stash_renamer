@@ -29,10 +29,7 @@ export function normalizeCriteriaForCompare(source: any): any[] {
 						criterion?.type || criterion?.criterionOption?.type || null;
 					if (!type) return null;
 					const modifier = criterion?.modifier ?? criterion?._modifier ?? null;
-					const value = Object.prototype.hasOwnProperty.call(
-						criterion || {},
-						"value",
-					)
+					const value = Object.hasOwn(criterion || {}, "value")
 						? criterion.value
 						: criterion?._value;
 					return { type, modifier, value };

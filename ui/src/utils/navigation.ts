@@ -1,9 +1,29 @@
+import type { IntlShape } from "react-intl";
+import { objectTitle } from "src/core/files";
+import { galleryTitle } from "src/core/galleries";
 import * as GQL from "src/core/generated-graphql";
-import { PerformersCriterion } from "src/models/list-filter/criteria/performers";
 import { CountryCriterion } from "src/models/list-filter/criteria/country";
 import {
-	StudiosCriterion,
+	type Criterion,
+	type CriterionValue,
+	createStringCriterionOption,
+	type ModifierCriterion,
+	type ModifierCriterionOption,
+	StringCriterion,
+} from "src/models/list-filter/criteria/criterion";
+import { GalleriesCriterion } from "src/models/list-filter/criteria/galleries";
+import {
+	ContainingGroupsCriterionOption,
+	GroupsCriterion,
+	GroupsCriterionOption,
+	SubGroupsCriterionOption,
+} from "src/models/list-filter/criteria/groups";
+import { PerformersCriterion } from "src/models/list-filter/criteria/performers";
+import { PhashCriterion } from "src/models/list-filter/criteria/phash";
+import { MarkersScenesCriterion } from "src/models/list-filter/criteria/scenes";
+import {
 	ParentStudiosCriterion,
+	StudiosCriterion,
 } from "src/models/list-filter/criteria/studios";
 import {
 	ChildTagsCriterionOption,
@@ -12,27 +32,7 @@ import {
 	TagsCriterionOption,
 } from "src/models/list-filter/criteria/tags";
 import { ListFilterModel } from "src/models/list-filter/filter";
-import {
-	ContainingGroupsCriterionOption,
-	GroupsCriterion,
-	GroupsCriterionOption,
-	SubGroupsCriterionOption,
-} from "src/models/list-filter/criteria/groups";
-import {
-	ModifierCriterion,
-	ModifierCriterionOption,
-	CriterionValue,
-	StringCriterion,
-	createStringCriterionOption,
-	Criterion,
-} from "src/models/list-filter/criteria/criterion";
-import { GalleriesCriterion } from "src/models/list-filter/criteria/galleries";
-import { PhashCriterion } from "src/models/list-filter/criteria/phash";
-import { ILabeledId } from "src/models/list-filter/types";
-import { IntlShape } from "react-intl";
-import { galleryTitle } from "src/core/galleries";
-import { MarkersScenesCriterion } from "src/models/list-filter/criteria/scenes";
-import { objectTitle } from "src/core/files";
+import type { ILabeledId } from "src/models/list-filter/types";
 
 function addExtraCriteria(dest: Criterion[], src?: Criterion[]) {
 	if (src && src.length > 0) {
@@ -467,7 +467,7 @@ export function handleUnsavedChanges(
 	basepath: string,
 	id?: string,
 ) {
-	return function (location: { pathname: string }) {
+	return (location: { pathname: string }) => {
 		// #2291 - don't prompt if we're navigating within the gallery being edited
 		if (id !== undefined && location.pathname === `/${basepath}/${id}`) {
 			return true;

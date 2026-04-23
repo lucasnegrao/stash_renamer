@@ -1,23 +1,35 @@
+import { CaptionsCriterionOption } from "./criteria/captions";
 import {
+	createDateCriterionOption,
+	createDurationCriterionOption,
 	createMandatoryNumberCriterionOption,
 	createMandatoryStringCriterionOption,
-	createStringCriterionOption,
-	createDateCriterionOption,
 	createMandatoryTimestampCriterionOption,
-	createDurationCriterionOption,
+	createStringCriterionOption,
 } from "./criteria/criterion";
-import { HasMarkersCriterionOption } from "./criteria/has-markers";
-import { SceneIsMissingCriterionOption } from "./criteria/is-missing";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
+import { PerformerFavoriteCriterionOption } from "./criteria/favorite";
+import { FolderCriterionOption } from "./criteria/folder";
+import { GalleriesCriterionOption } from "./criteria/galleries";
 import {
 	GroupsCriterionOption,
 	LegacyMoviesCriterionOption,
 } from "./criteria/groups";
-import { GalleriesCriterionOption } from "./criteria/galleries";
-import { OrganizedCriterionOption } from "./criteria/organized";
-import { PerformersCriterionOption } from "./criteria/performers";
-import { ResolutionCriterionOption } from "./criteria/resolution";
-import { StudiosCriterionOption } from "./criteria/studios";
+import { HasMarkersCriterionOption } from "./criteria/has-markers";
 import { InteractiveCriterionOption } from "./criteria/interactive";
+import { SceneIsMissingCriterionOption } from "./criteria/is-missing";
+import { OrganizedCriterionOption } from "./criteria/organized";
+import { OrientationCriterionOption } from "./criteria/orientation";
+import { PathCriterionOption } from "./criteria/path";
+import { PerformersCriterionOption } from "./criteria/performers";
+import {
+	DuplicatedCriterionOption,
+	PhashCriterionOption,
+} from "./criteria/phash";
+import { RatingCriterionOption } from "./criteria/rating";
+import { ResolutionCriterionOption } from "./criteria/resolution";
+import { StashIDCriterionOption } from "./criteria/stash-ids";
+import { StudiosCriterionOption } from "./criteria/studios";
 import {
 	PerformerTagsCriterionOption,
 	// StudioTagsCriterionOption,
@@ -25,18 +37,6 @@ import {
 } from "./criteria/tags";
 import { ListFilterOptions, MediaSortByOptions } from "./filter-options";
 import { DisplayMode } from "./types";
-import {
-	DuplicatedCriterionOption,
-	PhashCriterionOption,
-} from "./criteria/phash";
-import { PerformerFavoriteCriterionOption } from "./criteria/favorite";
-import { CaptionsCriterionOption } from "./criteria/captions";
-import { StashIDCriterionOption } from "./criteria/stash-ids";
-import { RatingCriterionOption } from "./criteria/rating";
-import { PathCriterionOption } from "./criteria/path";
-import { OrientationCriterionOption } from "./criteria/orientation";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
-import { FolderCriterionOption } from "./criteria/folder";
 
 const defaultSortBy = "date";
 const sortByOptions = [

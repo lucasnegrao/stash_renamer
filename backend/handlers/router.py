@@ -26,6 +26,7 @@ from backend.handlers.watchdog import (
     handle_watchdog_configure,
     handle_watchdog_save_config,
     handle_watchdog_list_config,
+    handle_watchdog_reorder,
 )
 
 HandlerFunc = Callable[[Dict[str, Any], AppContext], Any]
@@ -54,4 +55,5 @@ ROUTES: Dict[str, HandlerFunc] = {
     "watchdog:configure": handle_watchdog_configure,
     "watchdog:save_config": handle_watchdog_save_config,
     "watchdog:list_config": handle_watchdog_list_config,
+    "watchdog:reorder": handle_watchdog_reorder,
 }

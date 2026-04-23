@@ -1,11 +1,11 @@
 import cx from "classnames";
-import {
+import type {
 	Criterion,
 	CriterionOption,
 } from "src/models/list-filter/criteria/criterion";
-import { ListFilterModel } from "src/models/list-filter/filter";
 import { getFilterOptions } from "src/models/list-filter/factory";
-import { CriterionType } from "src/models/list-filter/types";
+import type { ListFilterModel } from "src/models/list-filter/filter";
+import type { CriterionType } from "src/models/list-filter/types";
 import {
 	loadFromLocalStorage,
 	saveToLocalStorage,

@@ -1,12 +1,12 @@
-import { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
+import { cloneDeep } from "@apollo/client/utilities";
 import {
 	CriterionModifier,
-	CustomFieldCriterionInput,
+	type CustomFieldCriterionInput,
 } from "src/core/generated-graphql";
-import { cloneDeep } from "@apollo/client/utilities";
-import { ModifierSelect } from "../ModifierSelect";
-import { FilterTag } from "../FilterTags";
 import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
+import type { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
+import { FilterTag } from "../FilterTags";
+import { ModifierSelect } from "../ModifierSelect";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

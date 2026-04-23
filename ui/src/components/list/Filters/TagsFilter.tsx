@@ -1,26 +1,27 @@
-import React, { ReactNode, useMemo } from "react";
+import type React from "react";
+import { type ReactNode, useMemo } from "react";
+import { FormattedMessage } from "react-intl";
 import {
 	CriterionModifier,
-	TagDataFragment,
-	TagFilterType,
+	type TagDataFragment,
+	type TagFilterType,
 	useFindTagsForSelectQuery,
 } from "src/core/generated-graphql";
-import { HierarchicalObjectsFilter } from "./SelectableFilter";
-import { sortByRelevance } from "src/utils/query";
-import { CriterionOption } from "src/models/list-filter/criteria/criterion";
-import { ListFilterModel } from "src/models/list-filter/filter";
+import type { CriterionOption } from "src/models/list-filter/criteria/criterion";
 import {
-	IUseQueryHookProps,
+	type TagsCriterion,
+	TagsCriterionOption,
+} from "src/models/list-filter/criteria/tags";
+import type { ListFilterModel } from "src/models/list-filter/filter";
+import { sortByRelevance } from "src/utils/query";
+import {
+	type IUseQueryHookProps,
 	makeQueryVariables,
 	setObjectFilter,
 	useLabeledIdFilterState,
 } from "./LabeledIdFilter";
+import { HierarchicalObjectsFilter } from "./SelectableFilter";
 import { SidebarListFilter } from "./SidebarListFilter";
-import {
-	TagsCriterion,
-	TagsCriterionOption,
-} from "src/models/list-filter/criteria/tags";
-import { FormattedMessage } from "react-intl";
 
 interface ITagsFilter {
 	criterion: TagsCriterion;

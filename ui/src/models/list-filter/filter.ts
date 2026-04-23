@@ -1,15 +1,18 @@
 import {
-	ConfigDataFragment,
-	FilterMode,
-	FindFilterType,
-	SavedFilterDataFragment,
+	type ConfigDataFragment,
+	type FilterMode,
+	type FindFilterType,
+	type SavedFilterDataFragment,
 	SortDirectionEnum,
 } from "src/core/generated-graphql";
-import { Criterion, UnsupportedCriterionOption } from "./criteria/criterion";
-import { getFilterOptions } from "./factory";
-import { CriterionType, DisplayMode, SavedUIOptions } from "./types";
-import { ListFilterOptions } from "./filter-options";
+import {
+	type Criterion,
+	UnsupportedCriterionOption,
+} from "./criteria/criterion";
 import { CustomFieldsCriterion } from "./criteria/custom-fields";
+import { getFilterOptions } from "./factory";
+import type { ListFilterOptions } from "./filter-options";
+import { type CriterionType, DisplayMode, type SavedUIOptions } from "./types";
 
 interface IDecodedParams {
 	perPage?: number;

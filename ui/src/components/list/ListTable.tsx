@@ -1,9 +1,10 @@
-import { CheckBoxSelect } from "../shared/CheckBoxSelect";
 import cx from "classnames";
 import {
 	loadFromLocalStorage,
 	saveToLocalStorage,
 } from "../../services/browserStorage";
+import { CheckBoxSelect } from "../shared/CheckBoxSelect";
+
 const PluginApi = window.PluginApi;
 const { Table, Form } = PluginApi.libraries.Bootstrap;
 const React = PluginApi.React;

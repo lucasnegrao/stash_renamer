@@ -1,8 +1,8 @@
-import React from "react";
-import { Badge, Button } from "react-bootstrap";
 import { faFilter } from "@fortawesome/free-solid-svg-icons";
-import { Icon } from "src/components/Shared/Icon";
+import type React from "react";
+import { Badge, Button } from "react-bootstrap";
 import { useIntl } from "react-intl";
+import { Icon } from "src/components/Shared/Icon";
 
 interface IFilterButtonProps {
 	count?: number;

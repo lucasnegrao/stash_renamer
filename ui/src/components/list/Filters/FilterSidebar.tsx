@@ -1,14 +1,15 @@
-import React, { useEffect } from "react";
+import Mousetrap from "mousetrap";
+import type React from "react";
+import { useEffect } from "react";
+import { Button } from "react-bootstrap";
 import { FormattedMessage } from "react-intl";
 import { SidebarSection } from "src/components/Shared/Sidebar";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import { SearchTermInput } from "../ListFilter";
-import { SidebarSavedFilterList } from "../SavedFilterList";
-import { View } from "../views";
+import type { ListFilterModel } from "src/models/list-filter/filter";
 import useFocus from "src/utils/focus";
 import ScreenUtils from "src/utils/screen";
-import Mousetrap from "mousetrap";
-import { Button } from "react-bootstrap";
+import { SearchTermInput } from "../ListFilter";
+import { SidebarSavedFilterList } from "../SavedFilterList";
+import type { View } from "../views";
 
 const savedFiltersSectionID = "saved-filters";
 

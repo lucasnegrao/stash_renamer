@@ -1,14 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { CriterionModifier } from "../../../core/generated-graphql";
-import { CriterionOption } from "../../../models/list-filter/criteria/criterion";
-import { DurationCriterion } from "src/models/list-filter/criteria/criterion";
-import { ListFilterModel } from "src/models/list-filter/filter";
-import { Option, SidebarListFilter } from "./SidebarListFilter";
-import TextUtils from "src/utils/text";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FormattedMessage } from "react-intl";
 import { DoubleRangeInput } from "src/components/Shared/DoubleRangeInput";
 import { useDebounce } from "src/hooks/debounce";
-import { FormattedMessage } from "react-intl";
+import type { DurationCriterion } from "src/models/list-filter/criteria/criterion";
+import type { ListFilterModel } from "src/models/list-filter/filter";
 import { DurationCriterionOption } from "src/models/list-filter/scenes";
+import TextUtils from "src/utils/text";
+import { CriterionModifier } from "../../../core/generated-graphql";
+import type { CriterionOption } from "../../../models/list-filter/criteria/criterion";
+import { type Option, SidebarListFilter } from "./SidebarListFilter";
 
 interface ISidebarFilter {
 	title?: React.ReactNode;

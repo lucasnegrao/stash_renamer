@@ -1,13 +1,13 @@
 import {
-	ResolutionCriterionInput,
 	CriterionModifier,
+	type ResolutionCriterionInput,
 } from "src/core/generated-graphql";
-import { stringToResolution, resolutionStrings } from "src/utils/resolution";
-import { CriterionType } from "../types";
+import { resolutionStrings, stringToResolution } from "src/utils/resolution";
+import type { CriterionType } from "../types";
 import {
-	ModifierCriterion,
+	type CriterionValue,
+	type ModifierCriterion,
 	ModifierCriterionOption,
-	CriterionValue,
 	StringCriterion,
 } from "./criterion";
 

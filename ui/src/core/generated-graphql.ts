@@ -1,8 +1,10 @@
-import { SavedObjectFilter } from "src/models/list-filter/types";
-import { SavedUIOptions } from "src/models/list-filter/types";
+import * as Apollo from "@apollo/client";
 // import { IUIConfig } from 'src/core/config';
 import { gql } from "@apollo/client";
-import * as Apollo from "@apollo/client";
+import type {
+	SavedObjectFilter,
+	SavedUIOptions,
+} from "src/models/list-filter/types";
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = {

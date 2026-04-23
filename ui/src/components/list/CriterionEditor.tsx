@@ -1,42 +1,42 @@
-import { CriterionModifier } from "../../core/generated-graphql";
 import {
 	BooleanCriterion,
-	Criterion,
-	CriterionValue,
+	type Criterion,
+	type CriterionValue,
 	DateCriterion,
 	DurationCriterion,
 	ModifierCriterion,
 	NumberCriterion,
 	TimestampCriterion,
 } from "src/models/list-filter/criteria/criterion";
+import { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
 import { FolderCriterion } from "src/models/list-filter/criteria/folder";
+import { PathCriterion } from "src/models/list-filter/criteria/path";
+import { DuplicatedCriterion } from "src/models/list-filter/criteria/phash";
+import { RatingCriterion } from "src/models/list-filter/criteria/rating";
+import { StashIDCriterion } from "src/models/list-filter/criteria/stash-ids";
 import {
 	criterionIsDateValue,
 	criterionIsNumberValue,
 	criterionIsStashIDValue,
 	criterionIsTimestampValue,
 } from "src/models/list-filter/types";
-import { DuplicatedCriterion } from "src/models/list-filter/criteria/phash";
-import { PathCriterion } from "src/models/list-filter/criteria/path";
-import { CustomFieldsCriterion } from "src/models/list-filter/criteria/custom-fields";
-import { RatingCriterion } from "src/models/list-filter/criteria/rating";
-import { StashIDCriterion } from "src/models/list-filter/criteria/stash-ids";
+import { CriterionModifier } from "../../core/generated-graphql";
 
 import { BooleanFilter } from "./Filters/BooleanFilter";
+import { CustomFieldsFilter } from "./Filters/CustomFieldsFilter";
 import { DateFilter } from "./Filters/DateFilter";
 import { DuplicatedFilter } from "./Filters/DuplicateFilter";
 import { DurationFilter } from "./Filters/DurationFilter";
+import { FolderFilter } from "./Filters/FolderFilter";
 import { InputFilter } from "./Filters/InputFilter";
 import { NumberFilter } from "./Filters/NumberFilter";
-import { OptionFilter, OptionListFilter } from "./Filters/OptionFilter";
 import { ObjectFilter } from "./Filters/ObjectFilter";
+import { OptionFilter, OptionListFilter } from "./Filters/OptionFilter";
 import { PathFilter } from "./Filters/PathFilter";
 import { RatingFilter } from "./Filters/RatingFilter";
 import { StashIDFilter } from "./Filters/StashIDFilter";
 import { TimestampFilter } from "./Filters/TimestampFilter";
 import { ModifierSelectorButtons } from "./ModifierSelect";
-import { FolderFilter } from "./Filters/FolderFilter";
-import { CustomFieldsFilter } from "./Filters/CustomFieldsFilter";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

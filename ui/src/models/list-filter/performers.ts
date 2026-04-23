@@ -1,24 +1,24 @@
+import { CircumcisedCriterionOption } from "./criteria/circumcised";
+import { CountryCriterionOption } from "./criteria/country";
 import {
-	createNumberCriterionOption,
-	createMandatoryNumberCriterionOption,
-	createStringCriterionOption,
 	createBooleanCriterionOption,
 	createDateCriterionOption,
+	createMandatoryNumberCriterionOption,
 	createMandatoryTimestampCriterionOption,
+	createNumberCriterionOption,
+	createStringCriterionOption,
 } from "./criteria/criterion";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
 import { FavoritePerformerCriterionOption } from "./criteria/favorite";
 import { GenderCriterionOption } from "./criteria/gender";
-import { CircumcisedCriterionOption } from "./criteria/circumcised";
+import { GroupsCriterionOption } from "./criteria/groups";
 import { PerformerIsMissingCriterionOption } from "./criteria/is-missing";
+import { RatingCriterionOption } from "./criteria/rating";
 import { StashIDCriterionOption } from "./criteria/stash-ids";
 import { StudiosCriterionOption } from "./criteria/studios";
 import { TagsCriterionOption } from "./criteria/tags";
 import { ListFilterOptions } from "./filter-options";
-import { CriterionType, DisplayMode } from "./types";
-import { CountryCriterionOption } from "./criteria/country";
-import { RatingCriterionOption } from "./criteria/rating";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
-import { GroupsCriterionOption } from "./criteria/groups";
+import { type CriterionType, DisplayMode } from "./types";
 
 const defaultSortBy = "name";
 const sortByOptions = [

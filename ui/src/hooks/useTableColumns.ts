@@ -2,6 +2,7 @@ import {
 	loadFromLocalStorage,
 	saveToLocalStorage,
 } from "../services/browserStorage";
+
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { useMemo, useState } = React;

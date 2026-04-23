@@ -1,9 +1,9 @@
 import {
 	deleteTemplateFromDatabase,
 	fetchSavedTemplates,
+	type IRenamerTemplate,
 	saveTemplateToDatabase,
 	updateTemplateInDatabase,
-	type IRenamerTemplate,
 } from "./sceneRenamerApi";
 
 export interface ITemplateLoadResult {

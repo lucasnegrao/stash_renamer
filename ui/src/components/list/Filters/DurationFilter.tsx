@@ -1,7 +1,8 @@
-import { CriterionModifier } from "src/core/generated-graphql";
-import { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
-import { INumberValue } from "src/models/list-filter/types";
 import { DurationInput } from "src/components/shared/DurationInput";
+import { CriterionModifier } from "src/core/generated-graphql";
+import type { ModifierCriterion } from "src/models/list-filter/criteria/criterion";
+import type { INumberValue } from "src/models/list-filter/types";
+
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { Form } = PluginApi.libraries.Bootstrap;

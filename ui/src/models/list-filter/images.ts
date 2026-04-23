@@ -1,18 +1,22 @@
 import {
+	createDateCriterionOption,
 	createMandatoryNumberCriterionOption,
 	createMandatoryStringCriterionOption,
-	createStringCriterionOption,
 	createMandatoryTimestampCriterionOption,
-	createDateCriterionOption,
+	createStringCriterionOption,
 } from "./criteria/criterion";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
 import { PerformerFavoriteCriterionOption } from "./criteria/favorite";
+import { FolderCriterionOption } from "./criteria/folder";
+import { GalleriesCriterionOption } from "./criteria/galleries";
 import { ImageIsMissingCriterionOption } from "./criteria/is-missing";
 import { OrganizedCriterionOption } from "./criteria/organized";
+import { OrientationCriterionOption } from "./criteria/orientation";
 import { PathCriterionOption } from "./criteria/path";
 import { PerformersCriterionOption } from "./criteria/performers";
+import { PhashCriterionOption } from "./criteria/phash";
 import { RatingCriterionOption } from "./criteria/rating";
 import { ResolutionCriterionOption } from "./criteria/resolution";
-import { OrientationCriterionOption } from "./criteria/orientation";
 import { StudiosCriterionOption } from "./criteria/studios";
 import {
 	PerformerTagsCriterionOption,
@@ -20,10 +24,6 @@ import {
 } from "./criteria/tags";
 import { ListFilterOptions, MediaSortByOptions } from "./filter-options";
 import { DisplayMode } from "./types";
-import { GalleriesCriterionOption } from "./criteria/galleries";
-import { PhashCriterionOption } from "./criteria/phash";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
-import { FolderCriterionOption } from "./criteria/folder";
 
 const defaultSortBy = "path";
 

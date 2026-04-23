@@ -1,4 +1,4 @@
-import * as GQL from "src/core/generated-graphql";
+import type * as GQL from "src/core/generated-graphql";
 
 export const getStashIDs = (
 	ids?: { stash_id: string; endpoint: string; updated_at: string }[],

@@ -1,8 +1,10 @@
 import argparse
 import json
+import queue
 import signal
 import threading
 import time
+import requests
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
@@ -13,27 +15,34 @@ from backend.services.graphql import GraphQLConfig, GraphQLService
 
 
 class TriggeringHandler(FileSystemEventHandler):
-    def __init__(self, item_id: str, event_types: Set[str], trigger_callback):
+    def __init__(self, path_key: str, event_types: Set[str], trigger_callback):
         super().__init__()
-        self._item_id = item_id
+        self._path_key = path_key
         self._event_types = event_types
         self._trigger_callback = trigger_callback
 
     def on_modified(self, event):
         if "modified" in self._event_types:
-            self._trigger_callback(self._item_id, "modified", event.src_path)
+            self._trigger_callback(self._path_key, "modified", event.src_path)
 
     def on_created(self, event):
         if "created" in self._event_types:
-            self._trigger_callback(self._item_id, "created", event.src_path)
+            self._trigger_callback(self._path_key, "created", event.src_path)
 
     def on_deleted(self, event):
         if "deleted" in self._event_types:
-            self._trigger_callback(self._item_id, "deleted", event.src_path)
+            self._trigger_callback(self._path_key, "deleted", event.src_path)
 
     def on_moved(self, event):
         if "moved" in self._event_types:
-            self._trigger_callback(self._item_id, "moved", event.src_path)
+            self._trigger_callback(self._path_key, "moved", event.src_path)
+
+
+class PathState:
+    def __init__(self):
+        self.last_trigger: float = 0.0
+        self.in_queue_or_processing: bool = False
+        self.pending_retrigger: bool = False
 
 
 class GraphQLWatchdogWorker:
@@ -46,6 +55,9 @@ class GraphQLWatchdogWorker:
         self._stop_event = threading.Event()
         self._pending_event = threading.Event()
         self._lock = threading.Lock()
+        
+        self._queue = queue.Queue()
+        self._server_online = False
 
         config = self._load_config()
         gql_config = GraphQLConfig(
@@ -55,38 +67,45 @@ class GraphQLWatchdogWorker:
         )
         self.gql = GraphQLService(gql_config)
 
-        raw_items = config.get("watch_items") or []
-        self.watch_items: Dict[str, Dict[str, Any]] = {}
-        self._last_trigger_by_item: Dict[str, float] = {}
-        for item in raw_items:
-            if not isinstance(item, dict):
+        raw_paths = config.get("watch_paths") or []
+        self.watch_paths: Dict[str, Dict[str, Any]] = {}
+        self._path_states: Dict[str, PathState] = {}
+        
+        for path_obj in raw_paths:
+            if not isinstance(path_obj, dict):
                 continue
-            item_id = str(item.get("id") or "").strip()
-            if not item_id:
+            path_key = str(path_obj.get("path") or "").strip()
+            if not path_key:
                 continue
-            self.watch_items[item_id] = item
-            self._last_trigger_by_item[item_id] = 0.0
+            self.watch_paths[path_key] = path_obj
+            self._path_states[path_key] = PathState()
 
         self.observer: Optional[Observer] = None
 
     def run(self) -> None:
         self._write_status("running")
-        self._log(f"watchdog worker started with {len(self.watch_items)} configs")
+        self._log(f"watchdog worker started with {len(self.watch_paths)} paths")
 
         self.observer = Observer()
-        for item_id, item in self.watch_items.items():
-            event_types = set(item.get("event_types") or ["modified"])
-            handler = TriggeringHandler(item_id, event_types, self._on_fs_event)
+        for path_key, path_obj in self.watch_paths.items():
+            event_types = set(path_obj.get("event_types") or ["modified"])
+            handler = TriggeringHandler(path_key, event_types, self._on_fs_event)
             self.observer.schedule(
                 handler,
-                str(item.get("path") or ""),
-                recursive=bool(item.get("recursive", True)),
+                path_key,
+                recursive=bool(path_obj.get("recursive", True)),
             )
 
         self.observer.start()
 
+        observer_thread = threading.Thread(target=self._connection_observer_loop, daemon=True)
+        observer_thread.start()
+
         dispatch_thread = threading.Thread(target=self._dispatch_loop, daemon=True)
         dispatch_thread.start()
+        
+        worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        worker_thread.start()
 
         while not self._stop_event.is_set():
             time.sleep(0.25)
@@ -102,61 +121,143 @@ class GraphQLWatchdogWorker:
             self._write_status("stopped")
             self._log("watchdog worker stopped")
 
-    def _on_fs_event(self, item_id: str, event_type: str, path: str) -> None:
+    def _on_fs_event(self, path_key: str, event_type: str, path: str) -> None:
         with self._lock:
-            self._last_trigger_by_item[item_id] = time.monotonic()
+            state = self._path_states.get(path_key)
+            if not state:
+                return
+            
+            if state.in_queue_or_processing:
+                state.pending_retrigger = True
+            else:
+                state.last_trigger = time.monotonic()
+        
         self._pending_event.set()
         self._log(
-            f"filesystem event received: config={item_id}, type={event_type}, path={path}"
+            f"filesystem event received: path_key={path_key}, type={event_type}, path={path}"
         )
+
+    def _connection_observer_loop(self) -> None:
+        self._server_online = False
+        while not self._stop_event.is_set():
+            try:
+                self.gql.call("{ version { version } }", timeout_seconds=5.0)
+                if not self._server_online:
+                    self._log("Server connection established/restored.")
+                self._server_online = True
+            except requests.exceptions.RequestException as exc:
+                if self._server_online:
+                    self._log(f"Server connection lost: {exc}")
+                self._server_online = False
+            except Exception as exc:
+                # Other exceptions like authentication failure might not mean offline
+                # but we'll assume it's up if it's responding with valid JSON errors.
+                self._server_online = True
+                
+            self._stop_event.wait(timeout=10.0)
 
     def _dispatch_loop(self) -> None:
         while not self._stop_event.is_set():
             if not self._pending_event.wait(timeout=0.25):
                 continue
 
-            ready_ids = []
+            ready_keys = []
             with self._lock:
                 now = time.monotonic()
-                for item_id, last_trigger in list(self._last_trigger_by_item.items()):
-                    item = self.watch_items.get(item_id) or {}
-                    debounce = self._to_float(item.get("debounce_seconds"), default=1.0)
-                    if last_trigger > 0 and (now - last_trigger) >= debounce:
-                        ready_ids.append(item_id)
+                for path_key, state in self._path_states.items():
+                    if state.in_queue_or_processing:
+                        continue
+                    
+                    if state.last_trigger > 0:
+                        path_obj = self.watch_paths.get(path_key) or {}
+                        debounce = self._to_float(path_obj.get("debounce_seconds"), default=1.0)
+                        if (now - state.last_trigger) >= debounce:
+                            ready_keys.append(path_key)
+                            state.in_queue_or_processing = True
+                            state.last_trigger = 0.0
 
-            if not ready_ids:
-                time.sleep(0.1)
-                continue
-
-            for item_id in ready_ids:
-                if self._stop_event.is_set():
-                    break
-                self._execute_item(item_id)
-                with self._lock:
-                    self._last_trigger_by_item[item_id] = 0.0
+            for path_key in ready_keys:
+                self._queue.put(path_key)
 
             with self._lock:
-                if all(v <= 0 for v in self._last_trigger_by_item.values()):
+                has_debouncing = any(
+                    s.last_trigger > 0 and not s.in_queue_or_processing 
+                    for s in self._path_states.values()
+                )
+                if not has_debouncing:
                     self._pending_event.clear()
 
-    def _execute_item(self, item_id: str) -> None:
-        item = self.watch_items.get(item_id) or {}
-        query = str(item.get("operation") or "").strip()
-        if not query:
-            self._log(f"watchdog config {item_id} has empty operation; skipping")
-            return
+    def _worker_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                if not self._server_online:
+                    self._stop_event.wait(timeout=1.0)
+                    continue
 
-        variables = item.get("variables") if isinstance(item.get("variables"), dict) else None
-        timeout_seconds = self._to_float(item.get("request_timeout_seconds"), default=30.0)
+                path_key = self._queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
 
-        try:
-            result = self.gql.call(query, variables=variables, timeout_seconds=timeout_seconds)
-            keys = list((result or {}).keys()) if isinstance(result, dict) else []
-            self._log(
-                f"graphql operation executed for config={item_id}; data keys={keys}"
-            )
-        except Exception as exc:
-            self._log(f"graphql operation failed for config={item_id}: {exc}")
+            if self._stop_event.is_set():
+                break
+
+            success = self._execute_path(path_key)
+
+            if not success and not self._server_online:
+                self._log(f"Execution failed while server offline for {path_key}, re-queuing.")
+                self._queue.put(path_key)
+                continue
+
+            with self._lock:
+                state = self._path_states.get(path_key)
+                if state:
+                    state.in_queue_or_processing = False
+                    if state.pending_retrigger:
+                        state.pending_retrigger = False
+                        state.last_trigger = time.monotonic()
+                        self._pending_event.set()
+            
+            self._queue.task_done()
+
+    def _execute_path(self, path_key: str) -> bool:
+        path_obj = self.watch_paths.get(path_key) or {}
+        operations = path_obj.get("operations") or []
+        success = True
+        
+        for op in operations:
+            if self._stop_event.is_set() or not self._server_online:
+                return False
+                
+            op_id = op.get("id", "unknown")
+            query = str(op.get("operation") or "").strip()
+            if not query:
+                self._log(f"watchdog config {op_id} on path={path_key} has empty operation; skipping")
+                continue
+
+            variables = op.get("variables") if isinstance(op.get("variables"), dict) else None
+            timeout_seconds = self._to_float(op.get("request_timeout_seconds"), default=30.0)
+
+            try:
+                result = self.gql.call(query, variables=variables, timeout_seconds=timeout_seconds)
+                keys = list((result or {}).keys()) if isinstance(result, dict) else []
+                self._log(
+                    f"graphql operation executed for config={op_id} on path={path_key}; data keys={keys}"
+                )
+            except requests.exceptions.RequestException as exc:
+                self._log(f"graphql network operation failed for config={op_id} on path={path_key}: {exc}")
+                self._server_online = False
+                return False
+            except Exception as exc:
+                error_str = str(exc)
+                if any(code in error_str for code in ["502", "503", "504", "111"]):
+                    self._log(f"graphql network operation failed for config={op_id} on path={path_key}: {exc}")
+                    self._server_online = False
+                    return False
+                
+                self._log(f"graphql operation failed for config={op_id} on path={path_key}: {exc}")
+                pass
+                
+        return success
 
     def _load_config(self) -> Dict[str, Any]:
         if not self.config_path.exists():
@@ -165,12 +266,12 @@ class GraphQLWatchdogWorker:
         if not isinstance(config, dict):
             raise RuntimeError("invalid watchdog config payload")
 
-        required = ["server_url", "cookie_name", "cookie_value", "watch_items"]
+        required = ["server_url", "cookie_name", "cookie_value", "watch_paths"]
         for key in required:
             if not config.get(key):
                 raise RuntimeError(f"watchdog config missing required key: {key}")
-        if not isinstance(config.get("watch_items"), list):
-            raise RuntimeError("watch_items must be a list")
+        if not isinstance(config.get("watch_paths"), list):
+            raise RuntimeError("watch_paths must be a list")
         return config
 
     def _write_status(self, status: str) -> None:

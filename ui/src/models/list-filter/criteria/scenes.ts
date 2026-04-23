@@ -1,9 +1,9 @@
+import { CriterionModifier } from "src/core/generated-graphql";
 import {
-	ModifierCriterionOption,
 	ILabeledIdCriterion,
 	ILabeledIdCriterionOption,
+	ModifierCriterionOption,
 } from "./criterion";
-import { CriterionModifier } from "src/core/generated-graphql";
 
 const inputType = "scenes";
 

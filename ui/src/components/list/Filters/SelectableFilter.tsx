@@ -1,15 +1,15 @@
 import { CriterionModifier } from "src/core/generated-graphql";
 import {
 	IHierarchicalLabeledIdCriterion,
-	ModifierCriterion,
+	type ModifierCriterion,
 } from "src/models/list-filter/criteria/criterion";
-import {
+import type {
 	IHierarchicalLabelValue,
 	ILabeledId,
 	ILabeledValueListValue,
 } from "src/models/list-filter/types";
-import { keyboardClickHandler } from "src/utils/keyboard";
 import useFocus from "src/utils/focus";
+import { keyboardClickHandler } from "src/utils/keyboard";
 import ScreenUtils from "src/utils/screen";
 
 const PluginApi = window.PluginApi;

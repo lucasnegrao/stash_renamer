@@ -1,16 +1,16 @@
 import { RenamerSettingsPanel } from "./components/RenamerSettingsPanel";
-import { RenamerResults } from "./views/results";
-import { RenamerSettings } from "./views/settings";
-import { EditorView } from "./views/EditorView";
-import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
 import {
 	getActiveTabState,
 	resetRenamerRuntimeState,
 	setActiveTabState,
 	subscribeActiveTabState,
 } from "./services/renamerRuntimeState";
+import { ensureSceneRenamerStyles } from "./styles/sceneRenamerStyles";
+import { EditorView } from "./views/EditorView";
+import { RenamerResults } from "./views/results";
+import { RenamerSettings } from "./views/settings";
 
-(function () {
+(() => {
 	const PluginApi = window.PluginApi;
 	const React = PluginApi.React;
 	const { Button, Tabs, Tab } = PluginApi.libraries.Bootstrap;
@@ -121,7 +121,7 @@ import {
 	PluginApi.register.route("/plugins/stash_renamer/results", RenamerResults);
 	PluginApi.register.route("/plugins/stash_renamer/settings", RenamerSettings);
 
-	PluginApi.patch.before("MainNavBar.UtilityItems", function (props: any) {
+	PluginApi.patch.before("MainNavBar.UtilityItems", (props: any) => {
 		const { Icon } = PluginApi.components;
 		return [
 			{
@@ -144,7 +144,7 @@ import {
 
 	PluginApi.patch.instead(
 		"PluginSettings",
-		function (props: any, _: any, Original: any) {
+		(props: any, _: any, Original: any) => {
 			if (props.pluginID !== "stash_renamer") return <Original {...props} />;
 			const { Setting } = PluginApi.components;
 

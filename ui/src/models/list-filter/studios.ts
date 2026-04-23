@@ -2,9 +2,10 @@ import {
 	createBooleanCriterionOption,
 	createMandatoryNumberCriterionOption,
 	createMandatoryStringCriterionOption,
-	createStringCriterionOption,
 	createMandatoryTimestampCriterionOption,
+	createStringCriterionOption,
 } from "./criteria/criterion";
+import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
 import { FavoriteStudioCriterionOption } from "./criteria/favorite";
 import { StudioIsMissingCriterionOption } from "./criteria/is-missing";
 import { RatingCriterionOption } from "./criteria/rating";
@@ -13,7 +14,6 @@ import { ParentStudiosCriterionOption } from "./criteria/studios";
 import { TagsCriterionOption } from "./criteria/tags";
 import { ListFilterOptions } from "./filter-options";
 import { DisplayMode } from "./types";
-import { CustomFieldsCriterionOption } from "./criteria/custom-fields";
 
 const defaultSortBy = "name";
 const sortByOptions = [

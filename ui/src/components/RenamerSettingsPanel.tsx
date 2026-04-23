@@ -1,7 +1,8 @@
-import { clearHistory } from "../services/sceneRenamerApi";
 import { requestResultsFocus } from "../services/renamerRuntimeState";
-import { HookSettingsModal } from "./HookSettingsModal";
+import { clearHistory } from "../services/sceneRenamerApi";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { HookSettingsModal } from "./HookSettingsModal";
+import { WatchdogSettingsPanel } from "./WatchdogSettingsPanel";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
@@ -63,7 +64,7 @@ export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 				}}
 				onConfirm={onConfirmClear}
 			/>
-			<Card>
+			<Card className="mb-4">
 				<Card.Body>
 					<div className="d-flex flex-column gap-2">
 						<div className="d-flex align-items-center gap-2">
@@ -101,6 +102,8 @@ export const RenamerSettingsPanel: React.FC<IRenamerSettingsPanelProps> = ({
 					</div>
 				</Card.Body>
 			</Card>
+
+			<WatchdogSettingsPanel />
 		</div>
 	);
 };

@@ -1,13 +1,13 @@
-import { PerformersCriterionOption } from "./criteria/performers";
-import { MarkersScenesCriterionOption } from "./criteria/scenes";
-import { SceneTagsCriterionOption, TagsCriterionOption } from "./criteria/tags";
-import { ListFilterOptions } from "./filter-options";
-import { DisplayMode } from "./types";
 import {
 	createDateCriterionOption,
 	createMandatoryTimestampCriterionOption,
 	createNullDurationCriterionOption,
 } from "./criteria/criterion";
+import { PerformersCriterionOption } from "./criteria/performers";
+import { MarkersScenesCriterionOption } from "./criteria/scenes";
+import { SceneTagsCriterionOption, TagsCriterionOption } from "./criteria/tags";
+import { ListFilterOptions } from "./filter-options";
+import { DisplayMode } from "./types";
 
 const defaultSortBy = "title";
 const sortByOptions = [

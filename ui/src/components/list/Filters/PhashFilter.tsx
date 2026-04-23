@@ -1,10 +1,10 @@
-import React from "react";
+import type React from "react";
 import { Form } from "react-bootstrap";
 import { useIntl } from "react-intl";
-import { IPhashDistanceValue } from "../../../models/list-filter/types";
-import { ModifierCriterion } from "../../../models/list-filter/criteria/criterion";
 import { CriterionModifier } from "src/core/generated-graphql";
 import { NumberField } from "src/utils/form";
+import type { ModifierCriterion } from "../../../models/list-filter/criteria/criterion";
+import type { IPhashDistanceValue } from "../../../models/list-filter/types";
 
 interface IPhashFilterProps {
 	criterion: ModifierCriterion<IPhashDistanceValue>;

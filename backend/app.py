@@ -29,6 +29,7 @@ def run(options: dict, collect_operations: bool = False):
     dry_run = to_bool(options.get("dry_run", False))
     debug_mode = to_bool(options.get("debug_mode", True))
     logger = LoggerService(debug_mode=debug_mode)
+    logger.info(f"Running in {mode} mode, options: {options}")
 
     gql_config = GraphQLConfig(
         server_url=str(server_url),
@@ -38,7 +39,7 @@ def run(options: dict, collect_operations: bool = False):
     watchdog = WatchdogService(
         db_path=str(options.get("operations_db_path") or "rename_operations.db"),
         gql_config=gql_config,
-        log_print=logger.debug if using_log else (lambda _msg: None)
+        log_print=logger.debug if using_log else (lambda _msg: None),
     )
 
     gql = GraphQLService(gql_config)

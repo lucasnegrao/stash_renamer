@@ -73,6 +73,7 @@ export namespace StasheroApi {
 		operation: string;
 		enabled: boolean;
 		options?: IWatchdogConfigOptions;
+		sort_order?: number;
 	}
 
 	export interface IWatchdogState {
@@ -103,11 +104,11 @@ export namespace StasheroApi {
 		}
 
 		/** mode: 'undo:list_operations' */
-		export interface IListOperationsArgs {}
+		export type IListOperationsArgs = {};
 		export type IListOperationsResponse = IScenePreviewResult[];
 
 		/** mode: 'undo:list_operation_batches' */
-		export interface IListOperationBatchesArgs {}
+		export type IListOperationBatchesArgs = {};
 		export interface IListOperationBatchesResponse {
 			batches: IOperationBatch[];
 		}
@@ -132,7 +133,7 @@ export namespace StasheroApi {
 		}
 
 		/** mode: 'undo:clear_history' */
-		export interface IClearHistoryArgs {}
+		export type IClearHistoryArgs = {};
 		export interface IClearHistoryResponse {
 			deleted_operations?: number;
 			deleted_batches?: number;
@@ -144,7 +145,7 @@ export namespace StasheroApi {
 	// =========================================================================
 	export namespace Template {
 		/** mode: 'template:list_templates' */
-		export interface IListTemplatesArgs {}
+		export type IListTemplatesArgs = {};
 		export interface IListTemplatesResponse {
 			templates: IRenamerTemplate[];
 		}
@@ -261,7 +262,7 @@ export namespace StasheroApi {
 	// =========================================================================
 	export namespace System {
 		/** mode: 'system:list_selectors' */
-		export interface IListSelectorsArgs {}
+		export type IListSelectorsArgs = {};
 		export interface IListSelectorsResponse {
 			roots: Array<{
 				root: string;
@@ -332,10 +333,21 @@ export namespace StasheroApi {
 		}
 
 		/** mode: 'watchdog:list_config' */
-		export interface IListConfigArgs {}
+		export type IListConfigArgs = {};
 		export interface IListConfigResponse {
 			watchdog: {
 				configs: IWatchdogConfig[];
+			};
+		}
+
+		/** mode: 'watchdog:reorder' */
+		export interface IReorderArgs {
+			path: string;
+			configIds: string[];
+		}
+		export interface IReorderResponse {
+			watchdog: {
+				restarted: boolean;
 			};
 		}
 	}

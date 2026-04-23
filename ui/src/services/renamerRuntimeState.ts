@@ -48,12 +48,9 @@ function normalizeSerializedCriterion(rawCriterion: any): any | null {
 		fromQueryParams?.modifier ??
 		rawCriterion?.modifier ??
 		rawCriterion?._modifier;
-	const value = Object.prototype.hasOwnProperty.call(
-		fromQueryParams || {},
-		"value",
-	)
+	const value = Object.hasOwn(fromQueryParams || {}, "value")
 		? fromQueryParams.value
-		: Object.prototype.hasOwnProperty.call(rawCriterion, "value")
+		: Object.hasOwn(rawCriterion, "value")
 			? rawCriterion.value
 			: rawCriterion?._value;
 	return {
@@ -159,7 +156,7 @@ function rebuildCriteriaFromSerialized(
 			const criterion = workingFilterModel.makeCriterion(criterionType);
 			const decodedPayload = {
 				modifier: rawCriterion?.modifier ?? rawCriterion?._modifier,
-				value: Object.prototype.hasOwnProperty.call(rawCriterion || {}, "value")
+				value: Object.hasOwn(rawCriterion || {}, "value")
 					? rawCriterion.value
 					: rawCriterion?._value,
 			};
@@ -201,7 +198,7 @@ export function applyFilterToSceneList(nextFilter: any): boolean {
 		}
 		const nextModel = prevState.clone();
 		const assignIfPresent = (key: string) => {
-			if (Object.prototype.hasOwnProperty.call(nextFilter, key)) {
+			if (Object.hasOwn(nextFilter, key)) {
 				nextModel[key] = nextFilter[key];
 			}
 		};
