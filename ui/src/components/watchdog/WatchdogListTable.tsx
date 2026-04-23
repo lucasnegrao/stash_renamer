@@ -1,7 +1,6 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
 import type { IWatchdogConfig } from "../../services/sceneRenamerApi";
 import { ListTable, type IColumn } from "../list/ListTable";
-import { BooleanOptionColumnCell } from "../list/columns/BooleanOptionColumnCell";
 import { CrudActionsColumnCell } from "../list/columns/CrudActionsColumnCell";
 import { TextColumnCell } from "../list/columns/TextColumnCell";
 
@@ -57,19 +56,11 @@ export const WatchdogListTable: React.FC<IWatchdogListTableProps> = ({
 			maxLines: 2,
 		},
 		{
-			value: "enabled",
-			label: "Enabled",
-			mandatory: true,
-			defaultWidth: 120,
-			minWidth: 100,
-			multiline: false,
-		},
-		{
 			value: "actions",
 			label: "Actions",
 			mandatory: true,
-			defaultWidth: 220,
-			minWidth: 180,
+			defaultWidth: 280,
+			minWidth: 240,
 			multiline: false,
 		},
 	];
@@ -85,19 +76,12 @@ export const WatchdogListTable: React.FC<IWatchdogListTableProps> = ({
 		if (column.value === "operation") {
 			return <TextColumnCell value={operationLabel(row.operation)} />;
 		}
-		if (column.value === "enabled") {
-			return (
-				<BooleanOptionColumnCell
-					checked={toEnabled((row as any)?.enabled)}
-					disabled={disabled}
-					onChange={(nextValue) => onToggleEnabled(row, nextValue)}
-				/>
-			);
-		}
 		if (column.value === "actions") {
 			return (
 				<CrudActionsColumnCell
 					disabled={disabled}
+					enabled={toEnabled((row as any)?.enabled)}
+					onToggleEnabled={(nextValue) => onToggleEnabled(row, nextValue)}
 					onEdit={() => onEdit(row)}
 					onRemove={() => onRemove(row)}
 				/>
