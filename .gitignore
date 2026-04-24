@@ -9,3 +9,4 @@ __pycache__
 ui/dist
 node_modules/*
 devdocs/graphql
+dist

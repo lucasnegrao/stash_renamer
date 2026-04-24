@@ -17,7 +17,6 @@ import { RenamerResults } from "./views/ResultsView";
 import { SettingsView } from "./views/SettingsView";
 
 (() => {
-	console.log("ëntry");
 	const PluginApi = window.PluginApi;
 	const React = PluginApi.React;
 	const { Button, Nav } = PluginApi.libraries.Bootstrap;
@@ -231,8 +230,6 @@ import { SettingsView } from "./views/SettingsView";
 			PluginApi.loadableComponents.SceneList,
 			PluginApi.loadableComponents.SceneQueryModal,
 		];
-		const _componentsLoading =
-			PluginApi.hooks.useLoadComponents(componentsToLoad);
 
 		React.useEffect(() => {
 			ensureSceneRenamerStyles();
@@ -367,16 +364,29 @@ import { SettingsView } from "./views/SettingsView";
 	PluginApi.patch.instead(
 		"PluginSettings",
 		(props: any, _: any, Original: any) => {
-			if (props.pluginID !== "stashero") return <Original {...props} />;
+			if (props.pluginID !== "stash_renamer") return <Original {...props} />;
 			const { Setting } = PluginApi.components;
 
-			return [
-				<Setting
-					key="stash-renamer-hook-setting"
-					heading={<SettingsView className="w-100" />}
-					subHeading=""
-				/>,
-			];
+			const PluginSettingsGate: React.FC = () => {
+				const [ready, setReady] = React.useState(getRuntimeReady());
+				React.useEffect(() => subscribeRuntimeReady(setReady), []);
+
+				if (!ready) {
+					return (
+						<Original key="stash-renamer-plugin-settings-original" {...props} />
+					);
+				}
+
+				return (
+					<Setting
+						key="stash-renamer-hook-setting"
+						heading={<SettingsView className="w-100" />}
+						subHeading=""
+					/>
+				);
+			};
+
+			return [<PluginSettingsGate key="stash-renamer-plugin-settings-gate" />];
 		},
 	);
 })();

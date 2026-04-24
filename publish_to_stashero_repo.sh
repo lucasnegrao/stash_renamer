@@ -21,7 +21,7 @@ fi
 log "Running UI pipeline: npm run pau"
 (
   cd "$UI_DIR"
-  npm run pau
+  npm run pauprod
 )
 
 log "Building dist via build_dist.py"

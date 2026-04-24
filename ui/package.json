@@ -6,7 +6,10 @@
 	"license": "AGPL-3.0",
 	"scripts": {
 		"tsc": "tsc",
+		"webpack:dev": "webpack --mode development",
+		"webpack:prod": "webpack --mode production",
 		"pau": "npm rum biome:format ; npx webpack ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/",
+		"pauprod": "npm run biome:format ; npm run webpack:prod ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer/* root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/stashero",
 		"compile:ts": "npm run tsc",
 		"compile": "npm run compile:ts && pau",
 		"build": "npm run pau",
