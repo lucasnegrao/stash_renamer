@@ -48,6 +48,11 @@ export interface IPluginRuntimeConfig {
 	pythonPath: string;
 }
 
+export interface IPackageSpec {
+	id: string;
+	sourceURL: string;
+}
+
 let selectorsCatalogCache: any | null = null;
 let selectorsCatalogInflight: Promise<any> | null = null;
 
@@ -505,6 +510,59 @@ export async function uninstallFfmpegProxyServiceTask(): Promise<
 	return api.system.ffmpegProxyReverseTask({});
 }
 
+export async function fetchInstalledPluginPackageSpec(
+	pluginId = "stash_renamer",
+): Promise<IPackageSpec | null> {
+	const query = gql`
+		query FindInstalledPluginPackage {
+			installedPackages(type: Plugin) {
+				package_id
+				sourceURL
+			}
+		}
+	`;
+	const result = await api.client.query({
+		query,
+		fetchPolicy: "no-cache",
+	});
+	const rows = Array.isArray(result?.data?.installedPackages)
+		? result.data.installedPackages
+		: [];
+	const row = rows.find(
+		(item: any) =>
+			String(item?.package_id || "").trim() === String(pluginId).trim(),
+	);
+	if (!row) return null;
+	return {
+		id: String(row.package_id || "").trim(),
+		sourceURL: String(row.sourceURL || "").trim(),
+	};
+}
+
+export async function uninstallPluginPackageTask(args: {
+	id: string;
+	sourceURL: string;
+}): Promise<string> {
+	const mutation = gql`
+		mutation UninstallPluginPackages($packages: [PackageSpecInput!]!) {
+			uninstallPackages(type: Plugin, packages: $packages)
+		}
+	`;
+	const result = await api.client.mutate({
+		mutation,
+		variables: {
+			packages: [
+				{
+					id: String(args.id || "").trim(),
+					sourceURL: String(args.sourceURL || "").trim(),
+				},
+			],
+		},
+		fetchPolicy: "no-cache",
+	});
+	return String(result?.data?.uninstallPackages || "").trim();
+}
+
 export async function installRuntimeServiceTask(): Promise<string | null> {
 	return api.system.runtimeServiceInstallTask({});
 }
@@ -546,7 +604,7 @@ export async function setPluginRuntimeConfig(args: {
 	pythonPath?: string;
 }): Promise<void> {
 	const mutation = gql`
-		mutation ConfigurePluginRuntime($plugin_id: ID!, $input: PluginConfigInput!) {
+		mutation ConfigurePluginRuntime($plugin_id: ID!, $input: Map!) {
 			configurePlugin(plugin_id: $plugin_id, input: $input)
 		}
 	`;

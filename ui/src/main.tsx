@@ -17,6 +17,7 @@ import { RenamerResults } from "./views/ResultsView";
 import { SettingsView } from "./views/SettingsView";
 
 (() => {
+	console.log("ëntry");
 	const PluginApi = window.PluginApi;
 	const React = PluginApi.React;
 	const { Button, Nav } = PluginApi.libraries.Bootstrap;
@@ -33,6 +34,137 @@ import { SettingsView } from "./views/SettingsView";
 	const subscribeRuntimeReady = (listener: (ready: boolean) => void) => {
 		runtimeReadyListeners.add(listener);
 		return () => runtimeReadyListeners.delete(listener);
+	};
+	type IRuntimeBootstrapState = {
+		done: boolean;
+		error: string;
+		overlay: {
+			show: boolean;
+			progress: number;
+			text: string;
+		};
+	};
+	let runtimeBootstrapStarted = false;
+	let runtimeBootstrapState: IRuntimeBootstrapState = {
+		done: false,
+		error: "",
+		overlay: {
+			show: true,
+			progress: 0,
+			text: "Preparing Scene Renamer runtime...",
+		},
+	};
+	const runtimeBootstrapListeners = new Set<
+		(state: IRuntimeBootstrapState) => void
+	>();
+	const getRuntimeBootstrapState = () => runtimeBootstrapState;
+	const setRuntimeBootstrapState = (
+		next:
+			| IRuntimeBootstrapState
+			| ((prev: IRuntimeBootstrapState) => IRuntimeBootstrapState),
+	) => {
+		runtimeBootstrapState =
+			typeof next === "function" ? next(runtimeBootstrapState) : next;
+		setRuntimeReady(runtimeBootstrapState.done && !runtimeBootstrapState.error);
+		runtimeBootstrapListeners.forEach((listener) =>
+			listener(runtimeBootstrapState),
+		);
+	};
+	const subscribeRuntimeBootstrap = (
+		listener: (state: IRuntimeBootstrapState) => void,
+	) => {
+		runtimeBootstrapListeners.add(listener);
+		return () => runtimeBootstrapListeners.delete(listener);
+	};
+	const startRuntimeBootstrap = async () => {
+		if (runtimeBootstrapStarted) return;
+		runtimeBootstrapStarted = true;
+		try {
+			const runtime = await fetchPluginRuntimeConfig("stash_renamer");
+			if (runtime.installed && String(runtime.pythonPath || "").trim()) {
+				setRuntimeBootstrapState((prev) => ({
+					...prev,
+					done: true,
+					error: "",
+					overlay: { ...prev.overlay, show: false },
+				}));
+				return;
+			}
+
+			setRuntimeBootstrapState((prev) => ({
+				...prev,
+				overlay: {
+					show: true,
+					progress: 5,
+					text: "Installing plugin runtime service...",
+				},
+			}));
+
+			const jobId = await installRuntimeServiceTask();
+			if (!jobId) {
+				throw new Error("runtime install task did not return a job id");
+			}
+
+			const tracker = trackTaskJob(jobId, {
+				onProgress: ({ progress, status, error }) => {
+					setRuntimeBootstrapState((prev) => ({
+						...prev,
+						overlay: {
+							show: true,
+							progress: Math.max(5, Math.min(100, Number(progress || 0))),
+							text: error
+								? `Runtime install: ${status} - ${String(error)}`
+								: `Runtime install: ${status}`,
+						},
+					}));
+				},
+			});
+			const final = await tracker.done;
+			if (String(final.status || "").toUpperCase() !== "FINISHED") {
+				throw new Error(
+					final.error ||
+						`runtime install task finished with status ${final.status}`,
+				);
+			}
+
+			const nextRuntime = await fetchPluginRuntimeConfig("stash_renamer");
+			if (
+				!nextRuntime.installed ||
+				String(nextRuntime.pythonPath || "").trim().length === 0
+			) {
+				await setPluginRuntimeConfig({
+					pluginId: "stash_renamer",
+					installed: false,
+					pythonPath: "",
+				});
+				throw new Error(
+					"runtime install task finished but plugin config is still missing pythonPath",
+				);
+			}
+			setRuntimeBootstrapState((prev) => ({
+				...prev,
+				done: true,
+				error: "",
+				overlay: { ...prev.overlay, show: false },
+			}));
+		} catch (e: any) {
+			const message = String(e?.message || e || "runtime setup failed");
+			try {
+				await setPluginRuntimeConfig({
+					pluginId: "stash_renamer",
+					installed: false,
+					pythonPath: "",
+				});
+			} catch {
+				// ignore config rollback failures
+			}
+			setRuntimeBootstrapState((prev) => ({
+				...prev,
+				done: true,
+				error: message,
+				overlay: { ...prev.overlay, show: false },
+			}));
+		}
 	};
 	const isRenamerPath = (pathname: string) =>
 		pathname === "/plugins/stash_renamer" ||
@@ -51,19 +183,17 @@ import { SettingsView } from "./views/SettingsView";
 			resetRenamerRuntimeState();
 		}
 	});
+	void startRuntimeBootstrap();
 
 	const MainPage: React.FC = () => {
 		const location = useLocation();
 		const match = PluginApi.libraries.ReactRouterDOM.useRouteMatch();
 		const { error: toastError } = PluginApi.hooks.useToast();
+		const shouldRenderPage = !(match && !match.isExact);
 
 		let currentTab = "editor";
 		if (location.pathname.endsWith("/results")) currentTab = "results";
 		if (location.pathname.endsWith("/settings")) currentTab = "settings";
-
-		// Only render when the route is an exact match to prevent Stash from double-rendering
-		// since it renders plugin routes without exact mode, matching base and sub-routes simultaneously.
-		if (match && !match.isExact) return null;
 
 		React.useEffect(() => {
 			setActiveTabState(currentTab as any);
@@ -71,17 +201,10 @@ import { SettingsView } from "./views/SettingsView";
 		const [globalTaskOverlay, setGlobalTaskOverlay] = React.useState(() =>
 			getRenamerTaskOverlayState(),
 		);
-		const [runtimeCheckDone, setRuntimeCheckDone] = React.useState(false);
-		const [runtimeCheckError, setRuntimeCheckError] = React.useState("");
-		const [runtimeInstallOverlay, setRuntimeInstallOverlay] = React.useState<{
-			show: boolean;
-			progress: number;
-			text: string;
-		}>({
-			show: false,
-			progress: 0,
-			text: "Preparing runtime...",
-		});
+		const [runtimeState, setRuntimeState] = React.useState(() =>
+			getRuntimeBootstrapState(),
+		);
+		const lastToastRef = React.useRef("");
 
 		React.useEffect(() => {
 			const unsub = subscribeRenamerTaskOverlayState((payload) => {
@@ -89,6 +212,16 @@ import { SettingsView } from "./views/SettingsView";
 			});
 			return () => unsub();
 		}, []);
+		React.useEffect(
+			() => subscribeRuntimeBootstrap((state) => setRuntimeState(state)),
+			[],
+		);
+		React.useEffect(() => {
+			const message = String(runtimeState.error || "").trim();
+			if (!message || message === lastToastRef.current) return;
+			lastToastRef.current = message;
+			toastError(`Scene Renamer runtime initialization failed: ${message}`);
+		}, [runtimeState.error, toastError]);
 
 		const pageRef = React.useRef<HTMLDivElement | null>(null);
 		const componentsToLoad = [
@@ -103,107 +236,6 @@ import { SettingsView } from "./views/SettingsView";
 
 		React.useEffect(() => {
 			ensureSceneRenamerStyles();
-		}, []);
-
-		React.useEffect(() => {
-			let cancelled = false;
-			(async () => {
-				try {
-					const runtime = await fetchPluginRuntimeConfig("stash_renamer");
-					if (
-						runtime.installed &&
-						String(runtime.pythonPath || "").trim().length > 0
-					) {
-						if (!cancelled) {
-							setRuntimeCheckDone(true);
-							setRuntimeReady(true);
-						}
-						return;
-					}
-
-					const jobId = await installRuntimeServiceTask();
-					if (!jobId) {
-						throw new Error("runtime install task did not return a job id");
-					}
-					if (!cancelled) {
-						setRuntimeInstallOverlay({
-							show: true,
-							progress: 5,
-							text: "Installing plugin runtime service...",
-						});
-					}
-					const tracker = trackTaskJob(jobId, {
-						onProgress: ({ progress, status, error }) => {
-							if (cancelled) return;
-							setRuntimeInstallOverlay({
-								show: true,
-								progress: Math.max(5, Math.min(100, Number(progress || 0))),
-								text: error
-									? `Runtime install: ${status} - ${String(error)}`
-									: `Runtime install: ${status}`,
-							});
-						},
-					});
-					const final = await tracker.done;
-					if (String(final.status || "").toUpperCase() !== "FINISHED") {
-						throw new Error(
-							final.error ||
-								`runtime install task finished with status ${final.status}`,
-						);
-					}
-
-					const nextRuntime = await fetchPluginRuntimeConfig("stash_renamer");
-					if (
-						!nextRuntime.installed ||
-						String(nextRuntime.pythonPath || "").trim().length === 0
-					) {
-						await setPluginRuntimeConfig({
-							pluginId: "stash_renamer",
-							installed: false,
-							pythonPath: "",
-						});
-						throw new Error(
-							"runtime install task finished but plugin config is still missing pythonPath",
-						);
-					}
-					if (!cancelled) {
-						setRuntimeCheckDone(true);
-						setRuntimeReady(true);
-					}
-				} catch (e: any) {
-					const message = String(e?.message || e || "runtime setup failed");
-					try {
-						await setPluginRuntimeConfig({
-							pluginId: "stash_renamer",
-							installed: false,
-							pythonPath: "",
-						});
-					} catch {
-						// ignore config rollback failures
-					}
-					if (!cancelled) {
-						setRuntimeCheckError(message);
-						setRuntimeCheckDone(true);
-						setRuntimeReady(false);
-						setRuntimeInstallOverlay({
-							show: false,
-							progress: 0,
-							text: "",
-						});
-					}
-					toastError(`Scene Renamer runtime initialization failed: ${message}`);
-				} finally {
-					if (!cancelled) {
-						setRuntimeInstallOverlay((prev) => ({
-							...prev,
-							show: false,
-						}));
-					}
-				}
-			})();
-			return () => {
-				cancelled = true;
-			};
 		}, []);
 
 		React.useLayoutEffect(() => {
@@ -232,76 +264,78 @@ import { SettingsView } from "./views/SettingsView";
 
 		return (
 			<>
-				<div ref={pageRef} className="stash-renamer-page">
-					{runtimeCheckDone && runtimeCheckError ? (
-						<div className="alert alert-danger mx-2 mt-2" role="alert">
-							Runtime initialization failed: {runtimeCheckError}
+				{!shouldRenderPage ? null : (
+					<div ref={pageRef} className="stash-renamer-page">
+						{runtimeState.done && runtimeState.error ? (
+							<div className="alert alert-danger mx-2 mt-2" role="alert">
+								Runtime initialization failed: {runtimeState.error}
+							</div>
+						) : null}
+						{runtimeState.done ? (
+							<Nav
+								variant="tabs"
+								className="mb-3"
+								id="stash-renamer-tabs"
+								activeKey={currentTab}
+							>
+								<Nav.Item>
+									<Nav.Link
+										as={NavLink}
+										exact
+										to="/plugins/stash_renamer"
+										eventKey="editor"
+									>
+										Editor
+									</Nav.Link>
+								</Nav.Item>
+								<Nav.Item>
+									<Nav.Link
+										as={NavLink}
+										to="/plugins/stash_renamer/results"
+										eventKey="results"
+									>
+										Results
+									</Nav.Link>
+								</Nav.Item>
+								<Nav.Item>
+									<Nav.Link
+										as={NavLink}
+										to="/plugins/stash_renamer/settings"
+										eventKey="settings"
+									>
+										Settings
+									</Nav.Link>
+								</Nav.Item>
+							</Nav>
+						) : null}
+						<div className="pt-10 position-relative">
+							<Switch>
+								<Route exact path="/plugins/stash_renamer">
+									<EditorView />
+								</Route>
+								<Route path="/plugins/stash_renamer/results">
+									<RenamerResults />
+								</Route>
+								<Route path="/plugins/stash_renamer/settings">
+									<SettingsView />
+								</Route>
+							</Switch>
+							<TaskProgressOverlay
+								show={Boolean(globalTaskOverlay?.show)}
+								progress={Number(globalTaskOverlay?.progress || 0)}
+								text={String(globalTaskOverlay?.text || "")}
+							/>
+							<TaskProgressOverlay
+								show={!runtimeState.done || runtimeState.overlay.show}
+								progress={Number(runtimeState.overlay.progress || 0)}
+								text={
+									runtimeState.overlay.text ||
+									"Preparing Scene Renamer runtime..."
+								}
+							/>
 						</div>
-					) : null}
-					{runtimeCheckDone ? (
-						<Nav
-							variant="tabs"
-							className="mb-3"
-							id="stash-renamer-tabs"
-							activeKey={currentTab}
-						>
-							<Nav.Item>
-								<Nav.Link
-									as={NavLink}
-									exact
-									to="/plugins/stash_renamer"
-									eventKey="editor"
-								>
-									Editor
-								</Nav.Link>
-							</Nav.Item>
-							<Nav.Item>
-								<Nav.Link
-									as={NavLink}
-									to="/plugins/stash_renamer/results"
-									eventKey="results"
-								>
-									Results
-								</Nav.Link>
-							</Nav.Item>
-							<Nav.Item>
-								<Nav.Link
-									as={NavLink}
-									to="/plugins/stash_renamer/settings"
-									eventKey="settings"
-								>
-									Settings
-								</Nav.Link>
-							</Nav.Item>
-						</Nav>
-					) : null}
-					<div className="pt-10 position-relative">
-						<Switch>
-							<Route exact path="/plugins/stash_renamer">
-								<EditorView />
-							</Route>
-							<Route path="/plugins/stash_renamer/results">
-								<RenamerResults />
-							</Route>
-							<Route path="/plugins/stash_renamer/settings">
-								<SettingsView />
-							</Route>
-						</Switch>
-						<TaskProgressOverlay
-							show={Boolean(globalTaskOverlay?.show)}
-							progress={Number(globalTaskOverlay?.progress || 0)}
-							text={String(globalTaskOverlay?.text || "")}
-						/>
-						<TaskProgressOverlay
-							show={!runtimeCheckDone || runtimeInstallOverlay.show}
-							progress={Number(runtimeInstallOverlay.progress || 0)}
-							text={
-								runtimeInstallOverlay.text ||
-								"Preparing Scene Renamer runtime..."
-							}
-						/>
 					</div>
-				</div>
+				)}
 			</>
 		);
 	};
@@ -350,8 +384,8 @@ import { SettingsView } from "./views/SettingsView";
 				return (
 					<Setting
 						key="stash-renamer-hook-setting"
-						heading="Scene Renamer Settings"
-						subHeading="Configure hook behavior and clean rename history."
+						heading={<SettingsView className="mt-2" />}
+						subHeading=""
 						children={<SettingsView className="mt-2" />}
 					/>
 				);
