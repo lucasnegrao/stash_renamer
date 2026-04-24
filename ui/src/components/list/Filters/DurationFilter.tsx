@@ -20,11 +20,10 @@ export const DurationFilter: React.FC<IDurationFilterProps> = ({
 	const intl = useIntl();
 	const value = criterion.value || { value: undefined, value2: undefined };
 
-	function onChanged(raw: string, key: "value" | "value2") {
-		const parsed = Number(raw);
+	function onChanged(raw: number | null, key: "value" | "value2") {
 		onValueChanged({
 			...value,
-			[key]: Number.isNaN(parsed) ? undefined : parsed,
+			[key]: raw === null ? undefined : raw,
 		});
 	}
 
@@ -36,8 +35,8 @@ export const DurationFilter: React.FC<IDurationFilterProps> = ({
 		return (
 			<Form.Group>
 				<DurationInput
-					value={criterion.value?.value}
-					setValue={(v) => onChanged(v, "value")}
+					value={current ?? null}
+					setValue={(v) => onChanged(v, key)}
 					placeholder={placeholder}
 				/>
 			</Form.Group>

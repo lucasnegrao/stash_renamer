@@ -33,7 +33,7 @@ export const DateFilter: React.FC<IDateFilterProps> = ({
 			<Form.Group>
 				<DateInput
 					value={value?.value ?? ""}
-					onValueChange={(v) => onChanged(v, "value")}
+					onValueChange={(v: string) => onChanged(v, "value")}
 					placeholder={intl.formatMessage({ id: "criterion.value" })}
 				/>
 			</Form.Group>

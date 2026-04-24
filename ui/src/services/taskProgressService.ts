@@ -2,7 +2,7 @@ import {
 	fetchJobById,
 	type ITaskJob,
 	subscribeJobUpdates,
-} from "../api/sceneRenamerApi";
+} from "../api/stasheroApi";
 
 export interface ITaskProgressEvent {
 	progress: number;
@@ -69,7 +69,7 @@ export function trackTaskJob(
 		}
 
 		const error = job?.error || null;
-		console.log(`[Scene Renamer][TaskProgress][${source}]`, {
+		console.log(`[Stashero][TaskProgress][${source}]`, {
 			jobId,
 			status,
 			progress,
@@ -109,7 +109,7 @@ export function trackTaskJob(
 				emit("ws", job);
 			},
 			onError: async () => {
-				console.warn("[Scene Renamer][TaskProgress][ws-error]", { jobId });
+				console.warn("[Stashero][TaskProgress][ws-error]", { jobId });
 				if (done) return;
 				await pollOnce();
 			},

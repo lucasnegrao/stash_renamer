@@ -12,13 +12,13 @@ import {
 	saveWatchdogConfigToDatabase,
 	stopWatchdog,
 	uninstallFfmpegProxyServiceTask,
-} from "../../api/sceneRenamerApi";
+} from "../../api/stasheroApi";
 import { trackTaskJob } from "../../services/taskProgressService";
 import { WatchdogListTable } from "./WatchdogListTable";
 import { WatchdogOperationModal } from "./WatchdogOperationModal";
 
 const PluginApi = window.PluginApi;
-const React = PluginApi.React;
+const React: typeof import("react") = PluginApi.React;
 const { Button, Card, Spinner, Badge, Alert } = PluginApi.libraries.Bootstrap;
 const { faPlay, faStop, faSync, faPlus } = PluginApi.libraries.FontAwesomeSolid;
 const { Icon } = PluginApi.components;
@@ -72,7 +72,7 @@ export const WatchdogSettingsPanel: React.FC<{ className?: string }> = ({
 			const config = await fetchGeneralConfigSnapshot();
 			const ffmpegPath = String(config?.ffmpegPath || "");
 			const installed =
-				/(?:^|[\\/])\.ffmpeg_proxy[\\/]ffmpeg_proxy(?:\.sh|\.cmd)?$/i.test(
+				/(?:^|[\\/])\.run_with_stash[\\/]run_with_stash(?:\.sh|\.cmd)?$/i.test(
 					ffmpegPath,
 				);
 			setServiceInstalled(installed);
@@ -124,7 +124,7 @@ export const WatchdogSettingsPanel: React.FC<{ className?: string }> = ({
 			const snapshot = await fetchGeneralConfigSnapshot();
 			const ffmpegPath = String(snapshot?.ffmpegPath || "");
 			const isInstalledNow =
-				/(?:^|[\\/])\.ffmpeg_proxy[\\/]ffmpeg_proxy(?:\.sh|\.cmd)?$/i.test(
+				/(?:^|[\\/])\.run_with_stash[\\/]run_with_stash(?:\.sh|\.cmd)?$/i.test(
 					ffmpegPath,
 				);
 			if (finished && !hasError && isInstalledNow === expectedInstalled) {
@@ -169,14 +169,14 @@ export const WatchdogSettingsPanel: React.FC<{ className?: string }> = ({
 
 	const groupedConfigs = React.useMemo(() => {
 		const groups: Record<string, IWatchdogConfig[]> = {};
-		configs.forEach((config) => {
+		configs.forEach((config: IWatchdogConfig) => {
 			if (!groups[config.path]) groups[config.path] = [];
 			groups[config.path].push(config);
 		});
 		return groups;
 	}, [configs]);
 
-	const groupedEntries = React.useMemo(
+	const groupedEntries = React.useMemo<[string, IWatchdogConfig[]][]>(
 		() => Object.entries(groupedConfigs),
 		[groupedConfigs],
 	);

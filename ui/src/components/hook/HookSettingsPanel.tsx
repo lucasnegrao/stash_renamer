@@ -9,7 +9,7 @@ import {
 	fetchSavedTemplates,
 	type IRenamerTemplate,
 	saveHookSettings,
-} from "../../api/sceneRenamerApi";
+} from "../../api/stasheroApi";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
@@ -218,7 +218,7 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 
 	const setRowTemplate = React.useCallback(
 		(rowId: string, templateId: string) => {
-			setRows((prev) =>
+			setRows((prev: IHookTemplateRow[]) =>
 				prev.map((row) =>
 					row.id === rowId
 						? { ...row, templateId: String(templateId || "").trim() }
@@ -230,11 +230,11 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 	);
 
 	const addRow = React.useCallback(() => {
-		setRows((prev) => [...prev, makeRow("")]);
+		setRows((prev: IHookTemplateRow[]) => [...prev, makeRow("")]);
 	}, []);
 
 	const removeRow = React.useCallback((rowId: string) => {
-		setRows((prev) => {
+		setRows((prev: IHookTemplateRow[]) => {
 			const next = prev.filter((row) => row.id !== rowId);
 			return next.length > 0 ? next : [makeRow("")];
 		});
@@ -243,7 +243,7 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 	const openEditTemplate = React.useCallback(
 		async (row: IHookTemplateRow) => {
 			const template = templates.find(
-				(item) => String(item.id) === String(row.templateId),
+				(item: IRenamerTemplate) => String(item.id) === String(row.templateId),
 			);
 			if (!template) {
 				setStatus("Select a template before editing.");
@@ -271,7 +271,7 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 				});
 				const scenes = (result?.scenes || []).slice(0, 5) as ISlimSceneData[];
 				const firstSceneId = String(scenes?.[0]?.id || "");
-				setEditorState((prev) => ({
+				setEditorState((prev: IHookTemplateRow[]) => ({
 					...prev,
 					scenes,
 					filenamePreviewSceneId: firstSceneId,
@@ -279,7 +279,10 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 					loading: false,
 				}));
 			} catch (error: unknown) {
-				setEditorState((prev) => ({ ...prev, loading: false }));
+				setEditorState((prev: IHookTemplateRow[]) => ({
+					...prev,
+					loading: false,
+				}));
 				setStatus(
 					`Failed to load preview scenes for template: ${
 						typeof error === "object" && error && "message" in error
@@ -293,7 +296,7 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 	);
 
 	const closeEditor = React.useCallback(async () => {
-		setEditorState((prev) => ({
+		setEditorState((prev: IHookTemplateRow[]) => ({
 			...prev,
 			show: false,
 			loading: false,
@@ -314,26 +317,38 @@ const HookSettingsPanelInner: React.FC<IHookSettingsModalProps> = ({
 				filenameTemplate={editorState.filenameTemplate}
 				pathTemplate={editorState.pathTemplate}
 				onChangeFilenameTemplate={(next) =>
-					setEditorState((prev) => ({ ...prev, filenameTemplate: next }))
+					setEditorState((prev: IHookTemplateRow[]) => ({
+						...prev,
+						filenameTemplate: next,
+					}))
 				}
 				onChangePathTemplate={(next) =>
-					setEditorState((prev) => ({ ...prev, pathTemplate: next }))
+					setEditorState((prev: IHookTemplateRow[]) => ({
+						...prev,
+						pathTemplate: next,
+					}))
 				}
 				selectedTemplateId={editorState.selectedTemplateId}
 				onChangeSelectedTemplateId={(next) =>
-					setEditorState((prev) => ({ ...prev, selectedTemplateId: next }))
+					setEditorState((prev: IHookTemplateRow[]) => ({
+						...prev,
+						selectedTemplateId: next,
+					}))
 				}
 				scenes={editorState.scenes}
 				filenamePreviewSceneId={editorState.filenamePreviewSceneId}
 				onChangeFilenamePreviewSceneId={(sceneId) =>
-					setEditorState((prev) => ({
+					setEditorState((prev: IHookTemplateRow[]) => ({
 						...prev,
 						filenamePreviewSceneId: sceneId,
 					}))
 				}
 				pathPreviewSceneId={editorState.pathPreviewSceneId}
 				onChangePathPreviewSceneId={(sceneId) =>
-					setEditorState((prev) => ({ ...prev, pathPreviewSceneId: sceneId }))
+					setEditorState((prev: IHookTemplateRow[]) => ({
+						...prev,
+						pathPreviewSceneId: sceneId,
+					}))
 				}
 			/>
 

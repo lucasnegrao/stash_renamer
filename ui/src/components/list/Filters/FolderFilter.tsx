@@ -5,16 +5,12 @@ import { ExpandCollapseButton } from "src/components/shared/CollapseButton";
 import {
 	CriterionModifier,
 	FilterMode,
+	Folder,
 	type FolderDataFragment,
 	type MultiCriterionInput,
 } from "src/core/generated-graphql";
 import { useDebouncedState } from "src/hooks/debounce";
-import { ModifierCriterionOption } from "src/models/list-filter/criteria/criterion";
-import {
-	type FolderCriterion,
-	FolderCriterionOption,
-} from "src/models/list-filter/criteria/folder";
-import { ListFilterModel } from "src/models/list-filter/filter";
+import { type FolderCriterion } from "src/models/list-filter/criteria/folder";
 import { keyboardClickHandler } from "src/utils/keyboard";
 import { DepthSelector } from "./SelectableFilter";
 import { type Option, SelectedList } from "./SidebarListFilter";
@@ -77,11 +73,13 @@ const FolderRow: React.FC<{
 					</span>
 					{canExclude && (
 						<Button
-							onClick={(e) => {
+							onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 								e.stopPropagation();
 								onSelect(folder, true);
 							}}
-							onKeyDown={(e) => e.stopPropagation()}
+							onKeyDown={(e: React.MouseEvent<HTMLButtonElement>) =>
+								e.stopPropagation()
+							}
 							className="minimal exclude-button"
 						>
 							<span className="exclude-button-text">
@@ -211,80 +209,86 @@ function useFolderMap(props: {
 
 	const rootFolders: IFolder[] = useMemo(() => {
 		const ret = rootFoldersResult?.findFolders.folders ?? [];
-		return ret.map((f) => ({ ...f, expanded: false, children: undefined }));
+		return ret.map((f: IFolder) => ({
+			...f,
+			expanded: false,
+			children: undefined,
+		}));
 	}, [rootFoldersResult]);
 
 	const initialSelectedFolders: IFolder[] = useMemo(() => {
 		const ret: IFolder[] = [];
-		(initialSelectedResult?.findFolders.folders ?? []).forEach((folder) => {
-			if (!folder.parent_folders.length) {
-				// add root folder if not present
-				if (!ret.find((f) => f.id === folder.id)) {
-					ret.push({ ...folder, expanded: true, children: [] });
-				}
-				return;
-			}
-
-			let currentParent: IFolder | undefined;
-
-			for (let i = folder.parent_folders.length - 1; i >= 0; i--) {
-				const thisFolder = folder.parent_folders[i];
-				let existing: IFolder | undefined;
-
-				if (i === folder.parent_folders.length - 1) {
-					// last parent, add the folder as root if not present
-					existing = ret.find((f) => f.id === thisFolder.id);
-					if (!existing) {
-						existing = {
-							...folder.parent_folders[i],
-							expanded: true,
-							children: folder.parent_folders[i].sub_folders
-								// filter out zip folders if needed
-								.filter((f) => f.zip_file === null || !excludeZipFolders)
-								.map((f) => ({
-									...f,
-									expanded: false,
-									children: undefined,
-								})),
-						};
-						ret.push(existing);
+		(initialSelectedResult?.findFolders.folders ?? []).forEach(
+			(folder: Folder) => {
+				if (!folder.parent_folders.length) {
+					// add root folder if not present
+					if (!ret.find((f) => f.id === folder.id)) {
+						ret.push({ ...folder, expanded: true, children: [] });
 					}
+					return;
+				}
+
+				let currentParent: IFolder | undefined;
+
+				for (let i = folder.parent_folders.length - 1; i >= 0; i--) {
+					const thisFolder = folder.parent_folders[i];
+					let existing: IFolder | undefined;
+
+					if (i === folder.parent_folders.length - 1) {
+						// last parent, add the folder as root if not present
+						existing = ret.find((f) => f.id === thisFolder.id);
+						if (!existing) {
+							existing = {
+								...folder.parent_folders[i],
+								expanded: true,
+								children: folder.parent_folders[i].sub_folders
+									// filter out zip folders if needed
+									.filter((f) => f.zip_file === null || !excludeZipFolders)
+									.map((f) => ({
+										...f,
+										expanded: false,
+										children: undefined,
+									})),
+							};
+							ret.push(existing);
+						}
+						currentParent = existing;
+						continue;
+					}
+
+					const existingIndex =
+						currentParent!.children?.findIndex((f) => f.id === thisFolder.id) ??
+						-1;
+					if (existingIndex === -1) {
+						// should be guaranteed
+						throw new Error(
+							`Parent folder ${thisFolder.id} not found in children of ${
+								currentParent!.id
+							}`,
+						);
+					}
+
+					existing = currentParent!.children![existingIndex];
+
+					// replace children
+					existing = {
+						...existing,
+						expanded: true,
+						// filter out zip folders if needed
+						children: thisFolder.sub_folders
+							.filter((f) => f.zip_file === null || !excludeZipFolders)
+							.map((f) => ({
+								...f,
+								expanded: false,
+								children: undefined,
+							})),
+					};
+
+					currentParent!.children![existingIndex] = existing;
 					currentParent = existing;
-					continue;
 				}
-
-				const existingIndex =
-					currentParent!.children?.findIndex((f) => f.id === thisFolder.id) ??
-					-1;
-				if (existingIndex === -1) {
-					// should be guaranteed
-					throw new Error(
-						`Parent folder ${thisFolder.id} not found in children of ${
-							currentParent!.id
-						}`,
-					);
-				}
-
-				existing = currentParent!.children![existingIndex];
-
-				// replace children
-				existing = {
-					...existing,
-					expanded: true,
-					// filter out zip folders if needed
-					children: thisFolder.sub_folders
-						.filter((f) => f.zip_file === null || !excludeZipFolders)
-						.map((f) => ({
-							...f,
-							expanded: false,
-							children: undefined,
-						})),
-				};
-
-				currentParent!.children![existingIndex] = existing;
-				currentParent = existing;
-			}
-		});
+			},
+		);
 		return ret;
 	}, [initialSelectedResult, excludeZipFolders]);
 
@@ -300,66 +304,70 @@ function useFolderMap(props: {
 		// construct the folder list from the query result
 		const ret: IFolder[] = [];
 
-		(queryFoldersResult?.findFolders.folders ?? []).forEach((folder) => {
-			if (!folder.parent_folders.length) {
-				// no parents, just add it if not present
-				if (!ret.find((f) => f.id === folder.id)) {
-					ret.push({ ...folder, expanded: true, children: [] });
+		(queryFoldersResult?.findFolders.folders ?? []).forEach(
+			(folder: Folder) => {
+				if (!folder.parent_folders.length) {
+					// no parents, just add it if not present
+					if (!ret.find((f) => f.id === folder.id)) {
+						ret.push({ ...folder, expanded: true, children: [] });
+					}
+					return;
 				}
-				return;
-			}
 
-			// expand the parent folders
-			let currentParent: IFolder | undefined;
-			for (let i = folder.parent_folders.length - 1; i >= 0; i--) {
-				const thisFolder = folder.parent_folders[i];
-				let existing: IFolder | undefined;
+				// expand the parent folders
+				let currentParent: IFolder | undefined;
+				for (let i = folder.parent_folders.length - 1; i >= 0; i--) {
+					const thisFolder = folder.parent_folders[i];
+					let existing: IFolder | undefined;
 
-				if (i === folder.parent_folders.length - 1) {
-					// last parent, add the folder as root
-					existing = ret.find((f) => f.id === thisFolder.id);
+					if (i === folder.parent_folders.length - 1) {
+						// last parent, add the folder as root
+						existing = ret.find((f) => f.id === thisFolder.id);
+						if (!existing) {
+							existing = {
+								...folder.parent_folders[i],
+								expanded: true,
+								children: [],
+							};
+							ret.push(existing);
+						}
+						currentParent = existing;
+						continue;
+					}
+
+					// find folder in current parent's children
+					// currentParent is guaranteed to be defined here
+					existing = currentParent!.children?.find(
+						(f) => f.id === thisFolder.id,
+					);
 					if (!existing) {
+						// add to current parent's children
 						existing = {
-							...folder.parent_folders[i],
+							...thisFolder,
 							expanded: true,
 							children: [],
 						};
-						ret.push(existing);
+						currentParent!.children!.push(existing);
 					}
 					currentParent = existing;
-					continue;
 				}
 
-				// find folder in current parent's children
-				// currentParent is guaranteed to be defined here
-				existing = currentParent!.children?.find((f) => f.id === thisFolder.id);
-				if (!existing) {
-					// add to current parent's children
-					existing = {
-						...thisFolder,
-						expanded: true,
-						children: [],
-					};
-					currentParent!.children!.push(existing);
+				if (!currentParent) {
+					return;
 				}
-				currentParent = existing;
-			}
 
-			if (!currentParent) {
-				return;
-			}
+				if (!currentParent.children) {
+					currentParent.children = [];
+				}
 
-			if (!currentParent.children) {
-				currentParent.children = [];
-			}
-
-			// currentParent is now the immediate parent folder
-			currentParent!.children!.push({
-				...folder,
-				expanded: false,
-				children: undefined,
-			});
-		});
+				// currentParent is now the immediate parent folder
+				currentParent!.children!.push({
+					...folder,
+					expanded: false,
+					children: undefined,
+				});
+			},
+		);
 		return ret;
 	}, [queryFoldersResult]);
 
@@ -382,15 +390,17 @@ function useFolderMap(props: {
 				folder.id,
 				excludeZipFolders,
 			);
-			setFolderMap((current) =>
+			setFolderMap((current: IFolder[]) =>
 				current.map(
 					replaceFolder({
 						...folder,
 						expanded: true,
-						children: subFolderResult.data.findFolders.folders.map((f) => ({
-							...f,
-							expanded: false,
-						})),
+						children: subFolderResult.data.findFolders.folders.map(
+							(f: IFolder) => ({
+								...f,
+								expanded: false,
+							}),
+						),
 					}),
 				),
 			);

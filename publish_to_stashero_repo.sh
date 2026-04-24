@@ -69,7 +69,7 @@ log "Committing and pushing changes"
     exit 0
   fi
 
-  git commit -m "Update stash_renamer plugin distribution"
+  git commit -m "Update stashero plugin distribution"
   git push origin "$TARGET_BRANCH"
 )
 

@@ -33,17 +33,10 @@ export const TimestampFilter: React.FC<ITimestampFilterProps> = ({
 			<Form.Group>
 				<DateInput
 					value={value?.value ?? ""}
-					onValueChange={(v) => onChanged(v, "value")}
+					onValueChange={(v: string) => onChanged(v, "value")}
 					placeholder={intl.formatMessage({ id: "criterion.value" })}
 					isTime
 				/>
-				{/* <Form.Control
-					className="btn-secondary"
-					type="datetime-local"
-					onChange={(e: any) => onChanged(String(e.target.value || ""), key)}
-					value={current ?? ""}
-					placeholder={placeholder}
-				/> */}
 			</Form.Group>
 		);
 	}

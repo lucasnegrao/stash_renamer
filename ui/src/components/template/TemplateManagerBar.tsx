@@ -4,7 +4,7 @@ import {
 	faSave,
 	faTrash,
 } from "@fortawesome/free-solid-svg-icons";
-import type { IRenamerTemplate } from "../../api/sceneRenamerApi";
+import type { IRenamerTemplate } from "../../api/stasheroApi";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { TemplateSaveAsModal } from "./TemplateSaveAsModal";
 

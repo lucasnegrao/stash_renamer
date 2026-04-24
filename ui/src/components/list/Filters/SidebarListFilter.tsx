@@ -4,7 +4,6 @@ import { ClearableInput } from "src/components/shared/ClearableInput";
 import { useDebounce } from "src/hooks/debounce";
 import type useFocus from "src/utils/focus";
 import { keyboardClickHandler } from "src/utils/keyboard";
-import ScreenUtils from "src/utils/screen";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;
@@ -124,11 +123,13 @@ const CandidateItem: React.FC<{
 					{/* <span className="object-count">{p.id}</span> */}
 					{canExclude && (
 						<Button
-							onClick={(e) => {
+							onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 								e.stopPropagation();
 								onSelect(true);
 							}}
-							onKeyDown={(e) => e.stopPropagation()}
+							onKeyDown={(e: React.MouseEvent<HTMLButtonElement>) =>
+								e.stopPropagation()
+							}
 							className="minimal exclude-button"
 						>
 							<span className="exclude-button-text">exclude</span>

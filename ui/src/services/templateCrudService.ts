@@ -1,4 +1,4 @@
-import type { IRenamerTemplate } from "../api/sceneRenamerApi";
+import type { IRenamerTemplate } from "../api/stasheroApi";
 
 export function getTemplateById(
 	templates: IRenamerTemplate[],

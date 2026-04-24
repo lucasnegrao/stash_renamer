@@ -278,7 +278,7 @@ const SelectableFilterUI: React.FC<ISelectableFilter> = ({
 							);
 						})
 					: null}
-				{objects.map((p) => (
+				{objects.map((p: ILabeledId) => (
 					<UnselectedItem
 						key={p.id}
 						onSelect={(exclude) => onSelect(p, exclude)}
@@ -309,7 +309,9 @@ function hasItemsExcluded(
 	);
 }
 
-function hasDepth(value: any): value is IHierarchicalLabelValue {
+function hasDepth(
+	value: IHierarchicalLabelValue,
+): value is IHierarchicalLabelValue {
 	return hasItemsExcluded(value) && typeof value.depth === "number";
 }
 
@@ -365,8 +367,8 @@ export const ObjectsFilter: React.FC<IObjectsFilterProps> = ({
 	}
 
 	function onSelect(value: ILabeledId, newExclude: boolean) {
-		const nextSelected = selected.filter((v) => v.id !== value.id);
-		const nextExcluded = excluded.filter((v) => v.id !== value.id);
+		const nextSelected = selected.filter((v: ILabeledId) => v.id !== value.id);
+		const nextExcluded = excluded.filter((v: ILabeledId) => v.id !== value.id);
 
 		if (newExclude && hasItemsExcluded(criterion.value)) {
 			nextExcluded.push(value);
@@ -382,8 +384,8 @@ export const ObjectsFilter: React.FC<IObjectsFilterProps> = ({
 
 	function onUnselect(value: ILabeledId) {
 		setSelectedExcluded(
-			selected.filter((v) => v.id !== value.id),
-			excluded.filter((v) => v.id !== value.id),
+			selected.filter((v: ILabeledId) => v.id !== value.id),
+			excluded.filter((v: ILabeledId) => v.id !== value.id),
 		);
 		setInputFocus();
 	}
@@ -395,11 +397,17 @@ export const ObjectsFilter: React.FC<IObjectsFilterProps> = ({
 	}
 
 	const sortedSelected = React.useMemo(
-		() => selected.slice().sort((a, b) => a.label.localeCompare(b.label)),
+		() =>
+			selected
+				.slice()
+				.sort((a: ILabeledId, b: ILabeledId) => a.label.localeCompare(b.label)),
 		[selected],
 	);
 	const sortedExcluded = React.useMemo(
-		() => excluded.slice().sort((a, b) => a.label.localeCompare(b.label)),
+		() =>
+			excluded
+				.slice()
+				.sort((a: ILabeledId, b: ILabeledId) => a.label.localeCompare(b.label)),
 		[excluded],
 	);
 

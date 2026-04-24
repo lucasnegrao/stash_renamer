@@ -110,7 +110,9 @@ const CustomFieldCriterionEditor: React.FC<ICustomFieldCriterionEditor> = ({
 							className="btn-secondary"
 							type="text"
 							placeholder={intl.formatMessage({ id: "custom_fields.field" })}
-							onChange={(e) => setField(e.target.value)}
+							onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+								setField(e.target?.value)
+							}
 							value={field}
 						/>
 					</Col>
@@ -129,7 +131,9 @@ const CustomFieldCriterionEditor: React.FC<ICustomFieldCriterionEditor> = ({
 									placeholder={firstPlaceholder}
 									className="btn-secondary"
 									type="text"
-									onChange={(e) => setFirstValue(e.target.value)}
+									onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+										setFirstValue(e.target.value)
+									}
 									value={firstValue}
 								/>
 							</Col>
@@ -141,7 +145,9 @@ const CustomFieldCriterionEditor: React.FC<ICustomFieldCriterionEditor> = ({
 								placeholder={intl.formatMessage({ id: "criterion.less_than" })}
 								className="btn-secondary"
 								type="text"
-								onChange={(e) => setSecondValue(e.target.value)}
+								onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+									setSecondValue(e.target.value)
+								}
 								value={secondValue}
 							/>
 						</Col>

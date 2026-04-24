@@ -30,15 +30,8 @@ const Link = PluginApi.libraries.ReactRouterDOM.Link;
 const NavUtils = PluginApi.utils.NavUtils;
 const { FormattedMessage } = PluginApi.libraries.Intl;
 const { Icon } = PluginApi.components;
-const {
-	faPencil,
-	faCircleCheck,
-	faCircleXmark,
-	faTriangleExclamation,
-	faExchange,
-	faMinusCircle,
-	faPlusCircle,
-} = PluginApi.libraries.FontAwesomeSolid;
+const { faPencil, faCircleXmark, faMinusCircle } =
+	PluginApi.libraries.FontAwesomeSolid;
 const { useSceneUpdate } = PluginApi.utils.StashService;
 
 const TABLE_NAME = "scenes";

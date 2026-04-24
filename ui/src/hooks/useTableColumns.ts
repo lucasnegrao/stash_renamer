@@ -7,7 +7,7 @@ const PluginApi = window.PluginApi;
 const React = PluginApi.React;
 const { useMemo, useState } = React;
 
-const STORAGE_PREFIX = "stash_renamer_table_columns";
+const STORAGE_PREFIX = "stashero_table_columns";
 
 export const useTableColumns = (
 	tableName: string,

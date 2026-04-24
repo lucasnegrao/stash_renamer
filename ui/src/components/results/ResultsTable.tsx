@@ -1,5 +1,5 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
-import type { IScenePreviewResult } from "../../api/sceneRenamerApi";
+import type { IScenePreviewResult } from "../../api/stasheroApi";
 import { type IColumn, ListTable } from "../list/ListTable";
 
 const PluginApi = window.PluginApi;
@@ -75,8 +75,7 @@ function getStatusMeta(row: IScenePreviewResult): {
 
 function canUndoRow(row: IScenePreviewResult): boolean {
 	const successValue = row.success;
-	const isSuccessful =
-		successValue === true || successValue === 1 || successValue === "1";
+	const isSuccessful = successValue === true;
 	const opType = String(row.operation_type || "").toLowerCase();
 	return (
 		!!row.id && ["rename", "undo", "redo"].includes(opType) && isSuccessful

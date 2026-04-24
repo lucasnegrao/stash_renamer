@@ -31,7 +31,7 @@ import {
 	rectangularSelection,
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
-import type { ITokenTreeNode } from "../../api/sceneRenamerApi";
+import type { ITokenTreeNode } from "../../api/stasheroApi";
 
 export interface ITemplateCodeEditorHandle {
 	insertTokenAtCursor: (token: string) => void;
@@ -160,8 +160,8 @@ export const TemplateCodeEditor = React.forwardRef<
 			onBlur,
 			onEnter,
 			onReady,
-		},
-		ref,
+		}: Props,
+		ref: React.Ref<ITemplateCodeEditorHandle>,
 	) => {
 		const containerRef = React.useRef<HTMLDivElement | null>(null);
 		const viewRef = React.useRef<EditorView | null>(null);

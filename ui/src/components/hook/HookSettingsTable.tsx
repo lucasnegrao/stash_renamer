@@ -1,5 +1,5 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
-import type { IRenamerTemplate } from "../../api/sceneRenamerApi";
+import type { IRenamerTemplate } from "../../api/stasheroApi";
 import { ListTable, type IColumn } from "../list/ListTable";
 import { CrudActionsColumnCell } from "../list/cells/CrudActionsColumnCell";
 import { SelectOptionColumnCell } from "../list/cells/SelectOptionColumnCell";

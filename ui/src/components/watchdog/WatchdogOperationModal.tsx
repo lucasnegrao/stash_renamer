@@ -1,4 +1,4 @@
-import type { IWatchdogConfig } from "../../api/sceneRenamerApi";
+import type { IWatchdogConfig } from "../../api/stasheroApi";
 import { FolderSelect } from "../list/Filters/FolderFilter";
 import { BooleanOptionField } from "../shared/BooleanOptionField";
 import {

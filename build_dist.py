@@ -7,7 +7,7 @@ Rules:
 - Copy backend/ excluding __pycache__ and .pyc files.
 - Copy all root-level *.py files.
 - Copy root requirements.txt.
-- Copy stash_renamer.yml but rewrite ui javascript path to ui/bundle.js.
+- Copy stashero.yml but rewrite ui javascript path to ui/bundle.js.
 - Copy ui/dist/bundle.js to dist/ui/bundle.js.
 """
 
@@ -22,8 +22,8 @@ BACKEND_SRC = ROOT / "backend"
 BACKEND_DST = DIST / "backend"
 UI_BUNDLE_SRC = ROOT / "ui" / "dist" / "bundle.js"
 UI_BUNDLE_DST = DIST / "ui" / "bundle.js"
-PLUGIN_YML_SRC = ROOT / "stash_renamer.yml"
-PLUGIN_YML_DST = DIST / "stash_renamer.yml"
+PLUGIN_YML_SRC = ROOT / "stashero.yml"
+PLUGIN_YML_DST = DIST / "stashero.yml"
 REQUIREMENTS_SRC = ROOT / "requirements.txt"
 REQUIREMENTS_DST = DIST / "requirements.txt"
 

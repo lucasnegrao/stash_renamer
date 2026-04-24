@@ -56,7 +56,9 @@ export const ModifierSelect: React.FC<IModifierSelect> = ({
 	return (
 		<Form.Control
 			as="select"
-			onChange={(e) => onChanged(e.target.value as CriterionModifier)}
+			onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+				onChanged(e.target.value as CriterionModifier)
+			}
 			value={value}
 			className="btn-secondary modifier-selector"
 		>

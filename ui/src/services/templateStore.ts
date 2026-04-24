@@ -4,7 +4,7 @@ import {
 	type IRenamerTemplate,
 	saveTemplateToDatabase,
 	updateTemplateInDatabase,
-} from "../api/sceneRenamerApi";
+} from "../api/stasheroApi";
 
 export interface ITemplateLoadResult {
 	templates: IRenamerTemplate[];

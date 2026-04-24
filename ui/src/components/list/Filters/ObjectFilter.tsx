@@ -158,7 +158,7 @@ function useObjectResults(
 			})
 			.catch((e) => {
 				if (!active) return;
-				console.error("[Scene Renamer] Object filter query failed", e);
+				console.error("[Stashero] Object filter query failed", e);
 				setResults([]);
 			})
 			.finally(() => {

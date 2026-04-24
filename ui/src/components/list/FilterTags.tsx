@@ -148,16 +148,5 @@ export const FilterTags: React.FC<IFilterTagsProps> = ({
 
 	if (tags.length === 0) return null;
 
-	return (
-		<div className="wrap-tags filter-tags">
-			{tags}
-			{/* <Button
-				className="clear-all-button"
-				variant="secondary"
-				onClick={onRemoveAll}
-			>
-				{intl.formatMessage({ id: "actions.clear" })}
-			</Button> */}
-		</div>
-	);
+	return <div className="wrap-tags filter-tags">{tags}</div>;
 };

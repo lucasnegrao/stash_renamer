@@ -11,7 +11,7 @@ import {
 	type IScenePreviewResult,
 	undoBatchOperation,
 	undoOperation,
-} from "../api/sceneRenamerApi";
+} from "../api/stasheroApi";
 import { trackTaskJob } from "../services/taskProgressService";
 
 const PluginApi = window.PluginApi;
@@ -36,7 +36,7 @@ const {
 	faCaretDown,
 	faCaretUp,
 } = PluginApi.libraries.FontAwesomeSolid;
-const HOOK_BATCH_ID_PREFIX = "stash_renamer_hook_batch";
+const HOOK_BATCH_ID_PREFIX = "stashero_hook_batch";
 
 export const RenamerResults: React.FC = () => {
 	const intl = PluginApi.libraries.Intl.useIntl();
@@ -74,7 +74,10 @@ export const RenamerResults: React.FC = () => {
 	});
 
 	const selectedBatch = React.useMemo(
-		() => batches.find((b) => String(b.id) === String(selectedBatchId)) || null,
+		() =>
+			batches.find(
+				(b: IOperationBatch) => String(b.id) === String(selectedBatchId),
+			) || null,
 		[batches, selectedBatchId],
 	);
 	const formatBatchLabel = React.useCallback(
@@ -108,12 +111,15 @@ export const RenamerResults: React.FC = () => {
 	);
 
 	const toggleStatusFilter = (type: "success" | "error" | "warn") => {
-		setStatusFilters((prev) => ({ ...prev, [type]: !prev[type] }));
+		setStatusFilters((prev: Record<string, boolean>) => ({
+			...prev,
+			[type]: !prev[type],
+		}));
 		setCurrentPage(1);
 	};
 
 	const filteredOperations = React.useMemo(() => {
-		const filtered = operations.filter((row) => {
+		const filtered = operations.filter((row: IScenePreviewResult) => {
 			const raw = String(row.status || row.operation_type || "").toLowerCase();
 			const details = String(row.error || row.log || "").toLowerCase();
 			const successValue = row.success as any;
@@ -137,7 +143,7 @@ export const RenamerResults: React.FC = () => {
 			return false;
 		});
 
-		filtered.sort((a, b) => {
+		filtered.sort((a: IScenePreviewResult, b: IScenePreviewResult) => {
 			let valA = "";
 			let valB = "";
 			if (sortField === "when") {
@@ -164,7 +170,7 @@ export const RenamerResults: React.FC = () => {
 		let success = 0,
 			error = 0,
 			warn = 0;
-		operations.forEach((row) => {
+		operations.forEach((row: IScenePreviewResult) => {
 			const raw = String(row.status || row.operation_type || "").toLowerCase();
 			const details = String(row.error || row.log || "").toLowerCase();
 			const successValue = row.success as any;
@@ -314,7 +320,7 @@ export const RenamerResults: React.FC = () => {
 			const errors: string[] = [];
 			for (const id of ids) {
 				try {
-					await undoOperation(id);
+					await undoOperation(id as string);
 					ok += 1;
 				} catch (e: any) {
 					errors.push(`${id}: ${e?.message || String(e)}`);
@@ -417,7 +423,7 @@ export const RenamerResults: React.FC = () => {
 						{batches.length === 0 ? (
 							<Dropdown.Item disabled>No batches</Dropdown.Item>
 						) : (
-							batches.map((batch) => (
+							batches.map((batch: IOperationBatch) => (
 								<Dropdown.Item
 									key={String(batch.id)}
 									eventKey={String(batch.id)}
@@ -518,7 +524,9 @@ export const RenamerResults: React.FC = () => {
 						variant="secondary"
 						title="Sort Direction"
 						onClick={() =>
-							setSortDirection((d) => (d === "asc" ? "desc" : "asc"))
+							setSortDirection((d: "asc" | "desc") =>
+								d === "asc" ? "desc" : "asc",
+							)
 						}
 					>
 						<Icon icon={sortDirection === "desc" ? faCaretDown : faCaretUp} />

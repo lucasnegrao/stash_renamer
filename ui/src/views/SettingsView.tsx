@@ -5,7 +5,7 @@ import {
 	setPluginRuntimeConfig,
 	uninstallFfmpegProxyServiceTask,
 	uninstallPluginPackageTask,
-} from "../api/sceneRenamerApi";
+} from "../api/stasheroApi";
 import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import { HookSettingsModal } from "../components/hook/HookSettingsPanel";
 import { WatchdogSettingsPanel } from "../components/watchdog/WatchdogSettingsPanel";
@@ -77,7 +77,7 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 			}
 
 			await setPluginRuntimeConfig({
-				pluginId: "stash_renamer",
+				pluginId: "stashero",
 				installed: false,
 				pythonPath: "",
 			});
@@ -85,7 +85,7 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 			const pkg = await fetchInstalledPluginPackageSpec();
 			if (!pkg || !pkg.id || !pkg.sourceURL) {
 				throw new Error(
-					"Could not resolve installed package spec (id/sourceURL) for stash_renamer.",
+					"Could not resolve installed package spec (id/sourceURL) for stashero.",
 				);
 			}
 
@@ -140,8 +140,8 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 			/>
 			<ConfirmDialog
 				show={showUninstallConfirm}
-				title="Uninstall Scene Renamer?"
-				body="This will uninstall FFmpeg proxy service, clear plugin runtime configuration, uninstall package stash_renamer, and reload the page."
+				title="Uninstall Stashero?"
+				body="This will uninstall FFmpeg proxy service, clear plugin runtime configuration, uninstall package stashero, and reload the page."
 				confirmLabel={uninstalling ? "Uninstalling..." : "Uninstall Plugin"}
 				confirmVariant="danger"
 				closeButton={!uninstalling}
@@ -157,7 +157,9 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 					<Button
 						variant={activeInlinePanel === "hook" ? "secondary" : "primary"}
 						onClick={() =>
-							setActiveInlinePanel((prev) => (prev === "hook" ? "" : "hook"))
+							setActiveInlinePanel((prev: string) =>
+								prev === "hook" ? "" : "hook",
+							)
 						}
 						disabled={clearing}
 					>
@@ -166,7 +168,7 @@ export const SettingsView: React.FC<ISettingsViewProps> = ({
 					<Button
 						variant={activeInlinePanel === "watchdog" ? "secondary" : "primary"}
 						onClick={() =>
-							setActiveInlinePanel((prev) =>
+							setActiveInlinePanel((prev: string) =>
 								prev === "watchdog" ? "" : "watchdog",
 							)
 						}

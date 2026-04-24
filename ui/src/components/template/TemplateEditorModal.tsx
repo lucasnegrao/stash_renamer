@@ -10,7 +10,7 @@ import {
 	type IScenePreviewResult,
 	type ITokenTreeNode,
 	previewRenameScenes,
-} from "../../api/sceneRenamerApi";
+} from "../../api/stasheroApi";
 import {
 	getTemplateById,
 	isTemplateDirty,
@@ -252,7 +252,7 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 			})
 			.catch((e) => {
 				if (!active) return;
-				console.error("[Scene Renamer] Failed to load selector catalog", e);
+				console.error("[Stashero] Failed to load selector catalog", e);
 				setTokenTree([]);
 			})
 			.finally(() => {
@@ -289,8 +289,11 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 			const scene =
 				target === "filename" ? selectedFilenameScene : selectedPathScene;
 			if (!scene) {
-				setPreviewErrorByTarget((prev) => ({ ...prev, [target]: "" }));
-				setPreviewTextByTarget((prev) => ({
+				setPreviewErrorByTarget((prev: TPreviewTarget[]) => ({
+					...prev,
+					[target]: "",
+				}));
+				setPreviewTextByTarget((prev: TPreviewTarget[]) => ({
 					...prev,
 					[target]:
 						target === "filename"
@@ -300,8 +303,14 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 				return;
 			}
 
-			setPreviewBusyByTarget((prev) => ({ ...prev, [target]: true }));
-			setPreviewErrorByTarget((prev) => ({ ...prev, [target]: "" }));
+			setPreviewBusyByTarget((prev: TPreviewTarget[]) => ({
+				...prev,
+				[target]: true,
+			}));
+			setPreviewErrorByTarget((prev: TPreviewTarget[]) => ({
+				...prev,
+				[target]: "",
+			}));
 			try {
 				const result = await previewRenameScenes({
 					template: draftFilenameTemplate,
@@ -321,9 +330,12 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 						: joinOutputPath(nextPath, nextName) ||
 							msg ||
 							"No path output returned.";
-				setPreviewTextByTarget((prev) => ({ ...prev, [target]: nextText }));
+				setPreviewTextByTarget((prev: TPreviewTarget[]) => ({
+					...prev,
+					[target]: nextText,
+				}));
 			} catch (e: unknown) {
-				setPreviewErrorByTarget((prev) => ({
+				setPreviewErrorByTarget((prev: TPreviewTarget[]) => ({
 					...prev,
 					[target]: `Preview failed: ${
 						typeof e === "object" && e && "message" in e
@@ -332,7 +344,10 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 					}`,
 				}));
 			} finally {
-				setPreviewBusyByTarget((prev) => ({ ...prev, [target]: false }));
+				setPreviewBusyByTarget((prev: TPreviewTarget[]) => ({
+					...prev,
+					[target]: false,
+				}));
 			}
 		},
 		[
@@ -381,7 +396,7 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 	const onSelectTemplate = React.useCallback(
 		(templateId: string) => {
 			const selected = savedTemplates.find(
-				(row) => String(row.id) === String(templateId),
+				(row: IRenamerTemplate) => String(row.id) === String(templateId),
 			);
 			if (!selected) return;
 			setSelectedSavedTemplateId(String(selected.id));
@@ -613,8 +628,10 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 											onFocus={() => {
 												setActiveTarget("filename");
 											}}
-											onChange={(next) => setDraftFilenameTemplate(next)}
-											onReady={(handle) => {
+											onChange={(next: string) =>
+												setDraftFilenameTemplate(next)
+											}
+											onReady={(handle: ITemplateCodeEditorHandle) => {
 												editorHandlesRef.current.filename = handle;
 											}}
 										/>
@@ -657,8 +674,8 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 											onFocus={() => {
 												setActiveTarget("path");
 											}}
-											onChange={(next) => setDraftPathTemplate(next)}
-											onReady={(handle) => {
+											onChange={(next: string) => setDraftPathTemplate(next)}
+											onReady={(handle: ITemplateCodeEditorHandle) => {
 												editorHandlesRef.current.path = handle;
 											}}
 										/>
@@ -702,7 +719,7 @@ export const TemplateEditorModal: React.FC<ITemplateEditorModalProps> = ({
 											)
 											.catch((e) =>
 												console.error(
-													"[Scene Renamer] Failed to reload selectors",
+													"[Stashero] Failed to reload selectors",
 													e,
 												),
 											)

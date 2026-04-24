@@ -1,4 +1,4 @@
-import type { StasheroApi } from "./stasheroApi";
+import type { StasheroApiContract } from "./stasheroApiContract.d.ts";
 import {
 	getRuntimePythonPath,
 	setRuntimePythonPath,
@@ -7,12 +7,12 @@ import {
 const PluginApi = (window as any).PluginApi;
 const { gql } = PluginApi.libraries.Apollo;
 
-export type IScenePreviewResult = StasheroApi.IScenePreviewResult;
-export type IOperationBatch = StasheroApi.IOperationBatch;
-export type IRenamerTemplate = StasheroApi.IRenamerTemplate;
-export type IHookSettings = StasheroApi.IHookSettings;
-export type IWatchdogConfig = StasheroApi.IWatchdogConfig;
-export type IWatchdogState = StasheroApi.IWatchdogState;
+export type IScenePreviewResult = StasheroApiContract.IScenePreviewResult;
+export type IOperationBatch = StasheroApiContract.IOperationBatch;
+export type IRenamerTemplate = StasheroApiContract.IRenamerTemplate;
+export type IHookSettings = StasheroApiContract.IHookSettings;
+export type IWatchdogConfig = StasheroApiContract.IWatchdogConfig;
+export type IWatchdogState = StasheroApiContract.IWatchdogState;
 
 export interface ITokenTreeNode {
 	name: string;
@@ -133,114 +133,126 @@ export class StasheroApiClient {
 	}
 
 	public undo = {
-		undo: (args: StasheroApi.Undo.IUndoArgs) =>
-			this.runOperation<StasheroApi.Undo.IUndoResponse>("undo:undo", args),
+		undo: (args: StasheroApiContract.Undo.IUndoArgs) =>
+			this.runOperation<StasheroApiContract.Undo.IUndoResponse>(
+				"undo:undo",
+				args,
+			),
 		listOperations: () =>
-			this.runOperation<StasheroApi.Undo.IListOperationsResponse>(
+			this.runOperation<StasheroApiContract.Undo.IListOperationsResponse>(
 				"undo:list_operations",
 			),
 		listOperationBatches: () =>
-			this.runOperation<StasheroApi.Undo.IListOperationBatchesResponse>(
+			this.runOperation<StasheroApiContract.Undo.IListOperationBatchesResponse>(
 				"undo:list_operation_batches",
 			),
-		listBatchOperations: (args: StasheroApi.Undo.IListBatchOperationsArgs) =>
-			this.runOperation<StasheroApi.Undo.IListBatchOperationsResponse>(
+		listBatchOperations: (
+			args: StasheroApiContract.Undo.IListBatchOperationsArgs,
+		) =>
+			this.runOperation<StasheroApiContract.Undo.IListBatchOperationsResponse>(
 				"undo:list_batch_operations",
 				args,
 			),
-		undoBatchOperation: (args: StasheroApi.Undo.IUndoBatchOperationArgs) =>
-			this.runTask("undo:undo_batch_operation", args),
+		undoBatchOperation: (
+			args: StasheroApiContract.Undo.IUndoBatchOperationArgs,
+		) => this.runTask("undo:undo_batch_operation", args),
 		clearHistory: () =>
-			this.runOperation<StasheroApi.Undo.IClearHistoryResponse>(
+			this.runOperation<StasheroApiContract.Undo.IClearHistoryResponse>(
 				"undo:clear_history",
 			),
 	};
 
 	public template = {
 		listTemplates: () =>
-			this.runOperation<StasheroApi.Template.IListTemplatesResponse>(
+			this.runOperation<StasheroApiContract.Template.IListTemplatesResponse>(
 				"template:list_templates",
 			),
-		saveTemplate: (args: StasheroApi.Template.ISaveTemplateArgs) =>
-			this.runOperation<StasheroApi.Template.ISaveTemplateResponse>(
+		saveTemplate: (args: StasheroApiContract.Template.ISaveTemplateArgs) =>
+			this.runOperation<StasheroApiContract.Template.ISaveTemplateResponse>(
 				"template:save_template",
 				args,
 			),
-		updateTemplate: (args: StasheroApi.Template.IUpdateTemplateArgs) =>
-			this.runOperation<StasheroApi.Template.IUpdateTemplateResponse>(
+		updateTemplate: (args: StasheroApiContract.Template.IUpdateTemplateArgs) =>
+			this.runOperation<StasheroApiContract.Template.IUpdateTemplateResponse>(
 				"template:update_template",
 				args,
 			),
-		deleteTemplate: (args: StasheroApi.Template.IDeleteTemplateArgs) =>
-			this.runOperation<StasheroApi.Template.IDeleteTemplateResponse>(
+		deleteTemplate: (args: StasheroApiContract.Template.IDeleteTemplateArgs) =>
+			this.runOperation<StasheroApiContract.Template.IDeleteTemplateResponse>(
 				"template:delete_template",
 				args,
 			),
 	};
 
 	public hook = {
-		getSettings: (args: StasheroApi.Hook.IGetSettingsArgs) =>
-			this.runOperation<StasheroApi.Hook.IGetSettingsResponse>(
+		getSettings: (args: StasheroApiContract.Hook.IGetSettingsArgs) =>
+			this.runOperation<StasheroApiContract.Hook.IGetSettingsResponse>(
 				"hook:get_settings",
 				args,
 			),
-		saveSettings: (args: StasheroApi.Hook.ISaveSettingsArgs) =>
-			this.runOperation<StasheroApi.Hook.ISaveSettingsResponse>(
+		saveSettings: (args: StasheroApiContract.Hook.ISaveSettingsArgs) =>
+			this.runOperation<StasheroApiContract.Hook.ISaveSettingsResponse>(
 				"hook:save_settings",
 				args,
 			),
-		run: (args: StasheroApi.Hook.IRunArgs) =>
-			this.runOperation<StasheroApi.Hook.IRunResponse>("hook:run", args),
+		run: (args: StasheroApiContract.Hook.IRunArgs) =>
+			this.runOperation<StasheroApiContract.Hook.IRunResponse>(
+				"hook:run",
+				args,
+			),
 	};
 
 	public rename = {
-		run: (args: StasheroApi.Rename.IRunArgs) =>
-			this.runOperation<StasheroApi.Rename.IRunResponse>("rename:run", args),
-		previewDryRun: (args: StasheroApi.Rename.IPreviewDryRunArgs) =>
-			this.runOperation<StasheroApi.Rename.IPreviewDryRunResponse>(
+		run: (args: StasheroApiContract.Rename.IRunArgs) =>
+			this.runOperation<StasheroApiContract.Rename.IRunResponse>(
+				"rename:run",
+				args,
+			),
+		previewDryRun: (args: StasheroApiContract.Rename.IPreviewDryRunArgs) =>
+			this.runOperation<StasheroApiContract.Rename.IPreviewDryRunResponse>(
 				"rename:preview_dry_run",
 				args,
 			),
 	};
 
 	public watchdog = {
-		run: (args: StasheroApi.Watchdog.IRunArgs = {}) =>
-			this.runOperation<StasheroApi.Watchdog.IRunResponse>(
+		run: (args: StasheroApiContract.Watchdog.IRunArgs = {}) =>
+			this.runOperation<StasheroApiContract.Watchdog.IRunResponse>(
 				"watchdog:run",
 				args,
 			),
-		stop: (args: StasheroApi.Watchdog.IStopArgs = {}) =>
-			this.runOperation<StasheroApi.Watchdog.IStopResponse>(
+		stop: (args: StasheroApiContract.Watchdog.IStopArgs = {}) =>
+			this.runOperation<StasheroApiContract.Watchdog.IStopResponse>(
 				"watchdog:stop",
 				args,
 			),
-		status: (args: StasheroApi.Watchdog.IStatusArgs = {}) =>
-			this.runOperation<StasheroApi.Watchdog.IStatusResponse>(
+		status: (args: StasheroApiContract.Watchdog.IStatusArgs = {}) =>
+			this.runOperation<StasheroApiContract.Watchdog.IStatusResponse>(
 				"watchdog:status",
 				args,
 			),
-		restart: (args: StasheroApi.Watchdog.IRestartArgs = {}) =>
-			this.runOperation<StasheroApi.Watchdog.IRestartResponse>(
+		restart: (args: StasheroApiContract.Watchdog.IRestartArgs = {}) =>
+			this.runOperation<StasheroApiContract.Watchdog.IRestartResponse>(
 				"watchdog:restart",
 				args,
 			),
-		saveConfig: (args: StasheroApi.Watchdog.ISaveConfigArgs) =>
-			this.runOperation<StasheroApi.Watchdog.ISaveConfigResponse>(
+		saveConfig: (args: StasheroApiContract.Watchdog.ISaveConfigArgs) =>
+			this.runOperation<StasheroApiContract.Watchdog.ISaveConfigResponse>(
 				"watchdog:save_config",
 				args,
 			),
-		listConfig: (args: StasheroApi.Watchdog.IListConfigArgs = {}) =>
-			this.runOperation<StasheroApi.Watchdog.IListConfigResponse>(
+		listConfig: (args: StasheroApiContract.Watchdog.IListConfigArgs = {}) =>
+			this.runOperation<StasheroApiContract.Watchdog.IListConfigResponse>(
 				"watchdog:list_config",
 				args,
 			),
-		reorderConfigs: (args: StasheroApi.Watchdog.IReorderArgs) =>
-			this.runOperation<StasheroApi.Watchdog.IReorderResponse>(
+		reorderConfigs: (args: StasheroApiContract.Watchdog.IReorderArgs) =>
+			this.runOperation<StasheroApiContract.Watchdog.IReorderResponse>(
 				"watchdog:reorder",
 				args,
 			),
-		deleteConfig: (args: StasheroApi.Watchdog.IDeleteConfigArgs) =>
-			this.runOperation<StasheroApi.Watchdog.IDeleteConfigResponse>(
+		deleteConfig: (args: StasheroApiContract.Watchdog.IDeleteConfigArgs) =>
+			this.runOperation<StasheroApiContract.Watchdog.IDeleteConfigResponse>(
 				"watchdog:delete_config",
 				args,
 			),
@@ -248,22 +260,22 @@ export class StasheroApiClient {
 
 	public system = {
 		listSelectors: () =>
-			this.runOperation<StasheroApi.System.IListSelectorsResponse>(
+			this.runOperation<StasheroApiContract.System.IListSelectorsResponse>(
 				"system:list_selectors",
 			),
 		ffmpegProxyEnableTask: (
-			args: StasheroApi.System.IFFmpegProxyEnableArgs = {},
-		) => this.runTask("system:ffmpeg_proxy_enable", args),
+			args: StasheroApiContract.System.IFFmpegProxyEnableArgs = {},
+		) => this.runTask("system:run_with_stash_enable", args),
 		ffmpegProxyReverseTask: (
-			args: StasheroApi.System.IFFmpegProxyReverseArgs = {},
-		) => this.runTask("system:ffmpeg_proxy_reverse", args),
+			args: StasheroApiContract.System.IFFmpegProxyReverseArgs = {},
+		) => this.runTask("system:run_with_stash_reverse", args),
 		runtimeServiceInstallTask: (
-			args: StasheroApi.System.IRuntimeServiceInstallArgs = {},
+			args: StasheroApiContract.System.IRuntimeServiceInstallArgs = {},
 		) => this.runTask("system:runtime_service_install", args),
 	};
 }
 
-export const api = new StasheroApiClient("stash_renamer");
+export const api = new StasheroApiClient("stashero");
 
 // =========================================================================
 // Legacy Helpers (Delegating to API Singleton)
@@ -511,7 +523,7 @@ export async function uninstallFfmpegProxyServiceTask(): Promise<
 }
 
 export async function fetchInstalledPluginPackageSpec(
-	pluginId = "stash_renamer",
+	pluginId = "stashero",
 ): Promise<IPackageSpec | null> {
 	const query = gql`
 		query FindInstalledPluginPackage {
@@ -568,7 +580,7 @@ export async function installRuntimeServiceTask(): Promise<string | null> {
 }
 
 export async function fetchPluginRuntimeConfig(
-	pluginId = "stash_renamer",
+	pluginId = "stashero",
 ): Promise<IPluginRuntimeConfig> {
 	const query = gql`
 		query GetPluginRuntimeConfig($include: [ID!]) {
@@ -608,7 +620,7 @@ export async function setPluginRuntimeConfig(args: {
 			configurePlugin(plugin_id: $plugin_id, input: $input)
 		}
 	`;
-	const pluginId = String(args.pluginId || "stash_renamer");
+	const pluginId = String(args.pluginId || "stashero");
 	const pythonPath = String(args.pythonPath || "").trim();
 	const input: Record<string, any> = {
 		installed: Boolean(args.installed),
@@ -748,35 +760,35 @@ export async function deleteWatchdogConfigFromDatabase(
 }
 
 export async function saveWatchdogConfigToDatabase(
-	args: StasheroApi.Watchdog.ISaveConfigArgs,
+	args: StasheroApiContract.Watchdog.ISaveConfigArgs,
 ): Promise<{ config: IWatchdogConfig; restarted: boolean } | null> {
 	const res = await api.watchdog.saveConfig(args);
 	return res?.watchdog || null;
 }
 
 export async function runWatchdog(
-	args: StasheroApi.Watchdog.IRunArgs = {},
+	args: StasheroApiContract.Watchdog.IRunArgs = {},
 ): Promise<IWatchdogState> {
 	const res = await api.watchdog.run(args);
 	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
 }
 
 export async function stopWatchdog(
-	args: StasheroApi.Watchdog.IStopArgs = {},
+	args: StasheroApiContract.Watchdog.IStopArgs = {},
 ): Promise<IWatchdogState> {
 	const res = await api.watchdog.stop(args);
 	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
 }
 
 export async function restartWatchdog(
-	args: StasheroApi.Watchdog.IRestartArgs = {},
+	args: StasheroApiContract.Watchdog.IRestartArgs = {},
 ): Promise<IWatchdogState> {
 	const res = await api.watchdog.restart(args);
 	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;
 }
 
 export async function fetchWatchdogStatus(
-	args: StasheroApi.Watchdog.IStatusArgs = {},
+	args: StasheroApiContract.Watchdog.IStatusArgs = {},
 ): Promise<IWatchdogState> {
 	const res = await api.watchdog.status(args);
 	return (res?.watchdog || { status: "stopped" }) as IWatchdogState;

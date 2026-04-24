@@ -35,7 +35,9 @@ export const ColumnSelector: React.FC<{
 	}, [allColumns]);
 
 	const selectedColumns = useMemo(() => {
-		return disableOptions.filter((col) => selected.includes(col.value));
+		return disableOptions.filter((col: IColumn) =>
+			selected.includes(col.value),
+		);
 	}, [selected, disableOptions]);
 
 	return (
@@ -134,7 +136,7 @@ export const ListTable = <T extends { id: string }>(
 	const MIN_COL_WIDTH = 20;
 	const SELECT_COL_WIDTH = 52;
 	const visibleColumnByValue = useMemo(
-		() => Object.fromEntries(visibleColumns.map((c) => [c.value, c])),
+		() => Object.fromEntries(visibleColumns.map((c: IColumn) => [c.value, c])),
 		[visibleColumns],
 	);
 
@@ -180,7 +182,7 @@ export const ListTable = <T extends { id: string }>(
 			const activeColumn = visibleColumnByValue[active.column];
 			const min = getColumnMinWidth(activeColumn);
 			const nextWidth = Math.max(min, Math.round(active.startWidth + delta));
-			setColumnWidths((prev) => {
+			setColumnWidths((prev: number[]) => {
 				if (prev[active.column] === nextWidth) return prev;
 				return { ...prev, [active.column]: nextWidth };
 			});
@@ -219,11 +221,11 @@ export const ListTable = <T extends { id: string }>(
 		}
 
 		const latestIds = items.map((item) => item.id);
-		setRowOrder((prev) => {
+		setRowOrder((prev: string[]) => {
 			if (!prev.length) return latestIds;
 
 			const latestSet = new Set(latestIds);
-			const kept = prev.filter((id) => latestSet.has(id));
+			const kept = prev.filter((id: string) => latestSet.has(id));
 			const missing = latestIds.filter((id) => !kept.includes(id));
 			return [...kept, ...missing];
 		});
@@ -234,8 +236,8 @@ export const ListTable = <T extends { id: string }>(
 
 		const byId = new Map(items.map((item) => [item.id, item]));
 		const ordered = rowOrder
-			.map((id) => byId.get(id))
-			.filter((item): item is T => Boolean(item));
+			.map((id: string) => byId.get(id))
+			.filter((item: T | undefined): item is T => Boolean(item));
 		if (ordered.length === items.length) return ordered;
 		return items;
 	}, [items, rowOrder, rowReorderActive]);
@@ -269,10 +271,10 @@ export const ListTable = <T extends { id: string }>(
 	}, [columnWidths, widthStorageKey]);
 
 	useLayoutEffect(() => {
-		setColumnWidths((prev) => {
+		setColumnWidths((prev: Record<string, number>) => {
 			const next = { ...prev };
 			let changed = false;
-			visibleColumns.forEach((column) => {
+			visibleColumns.forEach((column: IColumn) => {
 				const min = getColumnMinWidth(column);
 				if (typeof next[column.value] === "number") {
 					const clamped = Math.max(min, next[column.value]);
@@ -307,7 +309,7 @@ export const ListTable = <T extends { id: string }>(
 
 	const baseColumnWidths = useMemo(() => {
 		const out: Record<string, number> = {};
-		visibleColumns.forEach((column) => {
+		visibleColumns.forEach((column: IColumn) => {
 			out[column.value] = getColumnWidth(column);
 		});
 		return out;
@@ -393,7 +395,7 @@ export const ListTable = <T extends { id: string }>(
 					)}
 				</td>
 
-				{visibleColumns.map((column) => (
+				{visibleColumns.map((column: IColumn, index: number) => (
 					<td
 						key={column.value}
 						className={`${column.value}-data`}
@@ -441,7 +443,7 @@ export const ListTable = <T extends { id: string }>(
 	};
 
 	const columnHeaders = useMemo(() => {
-		return visibleColumns.map((column) => (
+		return visibleColumns.map((column: IColumn) => (
 			<th
 				key={column.value}
 				className={`${column.value}-head`}
@@ -532,7 +534,7 @@ export const ListTable = <T extends { id: string }>(
 							minWidth: `${SELECT_COL_WIDTH}px`,
 						}}
 					/>
-					{visibleColumns.map((column) => (
+					{visibleColumns.map((column: IColumn) => (
 						<col
 							key={column.value}
 							style={{

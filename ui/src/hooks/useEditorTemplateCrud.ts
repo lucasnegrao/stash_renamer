@@ -4,7 +4,7 @@ import {
 	hasSceneListSetFilterState,
 	setFilterState,
 } from "../services/renamerRuntimeState";
-import type { IRenamerTemplate } from "../api/sceneRenamerApi";
+import type { IRenamerTemplate } from "../api/stasheroApi";
 import {
 	getTemplateById,
 	isTemplateDirty,

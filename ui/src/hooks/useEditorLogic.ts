@@ -12,15 +12,15 @@ import {
 	setScenePreviewByIdState,
 	subscribeScenePreviewState,
 } from "../services/renamerRuntimeState";
-import { queryFindScenesByIds } from "../api/sceneRenamerApi";
+import { queryFindScenesByIds } from "../api/stasheroApi";
 import { parseTemplateFilterJson } from "../services/templateCrudService";
 import { applySerializedFilterToModel } from "../utils/editorHelpers";
 import { useEditorOperations } from "./useEditorOperations";
 import { useEditorTemplateCrud } from "./useEditorTemplateCrud";
 import { useEditorTemplateFields } from "./useEditorTemplateFields";
 
-const PluginApi = (window as any).PluginApi;
-const React = PluginApi.React;
+const PluginApi = window.PluginApi;
+const React: typeof import("react") = PluginApi.React;
 const DEBUG_PREFIX = "[TestFilter]";
 const LAST_TEMPLATE_ID_STORAGE_KEY = "test_filter:last_template_id";
 
@@ -139,7 +139,7 @@ export function useEditorLogic() {
 	const history = PluginApi.libraries.ReactRouterDOM.useHistory?.();
 
 	const navigateToResults = React.useCallback(() => {
-		const nextPath = "/plugins/stash_renamer/results";
+		const nextPath = "/plugins/stashero/results";
 		if (history && typeof history.push === "function") {
 			if (String(window.location.pathname || "") !== nextPath) {
 				history.push(nextPath);

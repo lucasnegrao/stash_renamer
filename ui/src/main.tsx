@@ -3,7 +3,7 @@ import {
 	fetchPluginRuntimeConfig,
 	installRuntimeServiceTask,
 	setPluginRuntimeConfig,
-} from "./api/sceneRenamerApi";
+} from "./api/stasheroApi";
 import {
 	getRenamerTaskOverlayState,
 	resetRenamerRuntimeState,
@@ -51,7 +51,7 @@ import { SettingsView } from "./views/SettingsView";
 		overlay: {
 			show: true,
 			progress: 0,
-			text: "Preparing Scene Renamer runtime...",
+			text: "Preparing Stashero runtime...",
 		},
 	};
 	const runtimeBootstrapListeners = new Set<
@@ -80,7 +80,7 @@ import { SettingsView } from "./views/SettingsView";
 		if (runtimeBootstrapStarted) return;
 		runtimeBootstrapStarted = true;
 		try {
-			const runtime = await fetchPluginRuntimeConfig("stash_renamer");
+			const runtime = await fetchPluginRuntimeConfig("stashero");
 			if (runtime.installed && String(runtime.pythonPath || "").trim()) {
 				setRuntimeBootstrapState((prev) => ({
 					...prev,
@@ -127,13 +127,13 @@ import { SettingsView } from "./views/SettingsView";
 				);
 			}
 
-			const nextRuntime = await fetchPluginRuntimeConfig("stash_renamer");
+			const nextRuntime = await fetchPluginRuntimeConfig("stashero");
 			if (
 				!nextRuntime.installed ||
 				String(nextRuntime.pythonPath || "").trim().length === 0
 			) {
 				await setPluginRuntimeConfig({
-					pluginId: "stash_renamer",
+					pluginId: "stashero",
 					installed: false,
 					pythonPath: "",
 				});
@@ -151,7 +151,7 @@ import { SettingsView } from "./views/SettingsView";
 			const message = String(e?.message || e || "runtime setup failed");
 			try {
 				await setPluginRuntimeConfig({
-					pluginId: "stash_renamer",
+					pluginId: "stashero",
 					installed: false,
 					pythonPath: "",
 				});
@@ -167,8 +167,8 @@ import { SettingsView } from "./views/SettingsView";
 		}
 	};
 	const isRenamerPath = (pathname: string) =>
-		pathname === "/plugins/stash_renamer" ||
-		pathname.startsWith("/plugins/stash_renamer/");
+		pathname === "/plugins/stashero" ||
+		pathname.startsWith("/plugins/stashero/");
 	let currentPath = String(window.location?.pathname || "");
 	let patchesEnabled = isRenamerPath(currentPath);
 
@@ -220,7 +220,7 @@ import { SettingsView } from "./views/SettingsView";
 			const message = String(runtimeState.error || "").trim();
 			if (!message || message === lastToastRef.current) return;
 			lastToastRef.current = message;
-			toastError(`Scene Renamer runtime initialization failed: ${message}`);
+			toastError(`Stashero runtime initialization failed: ${message}`);
 		}, [runtimeState.error, toastError]);
 
 		const pageRef = React.useRef<HTMLDivElement | null>(null);
@@ -282,7 +282,7 @@ import { SettingsView } from "./views/SettingsView";
 									<Nav.Link
 										as={NavLink}
 										exact
-										to="/plugins/stash_renamer"
+										to="/plugins/stashero"
 										eventKey="editor"
 									>
 										Editor
@@ -291,7 +291,7 @@ import { SettingsView } from "./views/SettingsView";
 								<Nav.Item>
 									<Nav.Link
 										as={NavLink}
-										to="/plugins/stash_renamer/results"
+										to="/plugins/stashero/results"
 										eventKey="results"
 									>
 										Results
@@ -300,7 +300,7 @@ import { SettingsView } from "./views/SettingsView";
 								<Nav.Item>
 									<Nav.Link
 										as={NavLink}
-										to="/plugins/stash_renamer/settings"
+										to="/plugins/stashero/settings"
 										eventKey="settings"
 									>
 										Settings
@@ -310,13 +310,13 @@ import { SettingsView } from "./views/SettingsView";
 						) : null}
 						<div className="pt-10 position-relative">
 							<Switch>
-								<Route exact path="/plugins/stash_renamer">
+								<Route exact path="/plugins/stashero">
 									<EditorView />
 								</Route>
-								<Route path="/plugins/stash_renamer/results">
+								<Route path="/plugins/stashero/results">
 									<RenamerResults />
 								</Route>
-								<Route path="/plugins/stash_renamer/settings">
+								<Route path="/plugins/stashero/settings">
 									<SettingsView />
 								</Route>
 							</Switch>
@@ -329,8 +329,7 @@ import { SettingsView } from "./views/SettingsView";
 								show={!runtimeState.done || runtimeState.overlay.show}
 								progress={Number(runtimeState.overlay.progress || 0)}
 								text={
-									runtimeState.overlay.text ||
-									"Preparing Scene Renamer runtime..."
+									runtimeState.overlay.text || "Preparing Stashero runtime..."
 								}
 							/>
 						</div>
@@ -340,9 +339,9 @@ import { SettingsView } from "./views/SettingsView";
 		);
 	};
 
-	PluginApi.register.route("/plugins/stash_renamer", MainPage);
-	PluginApi.register.route("/plugins/stash_renamer/results", MainPage);
-	PluginApi.register.route("/plugins/stash_renamer/settings", MainPage);
+	PluginApi.register.route("/plugins/stashero", MainPage);
+	PluginApi.register.route("/plugins/stashero/results", MainPage);
+	PluginApi.register.route("/plugins/stashero/settings", MainPage);
 
 	PluginApi.patch.before("MainNavBar.UtilityItems", (props: any) => {
 		const { Icon } = PluginApi.components;
@@ -351,10 +350,10 @@ import { SettingsView } from "./views/SettingsView";
 				children: (
 					<>
 						{props.children}
-						<NavLink className="nav-utility" exact to="/plugins/stash_renamer">
+						<NavLink className="nav-utility" exact to="/plugins/stashero">
 							<Button
 								className="minimal d-flex align-items-center h-100"
-								title="Scene Renamer"
+								title="Stashero"
 							>
 								<Icon icon={faEthernet} />
 							</Button>
@@ -368,30 +367,16 @@ import { SettingsView } from "./views/SettingsView";
 	PluginApi.patch.instead(
 		"PluginSettings",
 		(props: any, _: any, Original: any) => {
-			if (props.pluginID !== "stash_renamer") return <Original {...props} />;
+			if (props.pluginID !== "stashero") return <Original {...props} />;
 			const { Setting } = PluginApi.components;
 
-			const PluginSettingsGate: React.FC = () => {
-				const [ready, setReady] = React.useState(getRuntimeReady());
-				React.useEffect(() => subscribeRuntimeReady(setReady), []);
-
-				if (!ready) {
-					return (
-						<Original key="stash-renamer-plugin-settings-original" {...props} />
-					);
-				}
-
-				return (
-					<Setting
-						key="stash-renamer-hook-setting"
-						heading={<SettingsView className="mt-2" />}
-						subHeading=""
-						children={<SettingsView className="mt-2" />}
-					/>
-				);
-			};
-
-			return [<PluginSettingsGate key="stash-renamer-plugin-settings-gate" />];
+			return [
+				<Setting
+					key="stash-renamer-hook-setting"
+					heading={<SettingsView className="w-100" />}
+					subHeading=""
+				/>,
+			];
 		},
 	);
 })();

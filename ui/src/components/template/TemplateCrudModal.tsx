@@ -1,5 +1,5 @@
-import type { IRenamerTemplate } from "../../api/sceneRenamerApi";
-import { TemplateManagerBar } from "../TemplateManagerBar";
+import type { IRenamerTemplate } from "../../api/stasheroApi";
+import { TemplateManagerBar } from "./TemplateManagerBar";
 
 const PluginApi = window.PluginApi;
 const React = PluginApi.React;

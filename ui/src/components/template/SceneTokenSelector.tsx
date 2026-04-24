@@ -1,4 +1,4 @@
-import type { ITokenTreeNode } from "../../api/sceneRenamerApi";
+import type { ITokenTreeNode } from "../../api/stasheroApi";
 import { CollapseButton } from "../shared/CollapseButton";
 import { TagItem } from "../shared/TagItem";
 

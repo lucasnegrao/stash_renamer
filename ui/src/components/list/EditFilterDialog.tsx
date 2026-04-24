@@ -214,17 +214,23 @@ export const EditFilterDialog: React.FC<IEditFilterProps> = ({
 	const filteredOptions = React.useMemo(() => {
 		const q = searchValue.trim().toLowerCase();
 		if (!q) return criterionOptions;
-		return criterionOptions.filter((option) =>
+		return criterionOptions.filter((option: CriterionOption) =>
 			labelForOption(intl, option).toLowerCase().includes(q),
 		);
 	}, [criterionOptions, intl, searchValue]);
 
 	const pinnedOptions = React.useMemo(
-		() => filteredOptions.filter((o) => pinnedIDs.includes(o.messageID)),
+		() =>
+			filteredOptions.filter((o: CriterionOption) =>
+				pinnedIDs.includes(o.messageID),
+			),
 		[filteredOptions, pinnedIDs],
 	);
 	const unpinnedOptions = React.useMemo(
-		() => filteredOptions.filter((o) => !pinnedIDs.includes(o.messageID)),
+		() =>
+			filteredOptions.filter(
+				(o: CriterionOption) => !pinnedIDs.includes(o.messageID),
+			),
 		[filteredOptions, pinnedIDs],
 	);
 
@@ -316,7 +322,7 @@ export const EditFilterDialog: React.FC<IEditFilterProps> = ({
 	function togglePinned(option: CriterionOption) {
 		const exists = pinnedIDs.includes(option.messageID);
 		const next = exists
-			? pinnedIDs.filter((id) => id !== option.messageID)
+			? pinnedIDs.filter((id: string) => id !== option.messageID)
 			: [...pinnedIDs, option.messageID];
 		setPinnedIDs(next);
 		saveToLocalStorage(pinnedStorageKey(currentFilter.mode), next);

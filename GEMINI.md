@@ -1,4 +1,4 @@
-# Stash Scene Renamer Plugin
+# Stash Stashero Plugin
 
 This repository contains a StashApp plugin designed to rename files based on user-defined templates.
 
@@ -7,7 +7,7 @@ This repository contains a StashApp plugin designed to rename files based on use
 The plugin is divided into a Python backend for processing and a React (TypeScript) frontend for the user interface.
 
 ### Backend (Python)
-- **Entrypoint:** `stash_renamer.py` is invoked directly by StashApp as a plugin, reading JSON input from `stdin`.
+- **Entrypoint:** `stashero.py` is invoked directly by StashApp as a plugin, reading JSON input from `stdin`.
 - **Core Logic:** `backend/app.py` parses the operational mode from Stash and delegates tasks to specific services (renaming, undoing, saving templates, etc.).
 - **Renamer Engine:** `backend/renamer/engine.py` handles the actual execution of renaming tasks.
 - **Stash Interaction:** The backend communicates with Stash using GraphQL (`backend/services/graphql.py`) for introspecting tags, performers, studios, and fetching scenes.
@@ -16,7 +16,7 @@ The plugin is divided into a Python backend for processing and a React (TypeScri
 
 ### Frontend (React/TypeScript)
 - **Location:** Code resides in `ui/src/`.
-- **Entrypoint:** `ui/src/main.tsx` utilizes the `PluginApi` to patch the Stash UI. It injects a main navigation button, a settings panel route (`/plugins/stash_renamer`), and tabs for Editor, Results, and Settings.
+- **Entrypoint:** `ui/src/main.tsx` utilizes the `PluginApi` to patch the Stash UI. It injects a main navigation button, a settings panel route (`/plugins/stashero`), and tabs for Editor, Results, and Settings.
 - **State Management:** Uses a custom service approach (`ui/src/services/renamerRuntimeState.ts`) combined with React Context and standard hooks.
 - **Build System:** Webpack bundles the source code into the `ui/dist` folder (or syncs directly to the Stash plugin folder via scripts).
 - **Package Manager:** Uses `pnpm` (configured via `ui/package.json` and `ui/pnpm-workspace.yaml`).

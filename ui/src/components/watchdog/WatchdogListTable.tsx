@@ -1,5 +1,5 @@
 import { useTableColumns } from "../../hooks/useTableColumns";
-import type { IWatchdogConfig } from "../../api/sceneRenamerApi";
+import type { IWatchdogConfig } from "../../api/stasheroApi";
 import { ListTable, type IColumn } from "../list/ListTable";
 import { CrudActionsColumnCell } from "../list/cells/CrudActionsColumnCell";
 import { TextColumnCell } from "../list/cells/TextColumnCell";

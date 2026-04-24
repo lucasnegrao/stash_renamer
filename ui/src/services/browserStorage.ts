@@ -1,4 +1,4 @@
-const STORAGE_NAMESPACE = "stash_renamer";
+const STORAGE_NAMESPACE = "stashero";
 
 function buildKey(key: string): string {
 	return `${STORAGE_NAMESPACE}:${key}`;

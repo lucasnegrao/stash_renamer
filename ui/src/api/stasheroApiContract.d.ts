@@ -5,7 +5,7 @@
  * supported by the plugin, mapping directly to the Python router modes.
  */
 
-export namespace StasheroApi {
+export namespace StasheroApiContract {
 	// =========================================================================
 	// Core Entities
 	// =========================================================================
@@ -34,7 +34,7 @@ export namespace StasheroApi {
 		new_path?: string;
 		log?: string;
 		error?: string;
-		id?: string;
+		id: string;
 		created_at?: string;
 		batch_id?: string;
 		operation_type?: string;
@@ -297,10 +297,10 @@ export namespace StasheroApi {
 			syntax: Record<string, string>;
 		}
 
-		/** mode: 'system:ffmpeg_proxy_enable' */
+		/** mode: 'system:run_with_stash_enable' */
 		export type IFFmpegProxyEnableArgs = {};
 
-		/** mode: 'system:ffmpeg_proxy_reverse' */
+		/** mode: 'system:run_with_stash_reverse' */
 		export type IFFmpegProxyReverseArgs = {};
 
 		/** mode: 'system:runtime_service_install' */
