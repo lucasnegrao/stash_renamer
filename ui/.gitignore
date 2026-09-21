@@ -1,0 +1,11 @@
+__pycache__/*
+ui/node_modules/*
+backend/__pycache__
+backend/services/__pycache__
+stash_ui
+stash_ui/*
+.pnpm-store
+__pycache__
+ui/dist
+node_modules/*
+devdocs/graphql/*

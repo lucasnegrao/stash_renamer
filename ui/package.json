@@ -1,0 +1,57 @@
+{
+	"name": "renamer-ui-component",
+	"version": "1.0.0",
+	"main": "index.js",
+	"author": "JucaLango",
+	"license": "AGPL-3.0",
+	"scripts": {
+		"tsc": "tsc",
+		"webpack:dev": "webpack --mode development",
+		"webpack:prod": "webpack --mode production",
+		"pau": "npm rum biome:format ; npx webpack ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/",
+		"pauprod": "npm run biome:format ; npm run webpack:prod ; rsync -avz --exclude 'node_modules/' --exclude '__pycache__' --exclude '.git'  -e ssh ~/development/stash_renamer/* root@192.168.42.53:/pool2/apps/stash_new/plugins/develop/stashero",
+		"compile:ts": "npm run tsc",
+		"compile": "npm run compile:ts && pau",
+		"build": "npm run pau",
+		"biome:check": "biome check",
+		"biome:fix": "biome check --write",
+		"biome:unsafe": "biome check --write --unsafe",
+		"biome:format": "biome format --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.11",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
+		"cpx": "^1.5.0",
+		"sass": "^1.99.0",
+		"ts-loader": "^9.5.7",
+		"typescript": "^6.0.2",
+		"webpack": "^5.106.1",
+		"webpack-cli": "^7.0.2"
+	},
+	"onlyBuiltDependencies": {
+		"@codemirror/lang-html": "ˆ6.4.11"
+	},
+	"dependencies": {
+		"@apollo/client": "3.8.10",
+		"@codemirror/autocomplete": "^6.20.1",
+		"@codemirror/commands": "^6.10.3",
+		"@codemirror/lang-liquid": "^6.3.2",
+		"@codemirror/language": "^6.12.3",
+		"@codemirror/lint": "^6.9.5",
+		"@codemirror/state": "^6.6.0",
+		"@codemirror/theme-one-dark": "^6.1.3",
+		"@codemirror/view": "^6.41.0",
+		"@fortawesome/free-solid-svg-icons": "^7.2.0",
+		"@lezer/highlight": "^1.2.3",
+		"@types/mousetrap": "^1.6.15",
+		"classnames": "^2.5.1",
+		"codemirror": "^6.0.2",
+		"lodash-es": "^4.18.1"
+	},
+	"pnpm": {
+		"overrides": {
+			"graphql": "^16.13.2"
+		}
+	}
+}
